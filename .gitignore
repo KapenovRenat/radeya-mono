@@ -1,1 +1,66 @@
-.idea
+# ── Зависимости ──
+node_modules/
+
+# ── Сборка ──
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# ── Секреты и окружение ──
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── Логи ──
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ── Тесты ──
+coverage/
+.nyc_output/
+
+# ── Кэши инструментов ──
+.eslintcache
+.turbo/
+.cache/
+next-env.d.ts
+
+# ── Prisma ──
+# ВНИМАНИЕ: prisma/migrations/ НЕ игнорируем — миграции обязаны быть в git
+prisma/*.db
+prisma/*.db-journal
+generated/
+
+# ── Дампы и бэкапы БД ──
+*.dump
+*.sql.gz
+backups/
+
+# ── Загруженные файлы ──
+uploads/
+public/uploads/
+
+# ── Skills от внешних пакетов (prisma init и подобные) ──
+# Справочники для ИИ-ассистентов. Полезны локально, но это не наш код.
+.claude/skills/
+.windsurf/
+.agents/
+skills-lock.json
+
+# ── IDE ──
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# ── ОС ──
+.DS_Store
+Thumbs.db
+Desktop.ini

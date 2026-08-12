@@ -1,0 +1,20 @@
+{
+  "name": "radeya-mono",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RADEYA — магазин, dashboard и API",
+  "workspaces": [
+    "shared",
+    "server",
+    "front"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace=server",
+    "dev:front": "npm run dev --workspace=front",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -13,3 +13,26 @@
 История — ниже.
 
 ---
+
+## 2026-08-12
+
+**База знаний и правила**
+- Заведены `index.md` (карта проекта), `CHANGELOG.md`, `STATUS.md`; `CLAUDE.md` сделан входным указателем
+- `AGENTS.md`: правило п.9 «каркас поднимаю я, дальше код пишет пользователь», п.10 «новый код — сразу в документацию»
+- `AGENTS.md`: разделы «Критерии качества», «Фиксация изменений кода в docs/», «Карта проекта и работа после /clear»
+- `docs/roadmap.md` — roadmap на 10 этапов с детализацией доступов, Dashboard, Товаров, Заказов и автоматизации
+- `docs/architecture.md`, `docs/api-reference.md`
+- `.gitignore`: секреты, сборка, `node_modules`, IDE, skills внешних пакетов
+
+**Каркас проекта**
+- Монорепозиторий на npm workspaces: `server`, `front`, `shared`
+- `shared`: роли и статусы пользователей, источники заказов, общие формы ответов API
+- `server`: Express 5 + TypeScript, валидация окружения через zod, логгер, типизированные ошибки,
+  единый обработчик ошибок, лог запросов, модуль `health`, graceful shutdown
+- `front`: Next.js 16 (App Router), Tailwind 4, shadcn/ui на Base UI, Redux Toolkit + RTK Query,
+  группы маршрутов `(shop)` / `(dashboard)` / `(auth)`, шрифт Inter с кириллицей
+
+**База данных**
+- PostgreSQL: база `radeya_mono`, роль приложения `radeya_app`, права на схему `public` ограничены
+- Prisma 7 + драйвер-адаптер `@prisma/adapter-pg`, клиент в `server/src/db/client.ts`
+- `GET /api/health` проверяет доступность базы, отдаёт 503 при недоступности
