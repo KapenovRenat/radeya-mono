@@ -1,0 +1,90 @@
+/* ─────────────────────────────────────────────────────────────
+   Темы RADEYA
+
+   Два измерения: раздел (магазин / админка) × схема (светлая / тёмная).
+   Класс раздела висит на layout группы маршрутов, класс dark — на <html>.
+
+     .theme-shop            магазин, светлая
+     .dark .theme-shop      магазин, тёмная
+     .theme-dashboard       админка, светлая
+     .dark .theme-dashboard админка, тёмная
+
+   Здесь переопределяются только те токены, которые отличаются от базовых
+   (базовые — в globals.css, блоки :root и .dark).
+
+   Эти же переменные читают и классы Tailwind (bg-primary), и наши
+   SCSS-модули через var(--primary). Один источник правды на весь проект.
+
+   Значения ниже — рабочие заглушки. Меняются под фирменный стиль,
+   компоненты трогать не нужно.
+   ───────────────────────────────────────────────────────────── */
+
+/* ── Магазин ─────────────────────────────────────────────── */
+
+.theme-shop {
+  /* Тёплый акцент витрины */
+  --primary: oklch(0.58 0.19 28);
+  --primary-foreground: oklch(0.99 0 0);
+
+  --accent: oklch(0.96 0.02 28);
+  --accent-foreground: oklch(0.35 0.12 28);
+
+  --ring: oklch(0.58 0.19 28);
+
+  /* Крупнее скругления — витрина мягче админки */
+  --radius: 0.75rem;
+
+  /* Токены общих компонентов — значения по умолчанию в globals.css,
+     здесь только то, что в магазине выглядит иначе */
+  --price-current: oklch(0.45 0.19 28);
+  --price-old: oklch(0.6 0 0);
+  --price-badge: oklch(0.62 0.17 145);
+}
+
+.dark .theme-shop {
+  --primary: oklch(0.68 0.17 28);
+  --primary-foreground: oklch(0.15 0 0);
+
+  --accent: oklch(0.28 0.05 28);
+  --accent-foreground: oklch(0.92 0.03 28);
+
+  --ring: oklch(0.68 0.17 28);
+
+  --price-current: oklch(0.78 0.16 28);
+  --price-old: oklch(0.65 0 0);
+  --price-badge: oklch(0.7 0.15 145);
+}
+
+/* ── Админка ─────────────────────────────────────────────── */
+
+.theme-dashboard {
+  /* Спокойный синий: в админке сидят по несколько часов */
+  --primary: oklch(0.52 0.15 250);
+  --primary-foreground: oklch(0.99 0 0);
+
+  --accent: oklch(0.96 0.02 250);
+  --accent-foreground: oklch(0.35 0.1 250);
+
+  --ring: oklch(0.52 0.15 250);
+
+  /* Мельче скругления и плотнее сетка — больше данных на экране */
+  --radius: 0.5rem;
+
+  --sidebar-primary: oklch(0.52 0.15 250);
+  --sidebar-accent: oklch(0.95 0.02 250);
+  --sidebar-accent-foreground: oklch(0.35 0.1 250);
+}
+
+.dark .theme-dashboard {
+  --primary: oklch(0.65 0.15 250);
+  --primary-foreground: oklch(0.15 0 0);
+
+  --accent: oklch(0.28 0.04 250);
+  --accent-foreground: oklch(0.92 0.03 250);
+
+  --ring: oklch(0.65 0.15 250);
+
+  --sidebar-primary: oklch(0.65 0.15 250);
+  --sidebar-accent: oklch(0.28 0.04 250);
+  --sidebar-accent-foreground: oklch(0.92 0.03 250);
+}

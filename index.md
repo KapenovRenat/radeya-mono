@@ -68,6 +68,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `DashboardLayout` | Сайдбар админки, класс `theme-dashboard` | `front/src/app/(dashboard)/layout.tsx` |
 | `AuthLayout` | Форма по центру, без обвязки | `front/src/app/(auth)/layout.tsx` |
 | `Button` | Примитив shadcn/ui (Base UI) | `front/src/components/ui/button.tsx` |
+| `PriceTag` | Ценник товара; образец SCSS-модуля с токенами темы | `front/src/components/price-tag/` |
 
 ### 1.6. Общие функции, хуки, константы
 

@@ -20,13 +20,27 @@
 - `server` — Express 5, TypeScript, zod-валидация окружения, логгер, типизированные ошибки,
   единый обработчик ошибок, лог запросов, модуль `health`, корректная остановка
 - `front` — Next.js 16 (App Router), Tailwind 4, shadcn/ui на Base UI, Redux Toolkit + RTK Query,
-  группы маршрутов `(shop)` / `(dashboard)` / `(auth)` с раздельными layout и токенами стилей
+  группы маршрутов `(shop)` / `(dashboard)` / `(auth)` с раздельными layout
+- Стили: Sass подключён, четыре темы (магазин × админка, светлая × тёмная) в `front/src/styles/themes.css`.
+  Компоненты общие на всё приложение, свои — папка + `index.tsx` + `style.module.scss`, образец `PriceTag`
 - `shared` — роли, статусы пользователей, источники заказов, формы ответов API
 - База `radeya_mono` и роль `radeya_app` созданы, Prisma 7 подключена через `@prisma/adapter-pg`
 
 ## В работе / следующий шаг
 
 **Этап 1 — доступы.** С этого момента код пишет пользователь, я ставлю задачи (п.9).
+
+> **Блокирует задачу 1:** не решено, вход в систему по **email или по телефону**.
+> От этого зависит, какое поле в модели `User` делать уникальным и обязательным.
+
+**Задача 1 поставлена, ждёт выполнения:** модель `User` в `server/prisma/schema.prisma`.
+Поля: `id` (UUID, не автоинкремент), `email` (уникальный, в нижнем регистре), `passwordHash`,
+`name`, `phone?`, `role` (ADMIN/MANAGER/CLIENT, по умолчанию CLIENT), `status`
+(PENDING/ACTIVE/REJECTED/BLOCKED, по умолчанию PENDING), `createdAt`, `updatedAt`,
+`approvedAt?`, `approvedById?` (ссылка на того же пользователя — self-relation).
+Значения enum обязаны совпадать с `shared/src/constants/roles.ts`.
+Индексы: уникальный на `email`, обычный на `status`.
+Затем `prisma migrate dev --name init_users`, файл миграции — в git.
 
 1. Модель `User` в Prisma и первая миграция — поля, роли, статусы, индексы
 2. Регистрация: первый пользователь становится админом (проверка и вставка в одной транзакции)

@@ -1,0 +1,38 @@
+/* Правила для style.module.scss:
+
+   1. Суффикс .module обязателен — классы становятся локальными.
+      Без него .badge отсюда сломает .badge в другом компоненте.
+   2. Цвета и скругления — только через var(--токен). Тогда компонент
+      сам подстраивается под тему раздела и под тёмную схему.
+   3. Директивы Tailwind (@apply) не используем — две системы стилей
+      в одном файле труднее отлаживать.
+   4. Класс верхнего уровня не задаёт внешние отступы и ширину.
+      Их назначает тот, кто компонент вызывает, через className. */
+
+.priceTag {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+
+  .current {
+    color: var(--price-current);
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .old {
+    color: var(--price-old);
+    font-size: 0.875rem;
+    text-decoration: line-through;
+  }
+
+  .badge {
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--radius);
+    background: var(--price-badge);
+    color: var(--primary-foreground);
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+}

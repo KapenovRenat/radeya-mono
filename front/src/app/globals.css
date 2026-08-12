@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+/* Темы разделов: магазин и админка, светлая и тёмная. */
+@import "../styles/themes.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -73,6 +75,13 @@
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
+
+  /* Токены общих компонентов RADEYA. Здесь — значения по умолчанию,
+     разделы переопределяют их в src/styles/themes.css. */
+  --price-current: oklch(0.205 0 0);
+  --price-old: oklch(0.556 0 0);
+  --price-badge: oklch(0.62 0.17 145);
+
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -107,6 +116,11 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
+
+  --price-current: oklch(0.985 0 0);
+  --price-old: oklch(0.708 0 0);
+  --price-badge: oklch(0.7 0.15 145);
+
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -115,19 +129,6 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
-}
-
-/* ── RADEYA: токены разделов ────────────────────────────────────────
-   Магазин и админка используют один Tailwind, но разные значения
-   переменных. Класс вешается на layout группы маршрутов.
-   Палитры задаём здесь, компоненты об этом не знают.
-   ------------------------------------------------------------------ */
-.theme-shop {
-  --radius: 0.75rem;
-}
-
-.theme-dashboard {
-  --radius: 0.5rem;
 }
 
 @layer base {
