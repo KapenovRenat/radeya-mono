@@ -1,5 +1,12 @@
-import 'dotenv/config';
+import path from 'node:path';
+
+import { config as loadEnvFile } from 'dotenv';
 import { z } from 'zod';
+
+// Единый .env лежит в корне монорепозитория — и server, и front берут переменные оттуда.
+// Путь считаем от самого файла, а не от cwd: иначе результат зависит от того,
+// из какой папки запущена команда. Из src/ и из dist/ до корня одинаково три уровня.
+loadEnvFile({ path: path.resolve(__dirname, '../../../.env') });
 
 /**
  * Схема переменных окружения.
@@ -23,7 +30,7 @@ if (!parsed.success) {
     .join('\n');
 
   // Логгер здесь ещё не поднят, поэтому пишем напрямую.
-  console.error(`Ошибка в переменных окружения (server/.env):\n${problems}`);
+  console.error(`Ошибка в переменных окружения (.env в корне проекта):\n${problems}`);
   process.exit(1);
 }
 

@@ -1,6 +1,4 @@
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 /* Темы разделов: магазин и админка, светлая и тёмная. */
 @import "../styles/themes.css";
 

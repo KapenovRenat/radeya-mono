@@ -1,0 +1,42 @@
+.dashboardLogin {
+
+}
+
+.loginLogo {
+
+}
+
+.LoginFormHead {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+
+  span {
+    position: absolute;
+    font-size: 16px;
+    right: 60px;
+    top: 0;
+    font-weight: bold;
+  }
+}
+
+.LoginGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.LoginFormHeadImg {
+  width: 200px;
+
+  svg {
+    width: 100%;
+  }
+}
+
+.ButtonSubmit {
+  margin-top: 10px;
+}

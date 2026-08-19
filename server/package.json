@@ -12,12 +12,15 @@
     "typecheck": "tsc --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "create:admin": "tsx src/scripts/create-admin.ts"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@radeya/shared": "*",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
@@ -25,6 +28,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.9",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^20.19.43",

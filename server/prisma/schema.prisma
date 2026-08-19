@@ -13,3 +13,119 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+/// Роли сотрудников. Значения обязаны совпадать с USER_ROLES в shared/src/constants/roles.ts.
+enum UserRole {
+  ADMIN
+  MANAGER
+  SELLER
+}
+
+/// Сотрудник: вход в дашборд по логину. Саморегистрации нет — учётные записи
+/// заводит админ. Первый пользователь создаётся, пока таблица пуста.
+model User {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// Только латиница, цифры и `. _ -`, приводится к нижнему регистру до записи.
+  login String @unique
+
+  /// Хеш argon2id. Именно хеш, а не пароль: поле не должно попасть наружу ни при какой выборке.
+  passwordHash String
+
+  name String
+
+  /// Должность произвольным текстом — заполняет админ при создании.
+  position String
+
+  /// Без значения по умолчанию: роль всегда выбирается явно при создании.
+  role UserRole
+
+  /// Уволенного сотрудника отключаем, а не удаляем — иначе поедут ссылки в журнале действий.
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Кто завёл учётную запись. У первого админа пусто — его никто не создавал.
+  createdById  String? @db.Uuid
+  createdBy    User?   @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdUsers User[]  @relation("UserCreatedBy")
+
+  sessions Session[]
+
+  @@index([role])
+}
+
+/// Сессия сотрудника. В куке лежит только идентификатор, всё состояние — здесь.
+/// Поэтому сессию можно погасить мгновенно: удалили строку — доступ закрыт.
+/// С подписанным токеном так не выйдет, он живёт до истечения срока.
+model Session {
+  id String @id @default(uuid()) @db.Uuid
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  /// Для раздела «активные сессии» и разбора инцидентов.
+  userAgent String?
+  ip        String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Журнал действий: кто, что и когда сделал. Только вставка и чтение —
+/// ни update, ни delete из кода. Журнал, который можно править, журналом не является.
+///
+/// Связи с User намеренно нет: логин и роль хранятся снимком на момент действия.
+/// Иначе после переименования или смены роли вся прошлая история покажет
+/// сегодняшние значения, а восстановить исходные будет неоткуда.
+model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
+
+  at DateTime @default(now())
+
+  userId    String? @db.Uuid
+  userLogin String
+  userRole  String
+
+  /// Значение из AUDIT_ACTIONS в shared/src/constants/audit-actions.ts.
+  action String
+
+  entityType String?
+  entityId   String?
+
+  /// Состояние до и после изменения. Пароли и хеши сюда не попадают.
+  before Json?
+  after  Json?
+
+  ip String?
+
+  @@index([at])
+  @@index([userId])
+  @@index([action])
+}
+
+/// Клиент магазина: регистрируется сам с витрины, вход отдельный от дашборда.
+/// Ролей у клиента нет — права сотрудников к нему неприменимы.
+model Customer {
+  id String @id @default(uuid()) @db.Uuid
+
+  login        String @unique
+  passwordHash String
+  name         String
+
+  /// Нормализуется до записи в единый формат (+7XXXXXXXXXX), иначе уникальность не сработает.
+  phone String @unique
+
+  /// Необязательный. PostgreSQL допускает любое количество NULL в уникальном индексе,
+  /// поэтому «нужен не всем, но не повторяется» — это одно поле без ухищрений.
+  email String? @unique
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

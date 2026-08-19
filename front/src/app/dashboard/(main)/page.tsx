@@ -4,7 +4,7 @@ import { useGetHealthQuery } from "@/features/health/health-api";
 
 /**
  * Временная страница: проверяет, что фронт видит API.
- * Заменится настоящим дашбордом на этапе 6.
+ * Заменится настоящим дашбордом на этапе аналитики.
  */
 export default function DashboardPage() {
   const { data, isLoading, isError } = useGetHealthQuery();

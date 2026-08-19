@@ -285,7 +285,7 @@ Image      id, productId, variantId?, url, sortOrder
 - **Сервер** — Express, TypeScript
 - **База данных** — PostgreSQL, ORM Prisma
 - **Состояние на фронте** — Redux Toolkit + RTK Query
-- **UI** — Tailwind CSS, shadcn/ui на Base UI, SCSS-модули для своих компонентов
+- **UI** — Tailwind CSS для раскладки, SCSS-модули для компонентов; готовых UI-китов нет
 - **Интеграции** — Kaspi Shop API; Telegram Bot API — на этапе автоматизации
 
 **Интерфейс** делается по образцу МойСклад: плотные таблицы, дерево папок слева, работа
@@ -315,7 +315,7 @@ Image      id, productId, variantId?, url, sortOrder
 - Конституция проекта и база знаний в репозитории.
 - Каркас работает end-to-end: браузер → Next.js → Express → PostgreSQL.
 - Структура и стек: `server/` (Express + Prisma), `front/` (Next.js App Router, Redux Toolkit,
-  Tailwind + shadcn/ui, SCSS-модули), `shared/` (общие типы и константы).
+  Tailwind + SCSS-модули), `shared/` (общие типы и константы).
 - Справочник по внешнему Kaspi Shop API: авторизация, эндпоинты заказов, поля, статусы.
 - Справочник по Telegram-боту и спецификация аналитического модуля — понадобятся позже.
 

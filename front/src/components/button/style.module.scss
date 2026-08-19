@@ -1,0 +1,91 @@
+.desc {
+  font-weight: bold;
+  font-size: 18px;
+  color: red;
+}
+
+.Button {
+
+}
+
+.ButtonComponent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  height: 2.75rem;
+  padding: 0 1.25rem;
+
+  color: var(--primary-foreground);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+
+  background: var(--primary);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  outline: none;
+  cursor: pointer;
+
+  transition:
+          background-color 0.15s ease,
+          border-color 0.15s ease,
+          opacity 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--primary), var(--foreground) 12%);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  &:focus-visible {
+    border-color: var(--ring);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Во всю ширину — для формы входа */
+  &.full {
+    width: 100%;
+  }
+
+  /* Второстепенное действие */
+  &.secondary {
+    color: var(--secondary-foreground);
+    background: var(--secondary);
+
+    &:hover:not(:disabled) {
+      background: color-mix(in oklch, var(--secondary), var(--foreground) 8%);
+    }
+  }
+
+  /* Только рамка */
+  &.outline {
+    color: var(--foreground);
+    background: transparent;
+    border-color: var(--input);
+
+    &:hover:not(:disabled) {
+      background: var(--muted);
+    }
+  }
+
+  /* Опасное действие — удаление */
+  &.danger {
+    color: var(--primary-foreground);
+    background: var(--destructive);
+
+    &:hover:not(:disabled) {
+      background: color-mix(in oklch, var(--destructive), var(--foreground) 12%);
+    }
+  }
+}

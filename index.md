@@ -28,6 +28,9 @@ shared/    # Общий код: типы контрактов, констант�
 | Метод и путь | Назначение | Auth | Файл |
 |---|---|---|---|
 | `GET /api/health` | Сервер жив + база отвечает (503 при недоступной базе) | нет | `server/src/modules/health/health.routes.ts` |
+| `POST /api/auth/login` | Вход по логину и паролю, ставит httpOnly-куку сессии | нет | `server/src/modules/auth/auth.routes.ts` |
+| `POST /api/auth/logout` | Завершение сессии, удаление куки | да | `server/src/modules/auth/auth.routes.ts` |
+| `GET /api/auth/me` | Текущий пользователь | да | `server/src/modules/auth/auth.routes.ts` |
 
 Подробные контракты — в [docs/api-reference.md](docs/api-reference.md).
 
@@ -36,6 +39,13 @@ shared/    # Общий код: типы контрактов, констант�
 | Модуль | Метод | Что делает | Файл |
 |---|---|---|---|
 | health | `getHealthStatus()` | Статус, окружение, аптайм, доступность базы | `server/src/modules/health/health.service.ts` |
+| auth | `authenticate(login, password)` | Проверка пары; единая ошибка 401 на все случаи | `server/src/modules/auth/auth.service.ts` |
+| auth | `hashPassword(password)` | Хеш argon2id | `server/src/modules/auth/auth.service.ts` |
+| auth | `toAuthUser(user)` | DTO наружу без `passwordHash` | `server/src/modules/auth/auth.service.ts` |
+| auth | `createSession(userId, ua, ip)` | Создание сессии на 7 дней | `server/src/modules/auth/auth.service.ts` |
+| auth | `findActiveSession(id)` | Действующая сессия + пользователь, с проверкой срока и `isActive` | `server/src/modules/auth/auth.service.ts` |
+| auth | `destroySession(id)`, `destroyUserSessions(userId)` | Гашение сессий | `server/src/modules/auth/auth.service.ts` |
+| audit | `logAction(input)` | Запись в журнал; сбой не роняет операцию | `server/src/lib/audit.ts` |
 | db | `prisma` | Единственный экземпляр Prisma Client | `server/src/db/client.ts` |
 | db | `isDatabaseReachable()` | Проверка соединения с базой | `server/src/db/client.ts` |
 | db | `disconnectDatabase()` | Закрытие пула при остановке | `server/src/db/client.ts` |
@@ -44,18 +54,23 @@ shared/    # Общий код: типы контрактов, констант�
 
 | Модель | Назначение | Связи |
 |---|---|---|
-| — | пусто | |
+| `User` | Сотрудник: вход в дашборд по логину, роль, должность | `createdBy` / `createdUsers` — self-relation «кто завёл» |
+| `Customer` | Клиент магазина: свой вход, телефон обязателен, email нет | — |
+| `Session` | Сессия сотрудника; в куке только id, состояние в таблице | `user` → `User`, `onDelete: Cascade` |
+| `AuditLog` | Журнал действий, только вставка и чтение | связей нет: логин и роль снимком |
+| `UserRole` (enum) | Роли сотрудников: ADMIN, MANAGER, SELLER | — |
 
-Подробности — в `docs/data-model.md`. Схема проектируется с нуля.
+Подробности — в [docs/data-model.md](docs/data-model.md).
 
 ### 1.4. Страницы и маршруты
 
 | URL | Раздел | Файл |
 |---|---|---|
 | `/` | Магазин — главная (заглушка) | `front/src/app/(shop)/page.tsx` |
-| `/dashboard` | Админка — сводка; сейчас проверяет связь с API | `front/src/app/(dashboard)/dashboard/page.tsx` |
-| `/login` | Вход (заглушка) | `front/src/app/(auth)/login/page.tsx` |
+| `/dashboard` | Админка — сводка; сейчас проверяет связь с API | `front/src/app/dashboard/(main)/page.tsx` |
+| `/dashboard/login` | Вход сотрудника в админку (заглушка) | `front/src/app/dashboard/(auth)/login/page.tsx` |
 
+Структура маршрутов и layout — в [docs/app-structure.md](docs/app-structure.md).
 Целевой состав dashboard — 8 табов аналитики, см. [docs/analytics-spec.md](docs/analytics-spec.md).
 
 ### 1.5. Ключевые компоненты
@@ -65,17 +80,22 @@ shared/    # Общий код: типы контрактов, констант�
 | `RootLayout` | Корень: шрифты, провайдеры, `lang="ru"` | `front/src/app/layout.tsx` |
 | `Providers` | Redux-провайдер, стор на клиента | `front/src/app/providers.tsx` |
 | `ShopLayout` | Обвязка магазина, класс `theme-shop` | `front/src/app/(shop)/layout.tsx` |
-| `DashboardLayout` | Сайдбар админки, класс `theme-dashboard` | `front/src/app/(dashboard)/layout.tsx` |
-| `AuthLayout` | Форма по центру, без обвязки | `front/src/app/(auth)/layout.tsx` |
-| `Button` | Примитив shadcn/ui (Base UI) | `front/src/components/ui/button.tsx` |
+| `DashboardRootLayout` | Общая обвязка админки, класс `theme-dashboard` | `front/src/app/dashboard/layout.tsx` |
+| `DashboardMainLayout` | Сайдбар и рабочая область разделов админки | `front/src/app/dashboard/(main)/layout.tsx` |
+| `DashboardAuthLayout` | Форма входа по центру, без сайдбара | `front/src/app/dashboard/(auth)/layout.tsx` |
 | `PriceTag` | Ценник товара; образец SCSS-модуля с токенами темы | `front/src/components/price-tag/` |
 
 ### 1.6. Общие функции, хуки, константы
 
 | Имя | Назначение | Файл |
 |---|---|---|
-| `USER_ROLES`, `UserRole` | Роли: ADMIN, MANAGER, CLIENT | `shared/src/constants/roles.ts` |
-| `USER_STATUSES`, `UserStatus` | Статус учётной записи: PENDING, ACTIVE, REJECTED, BLOCKED | `shared/src/constants/roles.ts` |
+| `USER_ROLES`, `UserRole` | Роли сотрудников: ADMIN, MANAGER, SELLER | `shared/src/constants/roles.ts` |
+| `USER_ROLE_LABELS` | Подписи ролей для интерфейса | `shared/src/constants/roles.ts` |
+| `AUDIT_ACTIONS`, `AUDIT_ACTION_LABELS` | Действия для журнала и их подписи | `shared/src/constants/audit-actions.ts` |
+| `LOGIN_PATTERN`, `PASSWORD_PATTERN`, `normalizeLogin()` | Правила логина и пароля, общие для сервера и формы | `shared/src/constants/credentials.ts` |
+| `LoginRequest`, `AuthUser`, `AuthResponse` | Контракты входа | `shared/src/types/auth.ts` |
+| `requireAuth`, `requireRole(...roles)` | Проверка сессии и ролей | `server/src/middlewares/require-auth.ts` |
+| `SESSION_COOKIE_NAME`, `sessionCookieOptions` | Настройки куки сессии | `server/src/config/session.ts` |
 | `ORDER_SOURCES`, `ORDER_SOURCE_LABELS` | Источники заказов: SITE, KASPI, OFFLINE | `shared/src/constants/order-sources.ts` |
 | `ApiErrorResponse`, `PaginatedResponse` | Общие формы ответов API | `shared/src/types/api.ts` |
 | `env`, `corsOrigins`, `isProduction` | Проверенные переменные окружения | `server/src/config/env.ts` |
@@ -104,18 +124,16 @@ shared/    # Общий код: типы контрактов, констант�
 | [architecture.md](docs/architecture.md) | Структура монорепозитория, слои `server/`, структура `front/` и `shared/`, решения по стеку, команды разработки, известные долги. |
 | [api-reference.md](docs/api-reference.md) | Контракты всех эндпоинтов API: параметры, ответы, коды ошибок. |
 | [roadmap.md](docs/roadmap.md) | Roadmap проекта: три планируемых этапа — пользователи; товары (добавление, импорт из МойСклад, папки и карточка, склады); заказы из Kaspi и поставщики. Этапы после 0–3 (закупки, выгрузка на Kaspi, офлайн-заказы, автоматизация, Dashboard, складской учёт, магазин) сохранены с наработками, без сроков. Риски и открытые вопросы. |
+| [app-structure.md](docs/app-structure.md) | Дерево маршрутов `front/src/app/`, как работают группы в скобках, почему сайдбар не в корневом layout админки, темы, два входа, где лежат компоненты. |
+| [deployment.md](docs/deployment.md) | Единый `.env` в корне и как его находит каждый пакет, список переменных, команды миграций и shadow-база, зависимости сборки. |
+| [data-model.md](docs/data-model.md) | Модели Prisma: `User` (сотрудник), `Customer` (клиент магазина), enum `UserRole`, общие правила по id, паролям и отключению записей, список миграций. |
 | [analytics-spec.md](docs/analytics-spec.md) | Спецификация аналитического модуля: принципы визуализации (Tufte / Few / Munzner), информационная архитектура из 8 табов, состав графиков и KPI. Источник правды для имплементации дашборда. |
 | [kaspi-api-integration.md](docs/kaspi-api-integration.md) | Kaspi Shop API целиком: авторизация по `X-Auth-Token`, шифрование токена, эндпоинты заказов и позиций, стратегия синхронизации, маппинг полей, статусы заказов, схема БД, грабли. |
 | [telegram-bot.md](docs/telegram-bot.md) | Telegram-бот: отправка сообщений и карточек-картинок заказа, маршрутизация получателям (поставщик / склад / доставка), уведомления об отменах и возвратах, cron и расписание, грабли. |
 
-### Ещё не созданы
-
-Создаются в момент первой записи, по правилу «новый код — сразу в документацию»
-(п.10 и раздел «Фиксация изменений кода в docs/» в [AGENTS.md](AGENTS.md)):
-
-- `data-model.md` — модели Prisma, таблицы, миграции, индексы;
-- `app-structure.md` — страницы, маршруты, разделы dashboard, ключевые компоненты `front/`;
-- `deployment.md` — окружения, переменные, деплой.
+Новые документы создаются в момент первой записи, по правилу «новый код — сразу
+в документацию» (п.10 и раздел «Фиксация изменений кода в docs/» в [AGENTS.md](AGENTS.md)).
+Незакрытых документов сейчас нет.
 
 ---
 
