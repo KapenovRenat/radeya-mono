@@ -31,6 +31,9 @@ shared/    # Общий код: типы контрактов, констант�
 | `POST /api/auth/login` | Вход по логину и паролю, ставит httpOnly-куку сессии | нет | `server/src/modules/auth/auth.routes.ts` |
 | `POST /api/auth/logout` | Завершение сессии, удаление куки | да | `server/src/modules/auth/auth.routes.ts` |
 | `GET /api/auth/me` | Текущий пользователь | да | `server/src/modules/auth/auth.routes.ts` |
+| `GET /api/users` | Список сотрудников | да | `server/src/modules/users/users.routes.ts` |
+| `POST /api/users` | Создание сотрудника | ADMIN | `server/src/modules/users/users.routes.ts` |
+| `GET /api/audit` | Журнал действий, постранично | ADMIN | `server/src/modules/audit/audit.routes.ts` |
 
 Подробные контракты — в [docs/api-reference.md](docs/api-reference.md).
 
@@ -46,6 +49,10 @@ shared/    # Общий код: типы контрактов, констант�
 | auth | `findActiveSession(id)` | Действующая сессия + пользователь, с проверкой срока и `isActive` | `server/src/modules/auth/auth.service.ts` |
 | auth | `destroySession(id)`, `destroyUserSessions(userId)` | Гашение сессий | `server/src/modules/auth/auth.service.ts` |
 | audit | `logAction(input)` | Запись в журнал; сбой не роняет операцию | `server/src/lib/audit.ts` |
+| users | `listUsers()` | Сотрудники, свежие сверху | `server/src/modules/users/users.service.ts` |
+| users | `createUser(input, createdById)` | Создание; дубль логина → 409 | `server/src/modules/users/users.service.ts` |
+| users | `toUserListItem(user)` | DTO наружу без `passwordHash` | `server/src/modules/users/users.service.ts` |
+| audit | `listAuditLog(page)` | Страница журнала по 50 записей | `server/src/modules/audit/audit.service.ts` |
 | db | `prisma` | Единственный экземпляр Prisma Client | `server/src/db/client.ts` |
 | db | `isDatabaseReachable()` | Проверка соединения с базой | `server/src/db/client.ts` |
 | db | `disconnectDatabase()` | Закрытие пула при остановке | `server/src/db/client.ts` |
@@ -68,7 +75,8 @@ shared/    # Общий код: типы контрактов, констант�
 |---|---|---|
 | `/` | Магазин — главная (заглушка) | `front/src/app/(shop)/page.tsx` |
 | `/dashboard` | Админка — сводка; сейчас проверяет связь с API | `front/src/app/dashboard/(main)/page.tsx` |
-| `/dashboard/login` | Вход сотрудника в админку (заглушка) | `front/src/app/dashboard/(auth)/login/page.tsx` |
+| `/dashboard/login` | Вход сотрудника в админку | `front/src/app/dashboard/(auth)/login/page.tsx` |
+| `/dashboard/accounts` | Аккаунты и История: таблица сотрудников, создание, журнал действий | `front/src/app/dashboard/(main)/accounts/page.tsx` |
 
 Структура маршрутов и layout — в [docs/app-structure.md](docs/app-structure.md).
 Целевой состав dashboard — 8 табов аналитики, см. [docs/analytics-spec.md](docs/analytics-spec.md).
@@ -87,6 +95,9 @@ shared/    # Общий код: типы контрактов, констант�
 | `Input` | Поле ввода: подпись, ошибка, нативные пропсы | `front/src/components/input/` |
 | `Button` | Кнопка: варианты через классы, нативные пропсы | `front/src/components/button/` |
 | `AuthGuard` | Пускает в разделы админки только вошедших | `front/src/features/auth/auth-guard.tsx` |
+| `UsersTable` | Таблица сотрудников | `front/src/app/dashboard/(main)/accounts/_components/users-table.tsx` |
+| `AuditTable` | Таблица журнала действий | `front/src/app/dashboard/(main)/accounts/_components/audit-table.tsx` |
+| `CreateUserDialog` | Модалка создания сотрудника на нативном `<dialog>` | `front/src/app/dashboard/(main)/accounts/_components/create-user-dialog.tsx` |
 
 ### 1.6. Общие функции, хуки, константы
 
@@ -115,6 +126,11 @@ shared/    # Общий код: типы контрактов, констант�
 | `useLogout()` | Выход и переход на форму входа | `front/src/features/auth/use-auth.ts` |
 | `useLoginForm()` | Состояние формы входа, отправка, текст ошибки | `front/src/features/auth/use-login-form.ts` |
 | `apiErrorMessage(error, fallback)` | Текст ошибки из ответа RTK Query | `front/src/shared/api/error-message.ts` |
+| `apiFieldErrors(error)` | Ошибки по полям из `VALIDATION_ERROR` | `front/src/shared/api/error-message.ts` |
+| `useGetUsersQuery`, `useCreateUserMutation` | Сотрудники; тег `User` обновляет таблицу после создания | `front/src/features/users/users-api.ts` |
+| `useCreateUserForm(onSuccess)` | Состояние формы создания сотрудника | `front/src/features/users/use-create-user-form.ts` |
+| `useGetAuditLogQuery` | Журнал действий | `front/src/features/audit/audit-api.ts` |
+| `formatDateTime(iso)` | Дата и время в часовом поясе пользователя | `front/src/lib/format.ts` |
 | `cn()` | Склейка Tailwind-классов | `front/src/lib/utils.ts` |
 
 ### 1.7. Фоновые задачи и воркеры

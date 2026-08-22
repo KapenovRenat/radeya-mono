@@ -7,3 +7,5 @@ export * from './constants/audit-actions';
 export * from './constants/credentials';
 export * from './types/api';
 export * from './types/auth';
+export * from './types/users';
+export * from './types/audit';

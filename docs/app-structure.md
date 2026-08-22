@@ -24,8 +24,14 @@ front/src/app/
     │   └── login/page.tsx          → /dashboard/login
     └── (main)/
         ├── layout.tsx              # сайдбар и рабочая область
-        └── page.tsx                → /dashboard
+        ├── page.tsx                → /dashboard
+        └── accounts/
+            ├── page.tsx            → /dashboard/accounts
+            └── _components/        # только для этой страницы
 ```
+
+Папка с префиксом `_` исключена из роутинга: в неё складываются компоненты,
+нужные одной странице. Маршрут создаёт только файл `page.tsx`.
 
 ### Как читать скобки
 
