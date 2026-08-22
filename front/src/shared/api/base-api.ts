@@ -15,6 +15,6 @@ export const baseApi = createApi({
     credentials: "include",
   }),
   // Теги нужны для инвалидации кэша: мутация помечает тег, списки перезапрашиваются сами.
-  tagTypes: ["Health", "User", "Product", "Supplier", "Order"],
+  tagTypes: ["Health", "Auth", "User", "Product", "Supplier", "Order"],
   endpoints: () => ({}),
 });

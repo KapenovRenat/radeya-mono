@@ -4,13 +4,10 @@ import styles from "./style.module.scss";
 import {cn} from "@/lib/utils";
 import {Input} from "@/components/input";
 import {Button} from "@/components/button";
+import {useLoginForm} from "@/features/auth/use-login-form";
 
 export default function LoginPage() {
-
-    function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        alert("Pressed")
-    }
+    const { login, setLogin, password, setPassword, error, isLoading, handleSubmit } = useLoginForm();
 
     return (
     <div className={cn("space-y-2", styles.dashboardLogin)}>
@@ -22,9 +19,10 @@ export default function LoginPage() {
         </div>
         <form onSubmit={handleSubmit}  className={cn(styles.LoginForm)}>
             <div className={cn(styles.LoginGroup)}>
-                <Input placeholder={"Введите Логин"} label={"Login"} autoComplete="username"/>
-                <Input placeholder={"Введите Пароль"} label={"Password"} type={"password"} autoComplete="current-password" />
-                <Button type="submit" className={styles.ButtonSubmit}>Войти</Button>
+                <Input placeholder={"Введите Логин"} label={"Login"} onChange={(e) => setLogin(e.target.value)} autoComplete="username" value={login}/>
+                <Input placeholder={"Введите Пароль"} label={"Password"} type={"password"} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <Button type="submit" className={styles.ButtonSubmit} disabled={isLoading}>{isLoading ? 'Вход ...' : 'Войти'}</Button>
+                {error && <div>{error}</div>}
             </div>
         </form>
     </div>

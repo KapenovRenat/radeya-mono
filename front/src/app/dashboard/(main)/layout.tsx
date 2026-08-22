@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import {AuthGuard} from "@/features/auth/auth-guard";
+import {DashboardNavMenu} from "@/components/dashboard-nav-menu";
 
 /**
  * Разделы админки с сайдбаром. Всё, что внутри (main), получает меню;
@@ -22,8 +24,12 @@ export default function DashboardMainLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-h-full">
-      <main className="flex-1 px-6 py-6">{children}</main>
+    <div className="flex min-h-full flex-col">
+      <DashboardNavMenu className="flex-1 px-6" />
+
+      <main className="flex-1 px-6 py-6">
+        <AuthGuard>{children}</AuthGuard>
+      </main>
     </div>
   );
 }

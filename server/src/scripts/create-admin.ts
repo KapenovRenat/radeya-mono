@@ -1,5 +1,6 @@
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
+import { Writable } from 'node:stream';
 
 import {
   LOGIN_PATTERN,
@@ -29,20 +30,19 @@ import { hashPassword } from '../modules/auth/auth.service';
 let muted = false;
 
 async function main() {
-  const rl = createInterface({ input: stdin, output: stdout });
+  // Свой поток вывода: пока muted, символы пароля не печатаются в терминал.
+  // Внутренности readline не трогаем — они меняются от версии к версии Node.
+  const output = new Writable({
+    write(chunk, encoding, callback) {
+      if (!muted) stdout.write(chunk, encoding);
+      callback();
+    },
+  });
 
-  // Пароль не должен светиться в терминале и оставаться в истории вывода.
-  const writeToOutput = (
-    rl as unknown as { _writeToOutput(text: string): void }
-  )._writeToOutput.bind(rl);
-
-  (rl as unknown as { _writeToOutput(text: string): void })._writeToOutput = (
-    text: string,
-  ) => {
-    if (!muted) writeToOutput(text);
-  };
+  const rl = createInterface({ input: stdin, output, terminal: true });
 
   const askHidden = async (query: string) => {
+    // Приглашение печатаем мимо обёртки, иначе оно тоже проглотится.
     stdout.write(query);
     muted = true;
     const answer = await rl.question('');

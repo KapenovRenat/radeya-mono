@@ -84,6 +84,9 @@ shared/    # Общий код: типы контрактов, констант�
 | `DashboardMainLayout` | Сайдбар и рабочая область разделов админки | `front/src/app/dashboard/(main)/layout.tsx` |
 | `DashboardAuthLayout` | Форма входа по центру, без сайдбара | `front/src/app/dashboard/(auth)/layout.tsx` |
 | `PriceTag` | Ценник товара; образец SCSS-модуля с токенами темы | `front/src/components/price-tag/` |
+| `Input` | Поле ввода: подпись, ошибка, нативные пропсы | `front/src/components/input/` |
+| `Button` | Кнопка: варианты через классы, нативные пропсы | `front/src/components/button/` |
+| `AuthGuard` | Пускает в разделы админки только вошедших | `front/src/features/auth/auth-guard.tsx` |
 
 ### 1.6. Общие функции, хуки, константы
 
@@ -107,6 +110,11 @@ shared/    # Общий код: типы контрактов, констант�
 | `useAppDispatch`, `useAppSelector`, `useAppStore` | Типизированные хуки Redux | `front/src/store/hooks.ts` |
 | `baseApi` | Единая точка RTK Query, теги кэша | `front/src/shared/api/base-api.ts` |
 | `useGetHealthQuery` | Образец эндпоинта RTK Query | `front/src/features/health/health-api.ts` |
+| `useLoginMutation`, `useLogoutMutation`, `useGetMeQuery` | Эндпоинты входа; общий тег кэша `Auth` | `front/src/features/auth/auth-api.ts` |
+| `useAuth()` | Текущий пользователь, признак загрузки и входа | `front/src/features/auth/use-auth.ts` |
+| `useLogout()` | Выход и переход на форму входа | `front/src/features/auth/use-auth.ts` |
+| `useLoginForm()` | Состояние формы входа, отправка, текст ошибки | `front/src/features/auth/use-login-form.ts` |
+| `apiErrorMessage(error, fallback)` | Текст ошибки из ответа RTK Query | `front/src/shared/api/error-message.ts` |
 | `cn()` | Склейка Tailwind-классов | `front/src/lib/utils.ts` |
 
 ### 1.7. Фоновые задачи и воркеры
