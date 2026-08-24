@@ -24,12 +24,14 @@ export default function DashboardMainLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-h-full flex-col">
-      <DashboardNavMenu className="flex-1 px-6" />
+      <AuthGuard>
+          <div className="flex min-h-full flex-col">
+              <DashboardNavMenu className="flex-1 px-6" />
 
-      <main className="flex-1 px-6 py-6">
-        <AuthGuard>{children}</AuthGuard>
-      </main>
-    </div>
+              <main className="flex-1 px-6 py-6">
+                  {children}
+              </main>
+          </div>
+      </AuthGuard>
   );
 }

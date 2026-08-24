@@ -31,7 +31,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `POST /api/auth/login` | Вход по логину и паролю, ставит httpOnly-куку сессии | нет | `server/src/modules/auth/auth.routes.ts` |
 | `POST /api/auth/logout` | Завершение сессии, удаление куки | да | `server/src/modules/auth/auth.routes.ts` |
 | `GET /api/auth/me` | Текущий пользователь | да | `server/src/modules/auth/auth.routes.ts` |
-| `GET /api/users` | Список сотрудников | да | `server/src/modules/users/users.routes.ts` |
+| `GET /api/users` | Список сотрудников | ADMIN | `server/src/modules/users/users.routes.ts` |
 | `POST /api/users` | Создание сотрудника | ADMIN | `server/src/modules/users/users.routes.ts` |
 | `GET /api/audit` | Журнал действий, постранично | ADMIN | `server/src/modules/audit/audit.routes.ts` |
 
@@ -95,6 +95,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `Input` | Поле ввода: подпись, ошибка, нативные пропсы | `front/src/components/input/` |
 | `Button` | Кнопка: варианты через классы, нативные пропсы | `front/src/components/button/` |
 | `AuthGuard` | Пускает в разделы админки только вошедших | `front/src/features/auth/auth-guard.tsx` |
+| `RoleGuard` | Ограничение раздела по ролям с редиректом | `front/src/features/auth/role-guard.tsx` |
 | `UsersTable` | Таблица сотрудников | `front/src/app/dashboard/(main)/accounts/_components/users-table.tsx` |
 | `AuditTable` | Таблица журнала действий | `front/src/app/dashboard/(main)/accounts/_components/audit-table.tsx` |
 | `CreateUserDialog` | Модалка создания сотрудника на нативном `<dialog>` | `front/src/app/dashboard/(main)/accounts/_components/create-user-dialog.tsx` |

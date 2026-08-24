@@ -4,11 +4,13 @@ import React from 'react';
 import { cn } from "@/lib/utils";
 import styles from "./style.module.scss";
 import {Button} from "@/components/button";
-import {useLogout} from "@/features/auth/use-auth";
+import {useAuth, useLogout} from "@/features/auth/use-auth";
 import Link from "next/link";
+import {USER_ROLES} from "@radeya/shared";
 
 export function DashboardNavMenu({ children, className }: { children?: React.ReactNode, className?: string }) {
     const { logout, isLoading } = useLogout();
+    const { user } = useAuth();
 
     return (
         <div className={cn(styles.DashboardNavMenu, `${className}`)}>
@@ -42,21 +44,21 @@ export function DashboardNavMenu({ children, className }: { children?: React.Rea
                             <p>Товары</p>
                         </Link>
                     </li>
-                    <li>
+                    {user?.role === USER_ROLES.ADMIN ? <li>
                         <Link href="/dashboard/accounts">
                             <div>
 
                             </div>
                             <p>Аккаунты и История</p>
                         </Link>
-                    </li>
+                    </li> : null}
                 </ul>
             </div>
 
             <div className={cn(styles.account)}>
                 <div className={styles.accountDesc}>
-                    <p>Admin</p>
-                    <span>Должность: CEO</span>
+                    <p>{user?.login}</p>
+                    <span>Должность: {user?.position}</span>
                 </div>
                 <Button onClick={logout} disabled={isLoading} className={styles.accountButton}>Выйти</Button>
             </div>

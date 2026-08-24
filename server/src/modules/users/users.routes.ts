@@ -5,14 +5,16 @@ import { requireAuth, requireRole } from '../../middlewares/require-auth';
 import { getUsers, postUser } from './users.controller';
 
 /**
- * Раздел «Аккаунты». Заводить сотрудников может только админ —
- * иначе менеджер выпишет себе роль ADMIN и обойдёт любые ограничения.
+ * Раздел «Аккаунты» — целиком для админа.
  *
- * Список видят и менеджеры: он нужен, чтобы понимать, кто за что отвечает.
+ * Заводить сотрудников иначе нельзя: менеджер выпишет себе роль ADMIN
+ * и обойдёт любые ограничения. Список закрыт по тому же принципу —
+ * состав команды с ролями и должностями рядовому сотруднику знать незачем,
+ * а раздел в интерфейсе всё равно доступен только админу.
  */
 export const usersRouter = Router();
 
-usersRouter.use(requireAuth);
+usersRouter.use(requireAuth, requireRole(USER_ROLES.ADMIN));
 
 usersRouter.get('/', getUsers);
-usersRouter.post('/', requireRole(USER_ROLES.ADMIN), postUser);
+usersRouter.post('/', postUser);

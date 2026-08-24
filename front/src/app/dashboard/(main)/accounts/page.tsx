@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { AuditTable } from "./_components/audit-table";
 import { CreateUserDialog } from "./_components/create-user-dialog";
 import { UsersTable } from "./_components/users-table";
+import {useAuth} from "@/features/auth/use-auth";
+import {USER_ROLES} from "@radeya/shared";
 
 const TABS = [
   { id: "accounts", label: "Аккаунты" },
@@ -18,6 +20,7 @@ type TabId = (typeof TABS)[number]["id"];
 export default function AccountsPage() {
   const [tab, setTab] = useState<TabId>("accounts");
   const [isDialogOpen, setDialogOpen] = useState(false);
+  const { user } = useAuth();
 
   return (
     <div className="space-y-4">
@@ -45,9 +48,9 @@ export default function AccountsPage() {
 
       {tab === "accounts" && (
         <div className="space-y-4">
-          <Button type="button" onClick={() => setDialogOpen(true)}>
+            {user?.role === USER_ROLES.ADMIN ? <Button type="button" onClick={() => setDialogOpen(true)}>
             Добавить аккаунт
-          </Button>
+          </Button> : null}
 
           <UsersTable />
 
