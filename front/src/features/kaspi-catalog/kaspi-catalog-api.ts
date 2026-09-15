@@ -1,4 +1,6 @@
 import type {
+  KaspiCabinetFetchRequest,
+  KaspiCabinetFetchResponse,
   KaspiCatalogPreview,
   KaspiCatalogPreviewRequest,
 } from "@radeya/shared";
@@ -23,7 +25,23 @@ export const kaspiCatalogApi = baseApi.injectEndpoints({
         body,
       }),
     }),
+
+    /**
+     * Обход каталога в кабинете Kaspi. Результат пока уходит в консоль сервера —
+     * сюда возвращаются только счётчики.
+     */
+    fetchKaspiCabinet: build.mutation<
+      KaspiCabinetFetchResponse,
+      KaspiCabinetFetchRequest
+    >({
+      query: (body) => ({
+        url: "/kaspi-catalog/fetch",
+        method: "POST",
+        body,
+      }),
+    }),
   }),
 });
 
-export const { usePreviewKaspiCatalogMutation } = kaspiCatalogApi;
+export const { usePreviewKaspiCatalogMutation, useFetchKaspiCabinetMutation } =
+  kaspiCatalogApi;

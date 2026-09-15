@@ -11,3 +11,4 @@ export * from './types/auth';
 export * from './types/users';
 export * from './types/audit';
 export * from './types/kaspi-catalog';
+export * from './types/kaspi-cabinet';

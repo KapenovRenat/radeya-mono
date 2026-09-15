@@ -20,6 +20,14 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'не задан — сервер не сможет подключиться к базе'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+
+  // Идентификатор продавца в Kaspi — он же в шапке кабинета. Не секрет, но в код
+  // не зашиваем: у другого продавца он другой. Необязательный — без него просто
+  // не работает загрузка каталога, остальной сервер поднимается.
+  KASPI_MERCHANT_ID: z
+    .string()
+    .regex(/^\d+$/, 'должен состоять только из цифр')
+    .optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

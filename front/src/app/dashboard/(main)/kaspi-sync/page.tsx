@@ -6,6 +6,7 @@ import { Button } from "@/components/button";
 import { useKaspiCatalogSync } from "@/features/kaspi-catalog/use-kaspi-catalog-sync";
 import { formatDateTime } from "@/lib/format";
 import { usePagination } from "@/lib/use-pagination";
+import { CabinetFetch } from "./_components/cabinet-fetch";
 import { CatalogPagination } from "./_components/catalog-pagination";
 import { CatalogSummary } from "./_components/catalog-summary";
 import { CatalogTable } from "./_components/catalog-table";
@@ -35,6 +36,8 @@ export default function KaspiSyncPage() {
           Данные только показываются, в базу пока ничего не сохраняется.
         </p>
       </div>
+
+      <CabinetFetch />
 
       <div className="flex flex-col gap-3 rounded-lg border p-4">
         <label className="flex flex-col gap-1 text-sm">

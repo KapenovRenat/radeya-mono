@@ -3,6 +3,8 @@ import { AUDIT_ACTIONS } from '@radeya/shared';
 
 import { clientIp, logAction } from '../../lib/audit';
 import { ValidationError } from '../../lib/errors';
+import { fetchCabinetSchema } from './kaspi-cabinet.schemas';
+import { fetchCabinetCatalog } from './kaspi-cabinet.service';
 import { assertHasFiles, buildCatalogPreview } from './kaspi-catalog.service';
 
 /** POST /api/kaspi-catalog/preview */
@@ -34,6 +36,35 @@ export const previewCatalog: RequestHandler = async (req, res) => {
   });
 
   res.json(preview);
+};
+
+/** POST /api/kaspi-catalog/fetch */
+export const fetchCatalog: RequestHandler = async (req, res) => {
+  const parsed = fetchCabinetSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    throw new ValidationError('Проверьте параметры загрузки');
+  }
+
+  const result = await fetchCabinetCatalog(parsed.data);
+
+  const author = req.user!;
+
+  await logAction({
+    userId: author.id,
+    userLogin: author.login,
+    userRole: author.role,
+    action: AUDIT_ACTIONS.KASPI_CABINET_FETCH,
+    // Куку в журнал не кладём ни при каких условиях — это доступ в кабинет.
+    after: {
+      total: result.total,
+      pages: result.pages,
+      stoppedAtPage: result.stoppedAtPage,
+    },
+    ip: clientIp(req),
+  });
+
+  res.json(result);
 };
 
 function readXml(value: unknown, field: string): string | undefined {
