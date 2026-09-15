@@ -12,6 +12,8 @@ export const AUDIT_ACTIONS = {
   USER_CREATED: 'USER_CREATED',
   USER_ROLE_CHANGED: 'USER_ROLE_CHANGED',
   USER_DEACTIVATED: 'USER_DEACTIVATED',
+  KASPI_CATALOG_PREVIEW: 'KASPI_CATALOG_PREVIEW',
+  KASPI_WAREHOUSES_SAVED: 'KASPI_WAREHOUSES_SAVED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -24,4 +26,6 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   USER_CREATED: 'Создан сотрудник',
   USER_ROLE_CHANGED: 'Изменена роль',
   USER_DEACTIVATED: 'Сотрудник отключён',
+  KASPI_CATALOG_PREVIEW: 'Синхронизация с Kaspi (предпросмотр)',
+  KASPI_WAREHOUSES_SAVED: 'Сохранены склады из выгрузки Kaspi',
 };

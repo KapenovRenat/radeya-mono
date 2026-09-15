@@ -34,6 +34,9 @@ shared/    # Общий код: типы контрактов, констант�
 | `GET /api/users` | Список сотрудников | ADMIN | `server/src/modules/users/users.routes.ts` |
 | `POST /api/users` | Создание сотрудника | ADMIN | `server/src/modules/users/users.routes.ts` |
 | `GET /api/audit` | Журнал действий, постранично | ADMIN | `server/src/modules/audit/audit.routes.ts` |
+| `POST /api/kaspi-catalog/preview` | Разбор выгрузок ACTIVE/ARCHIVE, без записи в БД | ADMIN | `server/src/modules/kaspi-catalog/kaspi-catalog.routes.ts` |
+| `GET /api/warehouses` | Справочник складов | ADMIN | `server/src/modules/warehouses/warehouses.routes.ts` |
+| `POST /api/warehouses/import-kaspi` | Импорт складов из предпросмотра выгрузки, повторяемый | ADMIN | `server/src/modules/warehouses/warehouses.routes.ts` |
 
 Подробные контракты — в [docs/api-reference.md](docs/api-reference.md).
 
@@ -53,6 +56,11 @@ shared/    # Общий код: типы контрактов, констант�
 | users | `createUser(input, createdById)` | Создание; дубль логина → 409 | `server/src/modules/users/users.service.ts` |
 | users | `toUserListItem(user)` | DTO наружу без `passwordHash` | `server/src/modules/users/users.service.ts` |
 | audit | `listAuditLog(page)` | Страница журнала по 50 записей | `server/src/modules/audit/audit.service.ts` |
+| kaspi-catalog | `parseKaspiCatalog(xml, status)` | Разбор выгрузки Kaspi в список товаров | `server/src/modules/kaspi-catalog/kaspi-catalog.parser.ts` |
+| kaspi-catalog | `buildCatalogPreview(input)` | Сводка по двум файлам, поиск дублей артикулов | `server/src/modules/kaspi-catalog/kaspi-catalog.service.ts` |
+| warehouses | `listWarehouses()` | Справочник складов по коду | `server/src/modules/warehouses/warehouses.service.ts` |
+| warehouses | `saveKaspiWarehouses(input)` | Импорт складов: upsert по `code`, не трогает `name` и заполненный город | `server/src/modules/warehouses/warehouses.service.ts` |
+| warehouses | `toWarehouseDto(warehouse)` | DTO наружу | `server/src/modules/warehouses/warehouses.service.ts` |
 | db | `prisma` | Единственный экземпляр Prisma Client | `server/src/db/client.ts` |
 | db | `isDatabaseReachable()` | Проверка соединения с базой | `server/src/db/client.ts` |
 | db | `disconnectDatabase()` | Закрытие пула при остановке | `server/src/db/client.ts` |
@@ -65,6 +73,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `Customer` | Клиент магазина: свой вход, телефон обязателен, email нет | — |
 | `Session` | Сессия сотрудника; в куке только id, состояние в таблице | `user` → `User`, `onDelete: Cascade` |
 | `AuditLog` | Журнал действий, только вставка и чтение | связей нет: логин и роль снимком |
+| `Warehouse` | Склад Kaspi: код `PP3`, `kaspiStoreId`, КАТО, наше название | связей пока нет: на неё сошлются товары и заказы |
 | `UserRole` (enum) | Роли сотрудников: ADMIN, MANAGER, SELLER | — |
 
 Подробности — в [docs/data-model.md](docs/data-model.md).
@@ -77,6 +86,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `/dashboard` | Админка — сводка; сейчас проверяет связь с API | `front/src/app/dashboard/(main)/page.tsx` |
 | `/dashboard/login` | Вход сотрудника в админку | `front/src/app/dashboard/(auth)/login/page.tsx` |
 | `/dashboard/accounts` | Аккаунты и История: таблица сотрудников, создание, журнал действий | `front/src/app/dashboard/(main)/accounts/page.tsx` |
+| `/dashboard/kaspi-sync` | Синхронизация с Kaspi: загрузка выгрузок, предпросмотр каталога | `front/src/app/dashboard/(main)/kaspi-sync/page.tsx` |
 
 Структура маршрутов и layout — в [docs/app-structure.md](docs/app-structure.md).
 Целевой состав dashboard — 8 табов аналитики, см. [docs/analytics-spec.md](docs/analytics-spec.md).
@@ -99,6 +109,9 @@ shared/    # Общий код: типы контрактов, констант�
 | `UsersTable` | Таблица сотрудников | `front/src/app/dashboard/(main)/accounts/_components/users-table.tsx` |
 | `AuditTable` | Таблица журнала действий | `front/src/app/dashboard/(main)/accounts/_components/audit-table.tsx` |
 | `CreateUserDialog` | Модалка создания сотрудника на нативном `<dialog>` | `front/src/app/dashboard/(main)/accounts/_components/create-user-dialog.tsx` |
+| `CatalogSummary` | Счётчики, список складов и кнопка сохранения складов в БД | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-summary.tsx` |
+| `CatalogTable` | Таблица разобранных товаров Kaspi | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-table.tsx` |
+| `CatalogPagination` | Панель пагинации под таблицей: размер страницы, номера, диапазон | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-pagination.tsx` |
 
 ### 1.6. Общие функции, хуки, константы
 
@@ -132,6 +145,15 @@ shared/    # Общий код: типы контрактов, констант�
 | `useCreateUserForm(onSuccess)` | Состояние формы создания сотрудника | `front/src/features/users/use-create-user-form.ts` |
 | `useGetAuditLogQuery` | Журнал действий | `front/src/features/audit/audit-api.ts` |
 | `formatDateTime(iso)` | Дата и время в часовом поясе пользователя | `front/src/lib/format.ts` |
+| `usePagination(items, pageSize)` | Постраничный показ списка из памяти: срез страницы, номера с разрывами, диапазон | `front/src/lib/use-pagination.ts` |
+| `PAGE_SIZE_OPTIONS`, `DEFAULT_PAGE_SIZE`, `PAGINATION_GAP` | Размеры страницы (10/20/30) и метка разрыва в ряду номеров | `front/src/lib/use-pagination.ts` |
+| `MARKETPLACES`, `LISTING_STATUSES` и подписи | Площадки и статус размещения | `shared/src/constants/marketplaces.ts` |
+| `KaspiCatalogOffer`, `KaspiCatalogPreview` | Контракты разбора выгрузки Kaspi | `shared/src/types/kaspi-catalog.ts` |
+| `usePreviewKaspiCatalogMutation` | Отправка выгрузок на разбор | `front/src/features/kaspi-catalog/kaspi-catalog-api.ts` |
+| `useKaspiCatalogSync()` | Выбор файлов, запуск разбора, результат и ошибка | `front/src/features/kaspi-catalog/use-kaspi-catalog-sync.ts` |
+| `SaveWarehousesRequest`, `SaveWarehousesResponse`, `WarehouseDto` | Контракты справочника складов | `shared/src/types/kaspi-catalog.ts` |
+| `useGetWarehousesQuery`, `useImportKaspiWarehousesMutation` | Справочник складов; тег `Warehouse` | `front/src/features/warehouses/warehouses-api.ts` |
+| `useSaveWarehouses()` | Сохранение складов из предпросмотра: итог и ошибка | `front/src/features/warehouses/use-save-warehouses.ts` |
 | `cn()` | Склейка Tailwind-классов | `front/src/lib/utils.ts` |
 
 ### 1.7. Фоновые задачи и воркеры

@@ -25,10 +25,14 @@ front/src/app/
     └── (main)/
         ├── layout.tsx              # сайдбар и рабочая область
         ├── page.tsx                → /dashboard
-        └── accounts/
+        ├── accounts/
+        │   ├── layout.tsx          # RoleGuard: только ADMIN
+        │   ├── page.tsx            → /dashboard/accounts
+        │   └── _components/        # только для этой страницы
+        └── kaspi-sync/
             ├── layout.tsx          # RoleGuard: только ADMIN
-            ├── page.tsx            → /dashboard/accounts
-            └── _components/        # только для этой страницы
+            ├── page.tsx            → /dashboard/kaspi-sync
+            └── _components/
 ```
 
 Ограничение по ролям стоит в `layout.tsx` раздела, а не на странице: так оно
@@ -125,6 +129,12 @@ front/src/app/
 | `front/src/features/<фича>/` | Логика фичи, включая эндпоинты RTK Query |
 | `front/src/shared/api/` | `baseApi` — единая точка RTK Query и теги кэша |
 | `front/src/lib/utils.ts` | `cn()` — склейка классов Tailwind |
+| `front/src/lib/` | Общая логика без привязки к фиче: `format.ts`, `use-pagination.ts` |
+
+`usePagination()` — постраничный показ списка, который уже целиком в памяти. Отдаёт
+срез страницы, номера кнопок с разрывами (`1 … 49 50 51 … 133`) и диапазон «показано
+с — по». Для серверной выборки не годится: там страницу отдаёт запрос, а не срез
+массива. Первым его использует таблица разбора выгрузки Kaspi.
 
 Правило по цветам: **только токены темы**, без хардкода. Хардкод перестаёт переключаться
 между магазином и админкой и между светлой и тёмной темой.
