@@ -159,6 +159,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `usePreviewKaspiCatalogMutation` | Отправка выгрузок на разбор | `front/src/features/kaspi-catalog/kaspi-catalog-api.ts` |
 | `useFetchKaspiCabinetMutation` | Запуск обхода кабинета Kaspi | `front/src/features/kaspi-catalog/kaspi-catalog-api.ts` |
 | `useKaspiCabinet()` | Кука, «запомнить», запуск обхода, счётчики и ошибка | `front/src/features/kaspi-catalog/use-kaspi-cabinet.ts` |
+| `useCabinetFilters(offers)` | Отбор товаров: статус, проблемы, поиск по артикулу и названиям | `front/src/features/kaspi-catalog/use-cabinet-filters.ts` |
 | `KaspiCabinetFetchRequest`, `KaspiCabinetFetchResponse`, `CabinetOffer` | Контракты загрузки из кабинета и разобранный товар | `shared/src/types/kaspi-cabinet.ts` |
 | `useKaspiCatalogSync()` | Выбор файлов, запуск разбора, результат и ошибка | `front/src/features/kaspi-catalog/use-kaspi-catalog-sync.ts` |
 | `SaveWarehousesRequest`, `SaveWarehousesResponse`, `WarehouseDto` | Контракты справочника складов | `shared/src/types/kaspi-catalog.ts` |

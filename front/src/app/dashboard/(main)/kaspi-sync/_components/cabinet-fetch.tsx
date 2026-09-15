@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-
 import { Button } from "@/components/button";
+import { useCabinetFilters } from "@/features/kaspi-catalog/use-cabinet-filters";
 import { useKaspiCabinet } from "@/features/kaspi-catalog/use-kaspi-cabinet";
 import { usePagination } from "@/lib/use-pagination";
 import { CabinetTable } from "./cabinet-table";
@@ -26,17 +25,20 @@ export function CabinetFetch() {
     error,
   } = useKaspiCabinet();
 
-  const [onlyProblems, setOnlyProblems] = useState(false);
+  const {
+    query,
+    setQuery,
+    showOffSale,
+    setShowOffSale,
+    onlyProblems,
+    setOnlyProblems,
+    filtered,
+  } = useCabinetFilters(result?.offers ?? []);
 
-  const offers = useMemo(() => {
-    if (!result) return [];
+  const pagination = usePagination(filtered);
 
-    return onlyProblems
-      ? result.offers.filter((offer) => offer.problems.length > 0)
-      : result.offers;
-  }, [result, onlyProblems]);
-
-  const pagination = usePagination(offers);
+  /** Любой фильтр меняет состав списка — старый номер страницы к нему не относится. */
+  const resetPage = () => pagination.setPage(1);
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-4">
@@ -110,18 +112,46 @@ export function CabinetFetch() {
 
       {result && result.offers.length > 0 && (
         <div className="space-y-3 border-t pt-3">
-          <label className="flex items-center gap-2 text-sm">
+          <div className="flex flex-wrap items-center gap-4">
             <input
-              type="checkbox"
-              checked={onlyProblems}
+              type="search"
+              className="min-w-64 flex-1 rounded border bg-transparent px-2 py-1 text-sm"
+              value={query}
               onChange={(event) => {
-                setOnlyProblems(event.target.checked);
-                // Фильтр меняет состав списка — старый номер страницы к нему не относится.
-                pagination.setPage(1);
+                setQuery(event.target.value);
+                resetPage();
               }}
+              placeholder="Поиск по названию или артикулу"
             />
-            Только с проблемами
-          </label>
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={showOffSale}
+                onChange={(event) => {
+                  setShowOffSale(event.target.checked);
+                  resetPage();
+                }}
+              />
+              Снятые с продажи
+            </label>
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={onlyProblems}
+                onChange={(event) => {
+                  setOnlyProblems(event.target.checked);
+                  resetPage();
+                }}
+              />
+              Только с проблемами
+            </label>
+
+            <span className="text-sm text-muted-foreground">
+              Найдено {filtered.length}
+            </span>
+          </div>
 
           <CabinetTable offers={pagination.pageItems} />
 
