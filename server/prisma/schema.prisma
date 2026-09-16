@@ -319,8 +319,13 @@ model Variant {
   fabricShadeId String?      @db.Uuid
   fabricShade   FabricShade? @relation(fields: [fabricShadeId], references: [id], onDelete: SetNull)
 
-  /// Общий выключатель: снял с продажи — уходит со всех каналов разом.
-  isActive Boolean @default(true)
+  /// Продаём или нет — **наше** решение, общее для всех каналов: сняли здесь,
+  /// значит снято и на Kaspi, и на сайте. Не путать с `Listing.status`: там
+  /// то, что сейчас по факту на площадке, и расхождение между ними — рабочий
+  /// сигнал («мы продаём, а на Kaspi архив»), а не ошибка.
+  ///
+  /// При импорте приезжает из кабинета: архивный товар заводится снятым.
+  status ListingStatus @default(ON_SALE)
 
   sortOrder Int @default(0)
 

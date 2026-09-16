@@ -88,7 +88,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `Warehouse` | Склад Kaspi: код `PP3`, `kaspiStoreId`, КАТО, наше название, снимок товаров и остатка | `stocks` → `VariantStock` |
 | `Category` | Папка каталога, наше дерево с `path` | self-relation `parent` / `children`, `products` |
 | `Product` | Карточка модели: название, категория, бренд, `kaspiFamilyId` | `category`, `variants` |
-| `Variant` | Артикул: поля кабинета, флаги доставки, закупка, ткань | `product`, `listings`, `stocks`, `changes`, `fabric`, `fabricShade` |
+| `Variant` | Артикул: поля кабинета, статус продажи, флаги доставки, закупка, ткань | `product`, `listings`, `stocks`, `changes`, `fabric`, `fabricShade` |
 | `Listing` | Размещение на канале: цена, статус, ID площадки | `variant`; `@@unique([variantId, channel])` |
 | `VariantStock` | Остаток артикула на складе и срок предзаказа | `variant`, `warehouse` |
 | `Fabric` | Ткань обивки: наш справочник, Kaspi её не знает | `shades`, `variants` |

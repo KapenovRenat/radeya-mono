@@ -123,6 +123,10 @@ async function createProduct(
           kaspiUpdates: toJson(offer.updates),
           kaspiUpdatedAt: toDate(offer.updatedAt),
 
+          // Архивный товар кабинета заводится снятым, а не активным:
+          // иначе он попадёт в будущую выгрузку на площадки как продаваемый.
+          status: offer.status,
+
           anyKaspiDelivery: offer.delivery.any,
           anyKaspiDeliveryExpress: offer.delivery.express,
           anyKaspiDeliveryLocal: offer.delivery.local,
