@@ -28,6 +28,12 @@ const envSchema = z.object({
     .string()
     .regex(/^\d+$/, 'должен состоять только из цифр')
     .optional(),
+
+  // Токен Kaspi Shop API (кабинет → Настройки → API). Постоянный, уходит
+  // заголовком X-Auth-Token. Это доступ к магазину: в логи, ответы и журнал
+  // он не попадает ни при каких условиях. Необязательный — без него не работают
+  // только запросы к официальному API.
+  KASPI_API_TOKEN: z.string().min(1).optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
