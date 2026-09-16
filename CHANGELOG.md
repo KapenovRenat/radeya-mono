@@ -14,6 +14,40 @@
 
 ---
 
+## 2026-09-16
+
+**Каталог: модели и сохранение товаров Kaspi в базу**
+- Модели `Category`, `Product`, `Variant`, `Listing`, `VariantStock`, `Fabric`,
+  `FabricShade`, `VariantChange` + enum'ы `SalesChannel`, `ListingStatus`, `ChangeSource`.
+  Миграции `catalog`, `warehouse_stats`, `variant_status`
+- Артикул, закупка и поля кабинета — на `Variant`; цена и статус площадки — в `Listing`;
+  остаток — в `VariantStock`. Наличие `Listing` на канале означает «продаём здесь»
+- `Variant.status` (`ON_SALE` / `OFF_SALE`) — наше решение продавать, одно на все каналы.
+  `Listing.status` — что по факту на площадке; расхождение между ними рабочий сигнал
+- Ткани и оттенки ведём у себя: Kaspi знает только тип ткани. `Fabric` → `FabricShade`,
+  выбор на артикул вручную после синхронизации
+- `POST /api/products/import-kaspi` — заводит только новые артикулы, существующие не
+  перезаписывает. Отчёт: создано, пропущено, сбойные, склады не из справочника
+- `GET /api/products/skus` — известные артикулы; по ним страница прячет из таблицы
+  уже сохранённое и пишет «Новых товаров на Kaspi не создано»
+- Товары уходят на сервер пачками по 100: весь каталог это ~5 МБ, а общий лимит тела
+  1 МБ. Маршрутный `express.json` тут не помог бы — тело разбирается раньше маршрутов
+
+**Склады из кабинета**
+- `collectCabinetWarehouses()` — сводка складов за обход из `availabilities[].storeId`.
+  Кода города (КАТО) в JSON кабинета нет, `cityId` всегда пуст и при импорте понимается
+  как «неизвестно»
+- `WarehousesPanel` — общая таблица складов для выгрузки и кабинета
+- В `Warehouse` снимок синхронизации: `kaspiOffersCount`, `kaspiTotalStock`, `kaspiStatsAt`
+
+**Прочее**
+- `SALES_CHANNELS` (SITE, KASPI, OZON) вместо `MARKETPLACES`, WB убран
+- Маппер кабинета дополнен: `model`, `fileId`, `merchantUid`, четыре флага доставки,
+  `imagesV2`, `updates`, остатки по складам
+- Разбор в консоли браузера: сырой товар рядом с разобранным (`logCabinetResponse`)
+- Грабли Windows: `prisma generate` не перезаписывает клиент при запущенном сервере —
+  записано в `docs/deployment.md`
+
 ## 2026-09-15
 
 **Загрузка каталога из кабинета Kaspi**
