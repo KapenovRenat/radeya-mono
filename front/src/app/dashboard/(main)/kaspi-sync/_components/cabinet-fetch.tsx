@@ -3,9 +3,12 @@
 import { Button } from "@/components/button";
 import { useCabinetFilters } from "@/features/kaspi-catalog/use-cabinet-filters";
 import { useKaspiCabinet } from "@/features/kaspi-catalog/use-kaspi-cabinet";
+import { useImportKaspiProducts } from "@/features/products/use-import-kaspi-products";
 import { usePagination } from "@/lib/use-pagination";
 import { CabinetTable } from "./cabinet-table";
 import { CatalogPagination } from "./catalog-pagination";
+import { ProductsImportPanel } from "./products-import-panel";
+import { WarehousesPanel } from "./warehouses-panel";
 
 /**
  * Загрузка каталога напрямую из кабинета Kaspi.
@@ -25,6 +28,10 @@ export function CabinetFetch() {
     error,
   } = useKaspiCabinet();
 
+  const productsImport = useImportKaspiProducts(result?.offers ?? []);
+
+  // В таблицу идут только новые товары: на второй синхронизации из полутора
+  // тысяч строк интересны те несколько, которых в каталоге ещё нет.
   const {
     query,
     setQuery,
@@ -33,7 +40,7 @@ export function CabinetFetch() {
     onlyProblems,
     setOnlyProblems,
     filtered,
-  } = useCabinetFilters(result?.offers ?? []);
+  } = useCabinetFilters(productsImport.newOffers);
 
   const pagination = usePagination(filtered);
 
@@ -110,7 +117,24 @@ export function CabinetFetch() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
+      {result && result.warehouses.length > 0 && (
+        <WarehousesPanel warehouses={result.warehouses} source="кабинете" />
+      )}
+
       {result && result.offers.length > 0 && (
+        <ProductsImportPanel
+          newCount={productsImport.newOffers.length}
+          knownCount={productsImport.knownCount}
+          isChecking={productsImport.isChecking}
+          onSave={productsImport.save}
+          isSaving={productsImport.isSaving}
+          savedCount={productsImport.savedCount}
+          result={productsImport.result}
+          error={productsImport.error}
+        />
+      )}
+
+      {result && productsImport.newOffers.length > 0 && (
         <div className="space-y-3 border-t pt-3">
           <div className="flex flex-wrap items-center gap-4">
             <input

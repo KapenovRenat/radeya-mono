@@ -14,6 +14,9 @@ export function toWarehouseDto(warehouse: Warehouse): WarehouseDto {
     kaspiCityId: warehouse.kaspiCityId,
     name: warehouse.name,
     isActive: warehouse.isActive,
+    kaspiOffersCount: warehouse.kaspiOffersCount,
+    kaspiTotalStock: warehouse.kaspiTotalStock,
+    kaspiStatsAt: warehouse.kaspiStatsAt?.toISOString() ?? null,
   };
 }
 
@@ -52,8 +55,18 @@ export async function saveKaspiWarehouses(
       let updated = 0;
       let unchanged = 0;
 
+      const statsAt = new Date();
+
       for (const incoming of input.warehouses) {
         const current = byCode.get(incoming.code);
+
+        // Снимок синхронизации: сколько товаров и какой остаток был на складе.
+        // Пишется всегда — это состояние на момент загрузки, а не настройка.
+        const stats = {
+          kaspiOffersCount: incoming.offersCount ?? null,
+          kaspiTotalStock: incoming.totalStock ?? null,
+          kaspiStatsAt: statsAt,
+        };
 
         if (!current) {
           await tx.warehouse.create({
@@ -61,6 +74,7 @@ export async function saveKaspiWarehouses(
               code: incoming.code,
               kaspiStoreId: incoming.storeId,
               kaspiCityId: incoming.cityId,
+              ...stats,
             },
           });
           created += 1;
@@ -74,17 +88,16 @@ export async function saveKaspiWarehouses(
           current.kaspiStoreId !== incoming.storeId ||
           current.kaspiCityId !== nextCityId;
 
-        if (!changed) {
-          unchanged += 1;
-          continue;
-        }
-
         await tx.warehouse.update({
           where: { code: incoming.code },
           // name намеренно отсутствует — его заполняет человек, выгрузка не знает.
-          data: { kaspiStoreId: incoming.storeId, kaspiCityId: nextCityId },
+          data: { kaspiStoreId: incoming.storeId, kaspiCityId: nextCityId, ...stats },
         });
-        updated += 1;
+
+        // Обновлённый снимок изменением справочника не считаем: иначе каждая
+        // синхронизация показывала бы «обновлено 4», хотя склады те же.
+        if (changed) updated += 1;
+        else unchanged += 1;
       }
 
       return { created, updated, unchanged };

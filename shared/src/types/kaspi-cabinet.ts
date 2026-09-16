@@ -1,4 +1,4 @@
-import type { ListingStatus } from '../constants/marketplaces';
+import type { ListingStatus } from '../constants/sales-channels';
 
 /**
  * Загрузка каталога из кабинета Kaspi (внутренний JSON, не XML-выгрузка).
@@ -25,7 +25,14 @@ export interface CabinetOffer {
   title: string;
   /** Название карточки на витрине Kaspi. В кабинете — синяя ссылка. */
   masterTitle: string | null;
+  /** Поле `model` кабинета — обычно повторяет `title`, но не всегда. */
+  model: string | null;
   brand: string | null;
+
+  /** Идентификатор выгрузки, из которой товар попал в кабинет. */
+  fileId: string | null;
+  /** Идентификатор продавца в терминах кабинета. */
+  merchantUid: string | null;
 
   /** Основная цена. В данных Kaspi это `oldPrice`, когда есть скидка. */
   price: number | null;
@@ -41,11 +48,18 @@ export interface CabinetOffer {
   imageUrl: string | null;
   /** Сколько картинок всего. */
   imagesCount: number;
+  /** Все картинки карточки: адреса трёх размеров на каждую. */
+  images: CabinetImage[];
 
   status: ListingStatus;
 
+  /** Какие способы доставки включены у товара в кабинете. */
+  delivery: CabinetDelivery;
+
   /** Коды складов: `PP3`, `PP4`. */
   warehouses: string[];
+  /** Остаток и срок предзаказа по каждому складу. */
+  stocks: CabinetStock[];
   /** Сумма остатков по складам. */
   totalStock: number;
   /** Максимальный срок предзаказа в днях. Ноль — товар в наличии. */
@@ -62,8 +76,80 @@ export interface CabinetOffer {
   shopLink: string | null;
   updatedAt: string | null;
 
+  /** История изменений товара в кабинете, как её отдаёт Kaspi. */
+  updates: unknown[];
+
   /** Что не удалось разобрать. Пустой массив — запись в порядке. */
   problems: string[];
+}
+
+/** Картинка карточки: Kaspi отдаёт готовые адреса трёх размеров. */
+export interface CabinetImage {
+  small: string | null;
+  medium: string | null;
+  large: string | null;
+}
+
+/**
+ * Способы доставки, включённые у товара в кабинете.
+ *
+ * Четыре флага — зеркало Kaspi, их пишет только синхронизация. Пятый,
+ * доставка своими силами при заказе с сайта, живёт у нас в `Variant`:
+ * кабинет о нём не знает и знать не должен.
+ */
+export interface CabinetDelivery {
+  any: boolean;
+  express: boolean;
+  local: boolean;
+  merchant: boolean;
+}
+
+/** Остаток товара на одном складе. */
+export interface CabinetStock {
+  /** Наш короткий код: `PP3`. */
+  warehouseCode: string;
+  /** Идентификатор в Kaspi: `6871008_PP3`. */
+  storeId: string;
+  /** Пусто — остаток не указан: товар под заказ. */
+  quantity: number | null;
+  /** Срок предзаказа в днях. 0 — товар в наличии. */
+  preOrderDays: number;
+}
+
+/**
+ * Склад, встреченный в обходе кабинета.
+ *
+ * Отдельный тип, а не KaspiCatalogWarehouse из выгрузки: там `cityId` — живое
+ * значение из файла, здесь он всегда пуст. В JSON кабинета кода города у склада
+ * нет: `allCityPrices` — это города, где показывается цена покупателю, а не
+ * города складов. Одинаковое имя при разном смысле однажды обманет.
+ */
+export interface CabinetWarehouse {
+  /** Наш короткий код: `PP3`. */
+  code: string;
+  /** Идентификатор в Kaspi: `6871008_PP3`. */
+  storeId: string;
+  /** Всегда null — кабинет его не отдаёт. Поле оставлено ради общей формы импорта. */
+  cityId: null;
+  /** Сколько товаров обхода лежит на этом складе. */
+  offersCount: number;
+  /** Сумма остатков по этому складу. */
+  totalStock: number;
+}
+
+/**
+ * Пара «как пришло — как разобрали» для одного товара.
+ *
+ * Нужна, чтобы сверять маппинг глазами в консоли браузера: рядом видно
+ * исходное поле Kaspi и то, во что оно превратилось у нас. Отдаётся только
+ * образцом в несколько товаров — сырьё весит около 2.4 КБ на штуку, почти
+ * целиком из-за цен по тремстам городам.
+ */
+export interface CabinetSample {
+  /** Товар как его отдал кабинет, без изменений. */
+  raw: unknown;
+  /** Он же после toCabinetOffer(). */
+  parsed: CabinetOffer;
 }
 
 export interface KaspiCabinetFetchRequest {
@@ -110,6 +196,15 @@ export interface KaspiCabinetFetchResponse {
 
   /** Сколько записей не удалось разобрать полностью. */
   withProblems: number;
+
+  /** Склады, встреченные в обходе. Сводка по всем товарам, отсортирована по коду. */
+  warehouses: CabinetWarehouse[];
+
+  /**
+   * Первые несколько товаров сырыми и разобранными — для сверки маппинга
+   * в консоли браузера. Не для показа в интерфейсе.
+   */
+  sample: CabinetSample[];
 
   /** Все полученные товары — оба режима в одном списке. */
   offers: CabinetOffer[];

@@ -35,9 +35,11 @@ shared/    # Общий код: типы контрактов, констант�
 | `POST /api/users` | Создание сотрудника | ADMIN | `server/src/modules/users/users.routes.ts` |
 | `GET /api/audit` | Журнал действий, постранично | ADMIN | `server/src/modules/audit/audit.routes.ts` |
 | `POST /api/kaspi-catalog/preview` | Разбор выгрузок ACTIVE/ARCHIVE, без записи в БД | ADMIN | `server/src/modules/kaspi-catalog/kaspi-catalog.routes.ts` |
-| `POST /api/kaspi-catalog/fetch` | Обход каталога в кабинете Kaspi, результат в консоль сервера | ADMIN | `server/src/modules/kaspi-catalog/kaspi-catalog.routes.ts` |
+| `POST /api/kaspi-catalog/fetch` | Обход каталога в кабинете Kaspi: товары и сводка складов, без записи в БД | ADMIN | `server/src/modules/kaspi-catalog/kaspi-catalog.routes.ts` |
 | `GET /api/warehouses` | Справочник складов | ADMIN | `server/src/modules/warehouses/warehouses.routes.ts` |
 | `POST /api/warehouses/import-kaspi` | Импорт складов из предпросмотра выгрузки, повторяемый | ADMIN | `server/src/modules/warehouses/warehouses.routes.ts` |
+| `GET /api/products/skus` | Артикулы, уже сохранённые в каталоге | ADMIN | `server/src/modules/products/products.routes.ts` |
+| `POST /api/products/import-kaspi` | Сохранение загруженных товаров в каталог; создаёт только новые | ADMIN | `server/src/modules/products/products.routes.ts` |
 
 Подробные контракты — в [docs/api-reference.md](docs/api-reference.md).
 
@@ -62,10 +64,15 @@ shared/    # Общий код: типы контрактов, констант�
 | kaspi-catalog | `fetchCabinetCatalog(input)` | Обход всех страниц кабинета, частичный результат при обрыве | `server/src/modules/kaspi-catalog/kaspi-cabinet.service.ts` |
 | kaspi-catalog | `fetchOffersPage(params)` | Одна страница JSON кабинета, проверка формата ответа | `server/src/modules/kaspi-catalog/kaspi-cabinet.client.ts` |
 | kaspi-catalog | `toCabinetOffer(raw)` | Сырой товар кабинета в наш DTO, спорное помечает проблемой | `server/src/modules/kaspi-catalog/kaspi-cabinet.mapper.ts` |
+| kaspi-catalog | `readAvailabilities(raw)` | Наличие товара по складам: `storeId`, код, остаток, предзаказ | `server/src/modules/kaspi-catalog/kaspi-cabinet.mapper.ts` |
+| kaspi-catalog | `collectCabinetWarehouses(offers)` | Сводка складов за обход из `availabilities`; `cityId` кабинет не отдаёт | `server/src/modules/kaspi-catalog/kaspi-cabinet.warehouses.ts` |
+| kaspi-catalog | `buildSample(raw)` | Три первых товара сырыми и разобранными — сверка маппинга в браузере | `server/src/modules/kaspi-catalog/kaspi-cabinet.service.ts` |
 | kaspi-catalog | `rememberCookie()`, `getStoredCookie()`, `forgetCookie()` | Кука кабинета в памяти процесса, не на диске | `server/src/modules/kaspi-catalog/kaspi-cabinet.session.ts` |
 | warehouses | `listWarehouses()` | Справочник складов по коду | `server/src/modules/warehouses/warehouses.service.ts` |
 | warehouses | `saveKaspiWarehouses(input)` | Импорт складов: upsert по `code`, не трогает `name` и заполненный город | `server/src/modules/warehouses/warehouses.service.ts` |
 | warehouses | `toWarehouseDto(warehouse)` | DTO наружу | `server/src/modules/warehouses/warehouses.service.ts` |
+| products | `listKnownSkus()` | Артикулы, уже лежащие в базе | `server/src/modules/products/products.service.ts` |
+| products | `importKaspiProducts(input, authorId)` | Импорт товаров кабинета: только новые, отчёт по пропущенным и сбойным | `server/src/modules/products/products.service.ts` |
 | db | `prisma` | Единственный экземпляр Prisma Client | `server/src/db/client.ts` |
 | db | `isDatabaseReachable()` | Проверка соединения с базой | `server/src/db/client.ts` |
 | db | `disconnectDatabase()` | Закрытие пула при остановке | `server/src/db/client.ts` |
@@ -78,8 +85,19 @@ shared/    # Общий код: типы контрактов, констант�
 | `Customer` | Клиент магазина: свой вход, телефон обязателен, email нет | — |
 | `Session` | Сессия сотрудника; в куке только id, состояние в таблице | `user` → `User`, `onDelete: Cascade` |
 | `AuditLog` | Журнал действий, только вставка и чтение | связей нет: логин и роль снимком |
-| `Warehouse` | Склад Kaspi: код `PP3`, `kaspiStoreId`, КАТО, наше название | связей пока нет: на неё сошлются товары и заказы |
+| `Warehouse` | Склад Kaspi: код `PP3`, `kaspiStoreId`, КАТО, наше название, снимок товаров и остатка | `stocks` → `VariantStock` |
+| `Category` | Папка каталога, наше дерево с `path` | self-relation `parent` / `children`, `products` |
+| `Product` | Карточка модели: название, категория, бренд, `kaspiFamilyId` | `category`, `variants` |
+| `Variant` | Артикул: поля кабинета, флаги доставки, закупка, ткань | `product`, `listings`, `stocks`, `changes`, `fabric`, `fabricShade` |
+| `Listing` | Размещение на канале: цена, статус, ID площадки | `variant`; `@@unique([variantId, channel])` |
+| `VariantStock` | Остаток артикула на складе и срок предзаказа | `variant`, `warehouse` |
+| `Fabric` | Ткань обивки: наш справочник, Kaspi её не знает | `shades`, `variants` |
+| `FabricShade` | Оттенок ткани, принадлежит своей ткани | `fabric`, `variants` |
+| `VariantChange` | История изменений артикула: поле, было, стало, источник | `variant` |
 | `UserRole` (enum) | Роли сотрудников: ADMIN, MANAGER, SELLER | — |
+| `SalesChannel` (enum) | Каналы продаж: SITE, KASPI, OZON | — |
+| `ListingStatus` (enum) | Статус размещения: ON_SALE, OFF_SALE | — |
+| `ChangeSource` (enum) | Источник изменения: KASPI_SYNC, MANUAL | — |
 
 Подробности — в [docs/data-model.md](docs/data-model.md).
 
@@ -114,10 +132,12 @@ shared/    # Общий код: типы контрактов, констант�
 | `UsersTable` | Таблица сотрудников | `front/src/app/dashboard/(main)/accounts/_components/users-table.tsx` |
 | `AuditTable` | Таблица журнала действий | `front/src/app/dashboard/(main)/accounts/_components/audit-table.tsx` |
 | `CreateUserDialog` | Модалка создания сотрудника на нативном `<dialog>` | `front/src/app/dashboard/(main)/accounts/_components/create-user-dialog.tsx` |
-| `CatalogSummary` | Счётчики, список складов и кнопка сохранения складов в БД | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-summary.tsx` |
+| `CatalogSummary` | Счётчики разбора выгрузки над таблицей товаров | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-summary.tsx` |
+| `WarehousesPanel` | Таблица складов и сохранение их в справочник; общая для выгрузки и кабинета | `front/src/app/dashboard/(main)/kaspi-sync/_components/warehouses-panel.tsx` |
+| `ProductsImportPanel` | Счётчик новых товаров и сохранение их в каталог | `front/src/app/dashboard/(main)/kaspi-sync/_components/products-import-panel.tsx` |
 | `CatalogTable` | Таблица разобранных товаров Kaspi | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-table.tsx` |
 | `CatalogPagination` | Панель пагинации под таблицей: размер страницы, номера, диапазон | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-pagination.tsx` |
-| `CabinetFetch` | Кука, запуск загрузки из кабинета, счётчики, фильтр и таблица | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-fetch.tsx` |
+| `CabinetFetch` | Кука, запуск загрузки из кабинета, счётчики, склады, фильтр и таблица | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-fetch.tsx` |
 | `CabinetTable` | Таблица товаров из кабинета: картинка, штрихкод, цены со скидкой, размер | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-table.tsx` |
 
 ### 1.6. Общие функции, хуки, константы
@@ -154,17 +174,23 @@ shared/    # Общий код: типы контрактов, констант�
 | `formatDateTime(iso)` | Дата и время в часовом поясе пользователя | `front/src/lib/format.ts` |
 | `usePagination(items, pageSize)` | Постраничный показ списка из памяти: срез страницы, номера с разрывами, диапазон | `front/src/lib/use-pagination.ts` |
 | `PAGE_SIZE_OPTIONS`, `DEFAULT_PAGE_SIZE`, `PAGINATION_GAP` | Размеры страницы (10/20/30) и метка разрыва в ряду номеров | `front/src/lib/use-pagination.ts` |
-| `MARKETPLACES`, `LISTING_STATUSES` и подписи | Площадки и статус размещения | `shared/src/constants/marketplaces.ts` |
+| `SALES_CHANNELS`, `LISTING_STATUSES` и подписи | Каналы продаж (SITE, KASPI, OZON) и статус размещения | `shared/src/constants/sales-channels.ts` |
+| `ImportKaspiProductsRequest`, `ImportKaspiProductsResponse`, `KnownSkusResponse` | Контракты сохранения товаров в каталог | `shared/src/types/products.ts` |
+| `useGetKnownSkusQuery`, `useImportKaspiProductsMutation` | Каталог; тег `Product` обновляет список артикулов после импорта | `front/src/features/products/products-api.ts` |
+| `useImportKaspiProducts(offers)` | Делит загруженное на новое и сохранённое, сохраняет новое | `front/src/features/products/use-import-kaspi-products.ts` |
 | `KaspiCatalogOffer`, `KaspiCatalogPreview` | Контракты разбора выгрузки Kaspi | `shared/src/types/kaspi-catalog.ts` |
 | `usePreviewKaspiCatalogMutation` | Отправка выгрузок на разбор | `front/src/features/kaspi-catalog/kaspi-catalog-api.ts` |
 | `useFetchKaspiCabinetMutation` | Запуск обхода кабинета Kaspi | `front/src/features/kaspi-catalog/kaspi-catalog-api.ts` |
-| `useKaspiCabinet()` | Кука, «запомнить», запуск обхода, счётчики и ошибка | `front/src/features/kaspi-catalog/use-kaspi-cabinet.ts` |
+| `useKaspiCabinet()` | Кука, «запомнить», запуск обхода, счётчики и ошибка; печатает разбор в консоль браузера | `front/src/features/kaspi-catalog/use-kaspi-cabinet.ts` |
 | `useCabinetFilters(offers)` | Отбор товаров: статус, проблемы, поиск по артикулу и названиям | `front/src/features/kaspi-catalog/use-cabinet-filters.ts` |
 | `KaspiCabinetFetchRequest`, `KaspiCabinetFetchResponse`, `CabinetOffer` | Контракты загрузки из кабинета и разобранный товар | `shared/src/types/kaspi-cabinet.ts` |
+| `CabinetWarehouse` | Склад из обхода кабинета: код, `storeId`, счётчики; `cityId` всегда пуст | `shared/src/types/kaspi-cabinet.ts` |
+| `CabinetImage`, `CabinetDelivery`, `CabinetStock` | Картинки, флаги доставки и остатки товара кабинета | `shared/src/types/kaspi-cabinet.ts` |
+| `CabinetSample` | Пара «сырой товар Kaspi — разобранный нами» для сверки маппинга | `shared/src/types/kaspi-cabinet.ts` |
 | `useKaspiCatalogSync()` | Выбор файлов, запуск разбора, результат и ошибка | `front/src/features/kaspi-catalog/use-kaspi-catalog-sync.ts` |
 | `SaveWarehousesRequest`, `SaveWarehousesResponse`, `WarehouseDto` | Контракты справочника складов | `shared/src/types/kaspi-catalog.ts` |
 | `useGetWarehousesQuery`, `useImportKaspiWarehousesMutation` | Справочник складов; тег `Warehouse` | `front/src/features/warehouses/warehouses-api.ts` |
-| `useSaveWarehouses()` | Сохранение складов из предпросмотра: итог и ошибка | `front/src/features/warehouses/use-save-warehouses.ts` |
+| `useSaveWarehouses()` | Сохранение складов из выгрузки или кабинета: итог и ошибка | `front/src/features/warehouses/use-save-warehouses.ts` |
 | `cn()` | Склейка Tailwind-классов | `front/src/lib/utils.ts` |
 
 ### 1.7. Фоновые задачи и воркеры

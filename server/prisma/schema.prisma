@@ -130,8 +130,362 @@ model Warehouse {
   /// Точку закрыли — отключаем, а не удаляем: на неё ссылаются прошлые заказы.
   isActive Boolean @default(true)
 
+  /// Сколько товаров лежало на складе по данным последней синхронизации.
+  /// Это снимок кабинета, а не живая цифра: после импорта товаров actual
+  /// считается по VariantStock. Нужен, чтобы видеть общую картину до импорта.
+  kaspiOffersCount Int?
+
+  /// Сумма остатков по складу на момент той же синхронизации.
+  kaspiTotalStock Int?
+
+  /// Когда снимок сделан. Без даты цифры выше нечем датировать,
+  /// и через месяц будет непонятно, свежие они или прошлогодние.
+  kaspiStatsAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  stocks VariantStock[]
+}
+
+/// Каналы продаж. Значения обязаны совпадать с SALES_CHANNELS
+/// в shared/src/constants/sales-channels.ts.
+enum SalesChannel {
+  SITE
+  KASPI
+  OZON
+}
+
+/// Статус размещения. Совпадает с LISTING_STATUSES в shared.
+enum ListingStatus {
+  ON_SALE
+  OFF_SALE
+}
+
+/// Откуда пришло изменение. Нужен, чтобы отличать правку человека от синхронизации:
+/// иначе в истории не понять, кто поставил цену — менеджер или кабинет Kaspi.
+enum ChangeSource {
+  KASPI_SYNC
+  MANUAL
+}
+
+/// Категория каталога. Наша собственная: Kaspi отдаёт свои `categoryPathCodes`,
+/// но дерево для сайта и для учёта мы строим сами.
+model Category {
+  id String @id @default(uuid()) @db.Uuid
+
+  name String
+  /// Для ЧПУ на витрине.
+  slug String @unique
+
+  parentId String?    @db.Uuid
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children Category[] @relation("CategoryTree")
+
+  /// Денормализованный путь предков `/id1/id5/`. Без него «все товары поддерева»
+  /// превращается в рекурсию на каждый запрос каталога.
+  path String @default("/")
+
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+
+  /// Имя уникально внутри одного родителя, а не во всём дереве:
+  /// «Угловые» может лежать и под диванами, и под кроватями.
+  @@unique([parentId, name])
+  @@index([path])
+}
+
+/// Карточка модели: «Диван Али». Артикула и цены здесь нет — они у модификации.
+/// Из Kaspi на каждый артикул создаётся свой товар; объединение в одну модель
+/// с несколькими тканями делается потом руками, когда доберёмся до витрины.
+model Product {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// Наше название. Приходит из `masterTitle`, дальше правится руками.
+  name String
+
+  /// Для ЧПУ на витрине. Заполняется при выводе товара на сайт.
+  slug String? @unique
+
+  categoryId String?   @db.Uuid
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  /// Из `brandName` кабинета. Не путать с полем `brand` Kaspi — там что-то иное.
+  brand String?
+
+  description String?
+
+  /// `familyId` кабинета как есть. По нему модификации одной модели
+  /// склеиваются в один товар — но только после проверки человеком.
+  kaspiFamilyId String?
+
+  isActive Boolean @default(true)
+
+  createdById String? @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  variants Variant[]
+
+  @@index([categoryId])
+  @@index([kaspiFamilyId])
+}
+
+/// Модификация — то, что реально продаётся и имеет артикул. Kaspi матчит
+/// позиции заказа по артикулу модификации, поэтому `sku` живёт здесь, а не у товара.
+model Variant {
+  id String @id @default(uuid()) @db.Uuid
+
+  productId String  @db.Uuid
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// Артикул. Ключ сопоставления с кабинетом, выгрузкой и позициями заказов.
+  sku String @unique
+
+  /// Штрихкод `ntin` из кабинета.
+  barcode String?
+
+  // ——— Поля кабинета Kaspi. Пишет только синхронизация, руками не правим:
+  // иначе расхождение с площадкой станет невидимым.
+
+  /// Название карточки на витрине Kaspi — синяя ссылка в кабинете.
+  kaspiMasterTitle String?
+
+  /// Наше название в кабинете — серая строка под ссылкой.
+  kaspiTitle String?
+
+  /// Поле `model` кабинета. Обычно повторяет `kaspiTitle`, но не всегда.
+  kaspiModel String?
+
+  /// Идентификатор карточки на витрине Kaspi.
+  kaspiMasterSku String?
+
+  /// Идентификатор нашего предложения — понадобится для смены цен из админки.
+  kaspiOfferId String?
+
+  /// Идентификатор выгрузки, из которой товар попал в кабинет.
+  kaspiFileId String?
+
+  /// Идентификатор продавца в терминах кабинета.
+  kaspiMerchantUid String?
+
+  /// Путь на витрину Kaspi.
+  kaspiShopLink String?
+
+  /// Картинки карточки: массив `{ small, medium, large }`. Файлы не выкачиваем —
+  /// адреса Kaspi отдаёт готовыми. Json, потому что показываем их целиком и
+  /// никогда не ищем по отдельной картинке.
+  kaspiImages Json?
+
+  /// История изменений товара в кабинете, как её отдаёт Kaspi. Хранится снимком:
+  /// формат недокументированный, разбирать его наугад нельзя, а потерять жалко.
+  kaspiUpdates Json?
+
+  /// Когда кабинет последний раз менял товар.
+  kaspiUpdatedAt DateTime?
+
+  // ——— Доставка. Четыре флага — зеркало кабинета, их пишет только синхронизация.
+
+  anyKaspiDelivery        Boolean @default(false)
+  anyKaspiDeliveryExpress Boolean @default(false)
+  anyKaspiDeliveryLocal   Boolean @default(false)
+  anyMerchantDelivery     Boolean @default(false)
+
+  /// Пятый флаг — наш: заказ с сайта везём сами. Кабинет о нём не знает.
+  siteDelivery Boolean @default(false)
+
+  // ——— Наши поля.
+
+  /// Закупочная цена. Наружу не отдаётся ни при какой выборке.
+  purchasePrice Decimal? @db.Decimal(12, 2)
+
+  /// Минимальная и максимальная цена по каналам продаж. Денормализация ради
+  /// сортировки и фильтра в таблице: считать минимум по размещениям на каждую
+  /// строку списка — это запрос на каждый товар.
+  minChannelPrice Decimal? @db.Decimal(12, 2)
+  maxChannelPrice Decimal? @db.Decimal(12, 2)
+
+  /// Ткань и оттенок для витрины. Kaspi названий тканей не знает — выбираем
+  /// вручную из справочника после синхронизации.
+  fabricId String?  @db.Uuid
+  fabric   Fabric?  @relation(fields: [fabricId], references: [id], onDelete: SetNull)
+
+  fabricShadeId String?      @db.Uuid
+  fabricShade   FabricShade? @relation(fields: [fabricShadeId], references: [id], onDelete: SetNull)
+
+  /// Общий выключатель: снял с продажи — уходит со всех каналов разом.
+  isActive Boolean @default(true)
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  listings Listing[]
+  stocks   VariantStock[]
+  changes  VariantChange[]
+
+  @@index([productId])
+  @@index([fabricId])
+  @@index([kaspiMasterSku])
+}
+
+/// Размещение модификации на канале продаж: цена, статус и идентификаторы площадки.
+/// Само наличие записи означает «продаём здесь»: нет строки — канал не используется.
+model Listing {
+  id String @id @default(uuid()) @db.Uuid
+
+  variantId String  @db.Uuid
+  variant   Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  channel SalesChannel
+
+  /// Что сейчас по факту на площадке. Пишет синхронизация, руками не меняем:
+  /// расхождение с `Variant.isActive` — рабочий сигнал, а не ошибка.
+  status ListingStatus @default(ON_SALE)
+
+  /// Основная цена. У Kaspi это зачёркнутая `oldPrice`, когда есть скидка.
+  price Decimal? @db.Decimal(12, 2)
+
+  /// Цена со скидкой. Пусто — скидки нет.
+  discountPrice Decimal? @db.Decimal(12, 2)
+
+  /// Процент скидки. Считает сервер: обратный счёт от процента не воспроизводит
+  /// фактическую цену — расходится на сотни тенге.
+  discountPercent Int @default(0)
+
+  /// Идентификатор предложения на площадке: Kaspi `offerId`, OZON `product_id`.
+  externalId String?
+
+  /// Идентификатор карточки: Kaspi `masterSku`.
+  externalSku String?
+
+  /// Ссылка на витрину площадки.
+  externalUrl String?
+
+  publishedAt  DateTime?
+  lastSyncedAt DateTime?
+
+  /// Почему последняя синхронизация не прошла. Пусто — прошла.
+  syncError String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Один товар не может стоять на канале дважды.
+  @@unique([variantId, channel])
+  @@index([channel, externalId])
+}
+
+/// Остаток модификации на складе. Остаток физический, поэтому висит на модификации,
+/// а не на размещении: коробка на складе одна, и показывать её тремя независимыми
+/// цифрами для трёх каналов — прямой путь продать то, чего нет.
+model VariantStock {
+  id String @id @default(uuid()) @db.Uuid
+
+  variantId String  @db.Uuid
+  variant   Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  warehouseId String    @db.Uuid
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  /// Пусто — остаток не указан: товар под заказ. Ноль и «неизвестно» — разное.
+  quantity Int?
+
+  /// Срок предзаказа в днях. Один на всех: при импорте приезжает из кабинета,
+  /// дальше правится у нас и уходит обратно на площадку. У артикулов, которых
+  /// в Kaspi нет, значение ставим сами. 0 — товар в наличии.
+  preOrderDays Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([variantId, warehouseId])
+  @@index([warehouseId])
+}
+
+/// Ткань обивки. Справочник для витрины: Kaspi знает только тип ткани,
+/// название и палитру ведём у себя и выбираем на артикул из списка.
+model Fabric {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// Машинное имя для артикулов и адресов: `arben-tessoro`.
+  code String @unique
+
+  name String
+
+  /// Тип ткани: велюр, рогожка, экокожа. Это то немногое, что знает Kaspi.
+  type String?
+
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shades   FabricShade[]
+  variants Variant[]
+}
+
+/// Оттенок ткани. Принадлежит своей ткани: «серый Tessoro» и «серый Bravo» —
+/// разные оттенки, и общим справочником цветов их не выразить.
+model FabricShade {
+  id String @id @default(uuid()) @db.Uuid
+
+  fabricId String @db.Uuid
+  fabric   Fabric @relation(fields: [fabricId], references: [id], onDelete: Cascade)
+
+  code String
+  name String
+
+  /// Цвет плашки на витрине, если фото образца нет.
+  hex String?
+
+  /// Фото образца ткани.
+  imageUrl String?
+
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  variants Variant[]
+
+  @@unique([fabricId, code])
+}
+
+/// История изменений по артикулу: что поменялось, когда и откуда.
+/// Отдельно от `AuditLog`: тот про действия сотрудников, а сюда попадают
+/// и правки человека, и то, что приехало из кабинета Kaspi.
+model VariantChange {
+  id String @id @default(uuid()) @db.Uuid
+
+  variantId String  @db.Uuid
+  variant   Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  /// Имя изменившегося поля: `purchasePrice`, `listing.KASPI.price`.
+  field String
+
+  /// Значения строками: поля разного типа, а история read-only —
+  /// считать по ней ничего не будем, только показывать.
+  oldValue String?
+  newValue String?
+
+  source ChangeSource
+
+  /// Кто изменил. Пусто для синхронизации: у неё нет автора.
+  userId String? @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  @@index([variantId, createdAt])
 }
 
 /// Клиент магазина: регистрируется сам с витрины, вход отдельный от дашборда.

@@ -1,4 +1,10 @@
-import { LISTING_STATUSES, type CabinetOffer } from '@radeya/shared';
+import {
+  LISTING_STATUSES,
+  type CabinetDelivery,
+  type CabinetImage,
+  type CabinetOffer,
+  type CabinetStock,
+} from '@radeya/shared';
 
 import type { RawCabinetOffer } from './kaspi-cabinet.client';
 
@@ -16,8 +22,10 @@ export function toCabinetOffer(raw: RawCabinetOffer): CabinetOffer {
   if (!sku) problems.push('Нет артикула');
 
   const prices = readPrices(raw, problems);
+  const availabilities = readAvailabilities(raw);
   const stock = readStock(raw);
-  const images = asArray(raw.imagesV2);
+  const rawImages = asArray(raw.imagesV2);
+  const images = readImages(rawImages);
 
   const familyId = asString(raw.familyId);
 
@@ -26,11 +34,15 @@ export function toCabinetOffer(raw: RawCabinetOffer): CabinetOffer {
     masterSku: asString(raw.masterSku),
     offerId: asString(raw.offerId),
 
-    // `title` и `model` — одна и та же строка, берём первую непустую.
+    // `title` и `model` — обычно одна и та же строка, берём первую непустую.
     title: asString(raw.title) ?? asString(raw.model) ?? '',
     masterTitle: asString(raw.masterTitle),
+    model: asString(raw.model),
     // brandName — наш бренд; поле brand содержит что-то другое, см. docs.
     brand: asString(raw.brandName) ?? asString(raw.brandCode),
+
+    fileId: asString(raw.fileId),
+    merchantUid: asString(raw.merchantUid),
 
     price: prices.price,
     discountPrice: prices.discountPrice,
@@ -38,14 +50,18 @@ export function toCabinetOffer(raw: RawCabinetOffer): CabinetOffer {
 
     barcode: readBarcode(raw),
 
-    imageUrl: readFirstImage(images),
+    imageUrl: images[0]?.small ?? images[0]?.medium ?? images[0]?.large ?? null,
     imagesCount: images.length,
+    images,
 
     status: readStatus(raw),
+
+    delivery: readDelivery(raw),
 
     warehouses: asArray(raw.points)
       .map(asString)
       .filter((code): code is string => code !== null),
+    stocks: toStocks(availabilities),
     totalStock: stock.total,
     preOrderDays: stock.preOrderDays,
 
@@ -56,8 +72,67 @@ export function toCabinetOffer(raw: RawCabinetOffer): CabinetOffer {
     shopLink: asString(raw.shopLink),
     updatedAt: asString(raw.updatedAt),
 
+    updates: asArray(raw.updates),
+
     problems,
   };
+}
+
+/**
+ * Флаги доставки кабинета.
+ *
+ * Отсутствующий флаг — это `false`, а не «неизвестно»: в кабинете выключенный
+ * способ доставки поля может не прислать вовсе, и трактовать это как включённый
+ * нельзя — товар уедет покупателю способом, которым мы его не возим.
+ */
+function readDelivery(raw: RawCabinetOffer): CabinetDelivery {
+  return {
+    any: raw.anyKaspiDelivery === true,
+    express: raw.anyKaspiDeliveryExpress === true,
+    local: raw.anyKaspiDeliveryLocal === true,
+    merchant: raw.anyMerchantDelivery === true,
+  };
+}
+
+/** Картинки карточки: три размера на каждую, адреса готовые — файлы не качаем. */
+function readImages(rawImages: unknown[]): CabinetImage[] {
+  const images: CabinetImage[] = [];
+
+  for (const item of rawImages) {
+    const image = asRecord(item);
+    if (!image) continue;
+
+    const small = asString(image.small);
+    const medium = asString(image.medium);
+    const large = asString(image.large);
+
+    // Запись без единого адреса бесполезна: показывать нечего и хранить нечего.
+    if (small === null && medium === null && large === null) continue;
+
+    images.push({ small, medium, large });
+  }
+
+  return images;
+}
+
+/** Наличие по складам в виде, пригодном для сохранения: без записей без склада. */
+function toStocks(availabilities: CabinetAvailability[]): CabinetStock[] {
+  const stocks: CabinetStock[] = [];
+
+  for (const availability of availabilities) {
+    const { code, storeId } = availability;
+
+    if (code === null || storeId === null) continue;
+
+    stocks.push({
+      warehouseCode: code,
+      storeId,
+      quantity: availability.stockCount,
+      preOrderDays: availability.preOrderDays,
+    });
+  }
+
+  return stocks;
 }
 
 interface Prices {
@@ -127,6 +202,53 @@ interface Stock {
   preOrderDays: number;
 }
 
+/** Строка наличия: остаток товара на одном складе. */
+export interface CabinetAvailability {
+  /** Идентификатор в Kaspi: `6871008_PP3`. Пусто — склад в записи не назван. */
+  storeId: string | null;
+  /** Наш короткий код: `PP3`. Хвост `storeId`, а не отдельное поле ответа. */
+  code: string | null;
+  /** Пусто — остаток не указан, товар под заказ. Ноль и «неизвестно» — разное. */
+  stockCount: number | null;
+  /** Срок предзаказа в днях. 0 — товар в наличии. */
+  preOrderDays: number;
+}
+
+/**
+ * Наличие по складам.
+ *
+ * Разбор `availabilities` живёт здесь один раз: по нему считается и остаток
+ * товара, и сводка складов за обход. Записи без узнаваемого `storeId` остаются
+ * в списке — остаток по ним реальный, и терять его из суммы нельзя; в справочник
+ * складов такую строку не возьмут, там нужен идентификатор.
+ */
+export function readAvailabilities(raw: RawCabinetOffer): CabinetAvailability[] {
+  const result: CabinetAvailability[] = [];
+
+  for (const item of asArray(raw.availabilities)) {
+    const availability = asRecord(item);
+    if (!availability) continue;
+
+    const storeId = asString(availability.storeId);
+
+    result.push({
+      storeId,
+      code: storeId === null ? null : readWarehouseCode(storeId),
+      stockCount: asNumber(availability.stockCount),
+      preOrderDays: asNumber(availability.preOrder) ?? 0,
+    });
+  }
+
+  return result;
+}
+
+/** `6871008_PP3` → `PP3`. Всё, что не этой формы, складом не считаем. */
+function readWarehouseCode(storeId: string): string | null {
+  const match = /^\d+_(PP\d+)$/.exec(storeId);
+
+  return match?.[1] ?? null;
+}
+
 /**
  * Остатки по складам.
  *
@@ -137,12 +259,9 @@ function readStock(raw: RawCabinetOffer): Stock {
   let total = 0;
   let preOrderDays = 0;
 
-  for (const item of asArray(raw.availabilities)) {
-    const availability = asRecord(item);
-    if (!availability) continue;
-
-    total += asNumber(availability.stockCount) ?? 0;
-    preOrderDays = Math.max(preOrderDays, asNumber(availability.preOrder) ?? 0);
+  for (const availability of readAvailabilities(raw)) {
+    total += availability.stockCount ?? 0;
+    preOrderDays = Math.max(preOrderDays, availability.preOrderDays);
   }
 
   return { total, preOrderDays };
@@ -155,14 +274,6 @@ function readBarcode(raw: RawCabinetOffer): string | null {
   if (!barcode) return null;
 
   return asString(barcode.ntin) ?? asString(barcode.barcode);
-}
-
-function readFirstImage(images: unknown[]): string | null {
-  const first = asRecord(images[0]);
-
-  if (!first) return null;
-
-  return asString(first.small) ?? asString(first.medium) ?? asString(first.large);
 }
 
 /** В ответе путь идёт от частного к общему — разворачиваем для показа. */

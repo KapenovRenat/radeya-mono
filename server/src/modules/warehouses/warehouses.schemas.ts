@@ -42,6 +42,10 @@ export const saveWarehousesSchema = z.object({
           .trim()
           .regex(KATO_PATTERN, 'Код города ожидается числом (КАТО)')
           .nullable(),
+
+        // Снимок синхронизации. Необязательны: в XML-выгрузке остатка по складу нет.
+        offersCount: z.number().int().min(0).optional(),
+        totalStock: z.number().int().optional(),
       }),
     )
     .min(1, 'Список складов пуст')

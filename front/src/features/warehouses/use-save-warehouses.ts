@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import type {
-  KaspiCatalogWarehouse,
+  SaveWarehousesRequest,
   SaveWarehousesResponse,
 } from "@radeya/shared";
 
@@ -10,7 +10,16 @@ import { apiErrorMessage } from "@/shared/api/error-message";
 import { useImportKaspiWarehousesMutation } from "./warehouses-api";
 
 /**
- * Сохранение складов из предпросмотра выгрузки в справочник.
+ * Склад в виде, пригодном для импорта.
+ *
+ * Форма, а не конкретный тип источника: склады приходят и из XML-выгрузки
+ * (`KaspiCatalogWarehouse`), и из обхода кабинета (`CabinetWarehouse`).
+ * Счётчики необязательны — в выгрузке остатка по складу нет.
+ */
+type ImportableWarehouse = SaveWarehousesRequest["warehouses"][number];
+
+/**
+ * Сохранение складов в справочник — из предпросмотра выгрузки или из кабинета.
  *
  * Отдельно от товаров: склады — справочник, он заводится один раз и не ждёт,
  * пока мы разберёмся с разбором названий и артикулов.
@@ -21,20 +30,25 @@ export function useSaveWarehouses() {
   const [error, setError] = useState<string | null>(null);
 
   const saveWarehouses = useCallback(
-    async (warehouses: KaspiCatalogWarehouse[]) => {
+    async (warehouses: readonly ImportableWarehouse[]) => {
       setError(null);
       setResult(null);
 
       try {
         setResult(
           await save({
-            // offersCount на сервер не отправляем: это счётчик текущей выгрузки,
-            // а не свойство склада.
-            warehouses: warehouses.map(({ code, storeId, cityId }) => ({
-              code,
-              storeId,
-              cityId,
-            })),
+            // Счётчики уходят вместе со складом: в базе они лежат снимком
+            // последней синхронизации — по ним видно общую картину до того,
+            // как товары импортированы.
+            warehouses: warehouses.map(
+              ({ code, storeId, cityId, offersCount, totalStock }) => ({
+                code,
+                storeId,
+                cityId,
+                offersCount,
+                totalStock,
+              }),
+            ),
           }).unwrap(),
         );
       } catch (requestError) {

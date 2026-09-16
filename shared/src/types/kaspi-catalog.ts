@@ -1,4 +1,4 @@
-import type { ListingStatus } from '../constants/marketplaces';
+import type { ListingStatus } from '../constants/sales-channels';
 
 /**
  * Разбор выгрузки каталога Kaspi (ACTIVE.xml и ARCHIVE.xml).
@@ -85,6 +85,12 @@ export interface SaveWarehousesRequest {
     code: string;
     storeId: string;
     cityId: string | null;
+    /**
+     * Сколько товаров на складе и какой суммарный остаток — снимок текущей
+     * синхронизации. В выгрузке остатка нет, поэтому оба поля необязательны.
+     */
+    offersCount?: number;
+    totalStock?: number;
   }>;
 }
 
@@ -106,6 +112,10 @@ export interface WarehouseDto {
   kaspiCityId: string | null;
   name: string | null;
   isActive: boolean;
+  /** Снимок последней синхронизации: товаров, остаток и когда посчитано. */
+  kaspiOffersCount: number | null;
+  kaspiTotalStock: number | null;
+  kaspiStatsAt: string | null;
 }
 
 /** Тело POST /api/kaspi-catalog/preview: содержимое файлов как текст. */

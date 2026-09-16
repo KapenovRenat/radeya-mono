@@ -1,4 +1,4 @@
-import type { KaspiCabinetFetchResponse } from '@radeya/shared';
+import type { CabinetSample, KaspiCabinetFetchResponse } from '@radeya/shared';
 
 import { env } from '../../config/env';
 import { AppError, ValidationError } from '../../lib/errors';
@@ -6,13 +6,14 @@ import { logger } from '../../lib/logger';
 import { fetchOffersPage, type RawCabinetOffer } from './kaspi-cabinet.client';
 import { toCabinetOffer } from './kaspi-cabinet.mapper';
 import { getStoredCookie, hasStoredCookie, rememberCookie } from './kaspi-cabinet.session';
+import { collectCabinetWarehouses } from './kaspi-cabinet.warehouses';
 
 /**
  * Обход каталога кабинета Kaspi.
  *
- * Пока задача одна — получить данные и показать их в консоли сервера.
- * Разбор в наши модели и таблица на странице появятся следующим шагом,
- * в базу не пишется ничего.
+ * Отдаёт разобранные товары, сводку складов и образец «сырое рядом с
+ * разобранным» для сверки маппинга. В базу не пишется ничего: сохранение —
+ * отдельное решение, после того как данные проверены глазами.
  */
 
 /** Сколько товаров просим за раз. Проверено: кабинет отдаёт ровно столько. */
@@ -23,6 +24,15 @@ const PAUSE_BETWEEN_PAGES_MS = 500;
 
 /** Страховка от бесконечного цикла, если кабинет перестанет листать. */
 const MAX_PAGES = 500;
+
+/**
+ * Сколько товаров уходит на страницу сырыми — для сверки маппинга в консоли.
+ *
+ * Три, а не весь каталог: сырой товар весит около 2.4 КБ, почти всё это цены
+ * по тремстам городам. Полторы тысячи таких — три мегабайта в ответе и столько
+ * же в памяти вкладки, ради того же, что видно на трёх.
+ */
+const SAMPLE_SIZE = 3;
 
 export interface FetchCatalogInput {
   cookie?: string;
@@ -49,15 +59,16 @@ export async function fetchCabinetCatalog(
   const onSale = await crawl({ merchantId, cookie, onSale: true });
   const offSale = await crawl({ merchantId, cookie, onSale: false });
 
-  logSample(onSale.offers[0] ?? offSale.offers[0]);
-
-  const offers = [...onSale.offers, ...offSale.offers].map(toCabinetOffer);
+  const raw = [...onSale.offers, ...offSale.offers];
+  const offers = raw.map(toCabinetOffer);
+  const warehouses = collectCabinetWarehouses(raw);
+  const sample = buildSample(raw);
   const total = offers.length;
   const withProblems = offers.filter((offer) => offer.problems.length > 0).length;
   const expected = sumExpected(onSale.expected, offSale.expected);
 
   logger.info(
-    `Kaspi: обход завершён — в продаже ${onSale.offers.length}, архив ${offSale.offers.length}, всего ${total}, с проблемами ${withProblems}`,
+    `Kaspi: обход завершён — в продаже ${onSale.offers.length}, архив ${offSale.offers.length}, всего ${total}, с проблемами ${withProblems}, складов ${warehouses.length}`,
   );
 
   if (expected !== null && expected !== total) {
@@ -76,6 +87,8 @@ export async function fetchCabinetCatalog(
     stoppedReason: stopped.stoppedReason,
     hasStoredCookie: hasStoredCookie(),
     withProblems,
+    warehouses,
+    sample,
     offers,
   };
 }
@@ -214,27 +227,22 @@ function collectNew(
 }
 
 /**
- * Один товар в консоль — чтобы глазами увидеть, что пришло.
+ * Образец «как пришло — как разобрали» для консоли браузера.
  *
- * `allCityPrices` сворачиваем: там около трёхсот городов, и в консоли
- * они прячут все остальные поля.
+ * Смотреть сырьё в консоли сервера неудобно: там оно одной простынёй, без
+ * сворачивания объектов и без соседнего разобранного вида. В браузере пара
+ * лежит рядом, и расхождение маппинга видно сразу.
  */
-function logSample(first: RawCabinetOffer | undefined): void {
-  if (!first) {
+function buildSample(raw: RawCabinetOffer[]): CabinetSample[] {
+  if (raw.length === 0) {
     logger.warn('Kaspi: не получено ни одного товара');
-    return;
+    return [];
   }
 
-  const cityPrices = first.allCityPrices;
-  const cities =
-    cityPrices && typeof cityPrices === 'object' ? Object.entries(cityPrices) : [];
-
-  logger.info('Kaspi: первый товар', {
-    ...first,
-    allCityPrices: cities.length
-      ? { городов: cities.length, пример: cities[0] }
-      : cityPrices,
-  });
+  return raw.slice(0, SAMPLE_SIZE).map((offer) => ({
+    raw: offer,
+    parsed: toCabinetOffer(offer),
+  }));
 }
 
 function pause(ms: number): Promise<void> {

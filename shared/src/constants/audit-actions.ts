@@ -15,6 +15,7 @@ export const AUDIT_ACTIONS = {
   KASPI_CATALOG_PREVIEW: 'KASPI_CATALOG_PREVIEW',
   KASPI_WAREHOUSES_SAVED: 'KASPI_WAREHOUSES_SAVED',
   KASPI_CABINET_FETCH: 'KASPI_CABINET_FETCH',
+  KASPI_PRODUCTS_IMPORTED: 'KASPI_PRODUCTS_IMPORTED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -30,4 +31,5 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   KASPI_CATALOG_PREVIEW: 'Синхронизация с Kaspi (предпросмотр)',
   KASPI_WAREHOUSES_SAVED: 'Сохранены склады из выгрузки Kaspi',
   KASPI_CABINET_FETCH: 'Загрузка каталога из кабинета Kaspi',
+  KASPI_PRODUCTS_IMPORTED: 'Сохранены товары из кабинета Kaspi',
 };
