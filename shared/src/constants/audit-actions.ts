@@ -20,6 +20,7 @@ export const AUDIT_ACTIONS = {
   CATEGORY_RENAMED: 'CATEGORY_RENAMED',
   CATEGORY_DELETED: 'CATEGORY_DELETED',
   PRODUCTS_CATEGORY_CHANGED: 'PRODUCTS_CATEGORY_CHANGED',
+  PRODUCTS_RENAMED: 'PRODUCTS_RENAMED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -40,4 +41,5 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   CATEGORY_RENAMED: 'Категория переименована',
   CATEGORY_DELETED: 'Категория удалена',
   PRODUCTS_CATEGORY_CHANGED: 'Товары перемещены в категорию',
+  PRODUCTS_RENAMED: 'Товары переименованы пачкой',
 };

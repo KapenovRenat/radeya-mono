@@ -77,7 +77,8 @@ shared/    # Общий код: типы контрактов, констант�
 | warehouses | `listWarehouses()` | Справочник складов по коду | `server/src/modules/warehouses/warehouses.service.ts` |
 | warehouses | `saveKaspiWarehouses(input)` | Импорт складов: upsert по `code`, не трогает `name` и заполненный город | `server/src/modules/warehouses/warehouses.service.ts` |
 | warehouses | `toWarehouseDto(warehouse)` | DTO наружу | `server/src/modules/warehouses/warehouses.service.ts` |
-| — | `kaspi-api-probe` | Разведочный скрипт: что отдаёт Kaspi по токену. Запуск `npx tsx src/scripts/kaspi-api-probe.ts` из `server/` | `server/src/scripts/kaspi-api-probe.ts` |
+| kaspi-catalog | `readModelName(familyId, masterTitle, brand)` | Название модели («Эмбер») из двух источников: кандидаты из скобок `familyId` × хвост `masterTitle` после бренда. Не вышло — null с причиной | `server/src/modules/kaspi-catalog/kaspi-model-name.ts` |
+| — | `rename-products` | Переименование сохранённых товаров правилом `readModelName()`. Без `--apply` только показывает; правки руками не затирает без `--force`; `--diagnose` добавляет разбор источников. Запуск `npm run rename:products --workspace=server` | `server/src/scripts/rename-products.ts` |
 | products | `listKnownSkus()` | Артикулы, уже лежащие в базе | `server/src/modules/products/products.service.ts` |
 | products | `importKaspiProducts(input, authorId)` | Импорт товаров кабинета: только новые, отчёт по пропущенным и сбойным | `server/src/modules/products/products.service.ts` |
 | db | `prisma` | Единственный экземпляр Prisma Client | `server/src/db/client.ts` |

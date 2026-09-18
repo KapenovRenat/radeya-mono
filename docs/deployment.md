@@ -85,6 +85,22 @@ npm run create:admin --workspace=server
 
 Файл — `server/src/scripts/create-admin.ts`.
 
+### Переименование товаров
+
+Разовый пересчёт `Product.name` по правилу вывода названия модели. Повторяемый:
+правило будет уточняться, прогон можно повторить.
+
+```bash
+npm run rename:products --workspace=server
+```
+
+Без аргументов только показывает, что изменится, и пишет отчёт
+`server/rename-products.txt`. Запись — `-- --apply`; аргументы обязательно
+после `--`, иначе npm заберёт их себе. Флаги и поведение —
+в [kaspi-api-integration.md](kaspi-api-integration.md), раздел 11.
+
+Файл — `server/src/scripts/rename-products.ts`.
+
 ### Shadow-база
 
 `prisma migrate dev` создаёт временную **shadow-базу**, чтобы проверить, что миграция
