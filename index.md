@@ -44,7 +44,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `POST /api/categories` | Создать корневую папку или подпапку | ADMIN | `server/src/modules/categories/categories.controller.ts` |
 | `PATCH /api/categories/:id` | Переименовать папку, сохраняя родителя | ADMIN | `server/src/modules/categories/categories.controller.ts` |
 | `DELETE /api/categories/:id` | Удалить только пустую папку | ADMIN | `server/src/modules/categories/categories.controller.ts` |
-| `GET /api/products/variants` | Серверный поиск, поддерево категории, страницы 10/20/50 | ADMIN | `server/src/modules/products/catalog.controller.ts` |
+| `GET /api/products/variants` | Серверный поиск, поддерево категории, страницы 10/20/50; в строке все поля товара, включая закупку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
 | `PATCH /api/products/category` | Перенести товары со всеми модификациями в папку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
 
 Подробные контракты — в [docs/api-reference.md](docs/api-reference.md).
@@ -89,7 +89,7 @@ shared/    # Общий код: типы контрактов, констант�
 | categories | `deleteCategory(id)` | Заблокировать запись и удалить только без товаров/подпапок | `server/src/modules/categories/categories.service.ts` |
 | products | `listCatalog(input)` | Страница артикулов с поиском и фильтром по поддереву | `server/src/modules/products/catalog.service.ts` |
 | products | `moveProductsToCategory(input)` | Атомарный перенос Product, старые категории для аудита | `server/src/modules/products/catalog.service.ts` |
-| products | `toCatalogRow(row)` | Безопасный DTO строки, точные цены и миниатюра | `server/src/modules/products/catalog.mapper.ts` |
+| products | `toCatalogRow(row)` | Полный DTO строки каталога: все поля артикула, точные цены, галерея, закупка (только дашборд) | `server/src/modules/products/catalog.mapper.ts` |
 
 ### 1.3. Модели БД
 
@@ -222,7 +222,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `CatalogPageSize` | Тип разрешённого размера страницы | `shared/src/constants/catalog.ts` |
 | `CategoryDto`, `CategoryTreeNode`, `CategoryTreeResponse`, `CreateCategoryRequest` | Контракты ручного дерева и создания папок | `shared/src/types/catalog.ts` |
 | `RenameCategoryRequest`, `DeleteCategoryResponse` | Контракты переименования и удаления категории | `shared/src/types/catalog.ts` |
-| `CatalogQuery`, `CatalogRowDto`, `CatalogResponse` | Контракт страницы артикулов, поиска и фильтра по папке | `shared/src/types/catalog.ts` |
+| `CatalogQuery`, `CatalogRowDto`, `CatalogResponse` | Контракт страницы артикулов, поиска и фильтра по папке; в строке все поля товара, включая закупку | `shared/src/types/catalog.ts` |
+| `CatalogListingDto`, `CatalogStockDto`, `CatalogImageDto`, `CatalogKaspiDto`, `CatalogDeliveryDto` | Блоки строки каталога: размещения, остатки, галерея, поля кабинета, флаги доставки | `shared/src/types/catalog.ts` |
 | `CatalogListingDto`, `CatalogStockDto` | Цены по каналам и остатки по складам в строке таблицы | `shared/src/types/catalog.ts` |
 | `MoveProductsRequest`, `MoveProductsResponse` | Контракт переноса товаров в папку | `shared/src/types/catalog.ts` |
 | `catalogRowSelect` | Явный набор полей БД для таблицы без закупки и истории | `server/src/modules/products/catalog.mapper.ts` |

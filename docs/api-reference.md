@@ -459,23 +459,41 @@
   404 NOT_FOUND — выбранная папка отсутствует; общие 401/403.
 - Файл: `server/src/modules/products/catalog.controller.ts` (getCatalog).
 
-Состав CatalogRowDto:
+Состав CatalogRowDto — всё, что хранится на артикуле. Тип:
+`shared/src/types/catalog.ts`, выборка и маппинг: `catalog.mapper.ts`.
 
 | Поле | Смысл |
 |---|---|
 | variantId, productId | Идентификатор строки и общей карточки товара |
 | name, sku, barcode, brand | Наше название, артикул, штрихкод и бренд |
 | category | { id, name } либо null |
-| imageUrl | Одна миниатюра по HTTP(S) либо null |
-| status, productIsActive | Статус продажи модификации и активность Product |
-| fabric, fabricShade | { id, name } либо null |
-| listings | Массив { channel, status, price, discountPrice, discountPercent } |
-| stocks | Массив { warehouse: { id, code, name }, quantity, preOrderDays } |
+| imageUrl | Первая пригодная миниатюра по HTTP(S) либо null |
+| images | Вся галерея: массив { small, medium, large }, каждое поле может быть null |
+| status, productIsActive | Наш статус продажи модификации и активность Product |
+| sortOrder, createdAt, updatedAt | Порядок и даты самой модификации |
+| fabric | { id, name, code, type } либо null |
+| fabricShade | { id, name, code, hex, imageUrl } либо null |
+| listings | Массив размещений: id, channel, status, price, discountPrice, discountPercent, externalId, externalSku, externalUrl, publishedAt, lastSyncedAt, syncError |
+| stocks | Массив { warehouse: { id, code, name, kaspiStoreId, kaspiCityId, isActive }, quantity, preOrderDays } |
+| totalStock, preOrderDays | Сумма остатков и максимальный срок предзаказа по складам |
+| purchasePrice | Закупочная цена. Только дашборд — см. предупреждение ниже |
+| minChannelPrice, maxChannelPrice | Денормализованные минимум и максимум по каналам |
+| kaspi | Поля кабинета: masterTitle, title, model, masterSku, offerId, fileId, merchantUid, shopLink, updatedAt, updates |
+| delivery | Пять флагов: any, express, local, merchant (кабинет) и site (наш) |
+| product | Общее для всех модификаций: slug, description, kaspiFamilyId, createdAt, updatedAt |
 
-Цены — строки с двумя десятичными знаками в тенге либо null. Неизвестный остаток
-quantity=null не заменяется нулём. Нет Listing для канала — нет элемента в массиве;
-это не нулевая цена. Закупочная цена, история и сырые технические поля в ответ
-не входят. Полная галерея не передаётся. Отдельный API подробной карточки ещё не добавлен.
+**Закупочная цена отдаётся в этом DTO.** Эндпоинт закрыт ролью ADMIN целиком,
+и в дашборде закупка нужна. Два следствия: на страницы магазина этот DTO
+не отдавать ни в каком виде, и при открытии каталога ролям MANAGER и SELLER
+`purchasePrice` срезать по роли, а не оставлять всем.
+
+Цены — строки с двумя десятичными знаками в тенге либо null: number на цене
+теряет тиын. Даты — ISO-строки. Неизвестный остаток quantity=null не заменяется
+нулём, но в totalStock считается нулём — сложить «неизвестно» нечем. Нет Listing
+для канала — нет элемента в массиве; это не нулевая цена. `kaspi.updates` —
+сырой снимок истории кабинета, формат недокументированный, не разбирается;
+пустой массив, если снимка нет. В ответ не входит только история `VariantChange` —
+её отдаст будущий API подробной карточки, которого пока нет.
 
 ### PATCH /api/products/category
 Перенести выбранные товары в папку либо снять привязку к папке.

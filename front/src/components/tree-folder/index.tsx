@@ -27,6 +27,7 @@ export function TreeFolder({ items, selectedId, expandedIds, onSelect, onToggle,
   onCreate, onEdit, onDelete, disabled = false, allLabel = ALL_PRODUCTS_LABEL, isLoading = false, error,
   onRetry, className, ...props }: TreeFolderProps) {
   const actionsDisabled = disabled || isLoading || Boolean(error);
+
   const renderFolders = (folders: CategoryTreeNode[]) => (
     <ul className={styles.list}>
       {folders.map((folder) => {
@@ -70,6 +71,7 @@ export function TreeFolder({ items, selectedId, expandedIds, onSelect, onToggle,
 
   return (
     <div {...props} className={cn(styles.tree, className)}>
+
       <div className={styles.toolbar}>
         <span className={styles.title}>Категории</span>
         {onCreate && <button type="button" className={styles.create} onClick={() => onCreate(null)}
@@ -77,6 +79,7 @@ export function TreeFolder({ items, selectedId, expandedIds, onSelect, onToggle,
           <Plus size={16} aria-hidden="true" /> Создать категорию
         </button>}
       </div>
+
       <nav aria-label="Категории товаров" aria-busy={isLoading}>
         <button type="button" className={cn(styles.all, selectedId === null && styles.selected)}
           disabled={disabled} onClick={() => onSelect(null)} aria-current={selectedId === null ? "true" : undefined}>
@@ -88,6 +91,7 @@ export function TreeFolder({ items, selectedId, expandedIds, onSelect, onToggle,
             </div>
           : renderFolders(items)}
       </nav>
+
     </div>
   );
 }

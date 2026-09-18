@@ -223,7 +223,7 @@ Category ──< Product ──< Variant ──┬──< Listing        (кан
 | `kaspiUpdatedAt` | `DateTime?` | Когда кабинет менял товар |
 | `anyKaspiDelivery`, `…Express`, `…Local`, `anyMerchantDelivery` | `Boolean` | Зеркало кабинета |
 | `siteDelivery` | `Boolean` | **Наш пятый флаг:** заказ с сайта везём сами |
-| `purchasePrice` | `Decimal?` | Закупка. **Наружу не отдаётся никогда** |
+| `purchasePrice` | `Decimal?` | Закупка. Отдаётся **только в дашборд** (`GET /api/products/variants`, роль ADMIN). На витрину — никогда |
 | `minChannelPrice`, `maxChannelPrice` | `Decimal?` | Минимум и максимум по каналам |
 | `fabricId?`, `fabricShadeId?` | `uuid` | Ткань и оттенок для витрины |
 | `status` | `ListingStatus` | **Продаём или нет.** Наше решение, общее для всех каналов |
