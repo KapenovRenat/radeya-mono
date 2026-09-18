@@ -13,3 +13,5 @@ export * from './types/audit';
 export * from './types/kaspi-catalog';
 export * from './types/kaspi-cabinet';
 export * from './types/products';
+export * from './constants/catalog';
+export * from './types/catalog';

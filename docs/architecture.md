@@ -114,7 +114,7 @@ front/
 │   │   ├── (shop)/            # магазин: свой layout, класс theme-shop
 │   │   └── dashboard/         # админка: (main) с сайдбаром и (auth) со входом
 │   ├── components/
-│   │   └── price-tag/         # наш компонент: index.tsx + style.module.scss
+│   │   └── price-tag/         # наш компонент: tree-list.tsx + style.module.scss
 │   ├── features/              # логика по доменам: эндпоинты RTK Query, хуки
 │   ├── shared/                # переиспользуемое внутри front
 │   │   └── api/base-api.ts    # единая точка RTK Query
@@ -142,7 +142,7 @@ front/
 
 | Что | Чем стилизуется | Почему |
 |---|---|---|
-| `components/<имя>/` — наши компоненты | SCSS-модули | Папка + `index.tsx` + `style.module.scss` |
+| `components/<имя>/` — наши компоненты | SCSS-модули | Папка + `tree-list.tsx` + `style.module.scss` |
 | Разметка страниц и layout | Tailwind | Быстрее для сеток и отступов |
 
 **Готовых UI-китов в проекте нет.** Все компоненты пишутся сами: shadcn/ui, его CLI,
@@ -271,3 +271,38 @@ Tailwind 4, zod 4. Мажоры свежие — перед написанием
 `AGENTS.md` и `CLAUDE.md` (отключено флагом `--no-agents-md`), `prisma init` — папки
 `.claude/`, `.agents/`, `.windsurf/` со skills. К правилам проекта отношения не имеют,
 конституция одна и лежит в корне.
+
+## Модуль дерева категорий и чтения каталога (18.09.2026)
+
+Используется существующая модель Category. «Все товары» — служебный пункт обзора,
+не строка БД. Папки создаются вручную, без группировки по названиям Kaspi.
+Product связан с одной папкой, все его Variant наследуют её при фильтрации.
+
+- `server/src/modules/categories/`: routes, controller, schemas, service — дерево
+  и создание папок. getCategoryTree() собирает дерево за один запрос;
+  createCategory() проверяет родителя и уникальность имени в Serializable-транзакции.
+- `server/src/modules/products/catalog.schemas.ts`: проверка поиска, пагинации,
+  UUID папки и списка перемещаемых товаров.
+- `server/src/modules/products/catalog.service.ts`: listCatalog() — страница
+  артикулов и счётчик в одном снимке БД; moveProductsToCategory() — атомарный перенос.
+- `server/src/modules/products/catalog.mapper.ts`: catalogRowSelect и toCatalogRow()
+  определяют явный безопасный DTO; закупка и история даже не выбираются из БД.
+- `server/src/modules/products/catalog.controller.ts`: HTTP-обработчики и аудит переноса.
+- `shared/src/constants/catalog.ts`, `shared/src/types/catalog.ts`: размеры страниц,
+  лимиты, служебное название и общий контракт дерева/таблицы/переноса.
+- `front/src/features/categories/categories-api.ts`: запрос дерева, создание папки.
+- `front/src/features/categories/use-create-category-form.ts`: форма создания.
+- `front/src/features/products/catalog-api.ts`: серверная таблица и перенос.
+- `front/src/features/products/use-product-catalog.ts`: выбор/раскрытие папок,
+  поиск с задержкой, пагинация, выделение и перенос.
+
+Связанные данные выбираются для текущей страницы, без запроса из цикла по строкам.
+Для поиска по подстроке обычный индекс sku не гарантирует ускорения; при росте
+каталога оценить фактическое время и план запросов до добавления поисковых индексов.
+Пагинация offset подходит для текущего размера каталога, но очень глубокие страницы
+на значительно большей базе потребуют пересмотра. Дерево загружается целиком;
+товары — только выбранной страницей. Новых зависимостей и миграций нет.
+
+API подробной карточки, редактирование/перемещение/удаление самих папок и вёрстка
+страницы не входят в текущую реализацию. Категория «Прима 320 Угловой» группирует
+товары, но не объединяет их в один Product с модификациями.

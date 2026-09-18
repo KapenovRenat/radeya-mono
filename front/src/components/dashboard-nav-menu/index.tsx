@@ -37,7 +37,7 @@ export function DashboardNavMenu({ children, className }: { children?: React.Rea
                         </Link>
                     </li>
                     <li>
-                        <Link href="/dashboard">
+                        <Link href="/dashboard/products">
                             <div>
 
                             </div>

@@ -40,6 +40,10 @@ shared/    # Общий код: типы контрактов, констант�
 | `POST /api/warehouses/import-kaspi` | Импорт складов из предпросмотра выгрузки, повторяемый | ADMIN | `server/src/modules/warehouses/warehouses.routes.ts` |
 | `GET /api/products/skus` | Артикулы, уже сохранённые в каталоге | ADMIN | `server/src/modules/products/products.routes.ts` |
 | `POST /api/products/import-kaspi` | Сохранение загруженных товаров в каталог; создаёт только новые | ADMIN | `server/src/modules/products/products.routes.ts` |
+| `GET /api/categories` | Дерево ручных папок и служебный пункт «Все товары» | ADMIN | `server/src/modules/categories/categories.controller.ts` |
+| `POST /api/categories` | Создать корневую папку или подпапку | ADMIN | `server/src/modules/categories/categories.controller.ts` |
+| `GET /api/products/variants` | Серверный поиск, поддерево категории, страницы 10/20/50 | ADMIN | `server/src/modules/products/catalog.controller.ts` |
+| `PATCH /api/products/category` | Перенести товары со всеми модификациями в папку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
 
 Подробные контракты — в [docs/api-reference.md](docs/api-reference.md).
 
@@ -77,6 +81,11 @@ shared/    # Общий код: типы контрактов, констант�
 | db | `prisma` | Единственный экземпляр Prisma Client | `server/src/db/client.ts` |
 | db | `isDatabaseReachable()` | Проверка соединения с базой | `server/src/db/client.ts` |
 | db | `disconnectDatabase()` | Закрытие пула при остановке | `server/src/db/client.ts` |
+| categories | `getCategoryTree()` | Дерево папок одним запросом, «Все товары» отдельно | `server/src/modules/categories/categories.service.ts` |
+| categories | `createCategory(input)` | Создать папку, проверить родителя и дубли, заполнить path | `server/src/modules/categories/categories.service.ts` |
+| products | `listCatalog(input)` | Страница артикулов с поиском и фильтром по поддереву | `server/src/modules/products/catalog.service.ts` |
+| products | `moveProductsToCategory(input)` | Атомарный перенос Product, старые категории для аудита | `server/src/modules/products/catalog.service.ts` |
+| products | `toCatalogRow(row)` | Безопасный DTO строки, точные цены и миниатюра | `server/src/modules/products/catalog.mapper.ts` |
 
 ### 1.3. Модели БД
 
@@ -112,6 +121,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `/dashboard/accounts` | Аккаунты и История: таблица сотрудников, создание, журнал действий | `front/src/app/dashboard/(main)/accounts/page.tsx` |
 | `/dashboard/kaspi-sync` | Синхронизация с Kaspi: загрузка выгрузок, предпросмотр каталога | `front/src/app/dashboard/(main)/kaspi-sync/page.tsx` |
 
+**Каталог с деревом папок:** сервер и хуки готовы; планируемая страница `/dashboard/products` ещё не создана. Инструкция по подключению и проверке — в [docs/app-structure.md](docs/app-structure.md).
+
 Структура маршрутов и layout — в [docs/app-structure.md](docs/app-structure.md).
 Целевой состав dashboard — 8 табов аналитики, см. [docs/analytics-spec.md](docs/analytics-spec.md).
 
@@ -126,6 +137,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `DashboardMainLayout` | Сайдбар и рабочая область разделов админки | `front/src/app/dashboard/(main)/layout.tsx` |
 | `DashboardAuthLayout` | Форма входа по центру, без сайдбара | `front/src/app/dashboard/(auth)/layout.tsx` |
 | `PriceTag` | Ценник товара; образец SCSS-модуля с токенами темы | `front/src/components/price-tag/` |
+| `Loader` | Сегментное кольцо #f23428; size задаёт диаметр, hideLabel скрывает текст; label по умолчанию «Загрузка ...», подсветка букв каждые 160 мс | `front/src/components/loader/tree-list.tsx`, `front/src/components/loader/style.module.scss` |
 | `Input` | Поле ввода: подпись, ошибка, нативные пропсы | `front/src/components/input/` |
 | `Button` | Кнопка: варианты через классы, нативные пропсы | `front/src/components/button/` |
 | `AuthGuard` | Пускает в разделы админки только вошедших | `front/src/features/auth/auth-guard.tsx` |
@@ -192,7 +204,21 @@ shared/    # Общий код: типы контрактов, констант�
 | `SaveWarehousesRequest`, `SaveWarehousesResponse`, `WarehouseDto` | Контракты справочника складов | `shared/src/types/kaspi-catalog.ts` |
 | `useGetWarehousesQuery`, `useImportKaspiWarehousesMutation` | Справочник складов; тег `Warehouse` | `front/src/features/warehouses/warehouses-api.ts` |
 | `useSaveWarehouses()` | Сохранение складов из выгрузки или кабинета: итог и ошибка | `front/src/features/warehouses/use-save-warehouses.ts` |
+| `LoaderProps` | label, size, hideLabel, className и нативные атрибуты span для Loader | `front/src/components/loader/tree-list.tsx` |
 | `cn()` | Склейка Tailwind-классов | `front/src/lib/utils.ts` |
+| `CATALOG_PAGE_SIZES`, `CATALOG_DEFAULT_PAGE_SIZE` | Серверные размеры страниц 10/20/50, по умолчанию 20 | `shared/src/constants/catalog.ts` |
+| `CATALOG_SEARCH_MAX_LENGTH`, `CATEGORY_NAME_MAX_LENGTH`, `CATALOG_MOVE_MAX_PRODUCTS` | Общие лимиты поиска, имени папки и переноса | `shared/src/constants/catalog.ts` |
+| `ALL_PRODUCTS_LABEL` | Название служебного пункта «Все товары» | `shared/src/constants/catalog.ts` |
+| `CatalogPageSize` | Тип разрешённого размера страницы | `shared/src/constants/catalog.ts` |
+| `CategoryDto`, `CategoryTreeNode`, `CategoryTreeResponse`, `CreateCategoryRequest` | Контракты ручного дерева и создания папок | `shared/src/types/catalog.ts` |
+| `CatalogQuery`, `CatalogRowDto`, `CatalogResponse` | Контракт страницы артикулов, поиска и фильтра по папке | `shared/src/types/catalog.ts` |
+| `CatalogListingDto`, `CatalogStockDto` | Цены по каналам и остатки по складам в строке таблицы | `shared/src/types/catalog.ts` |
+| `MoveProductsRequest`, `MoveProductsResponse` | Контракт переноса товаров в папку | `shared/src/types/catalog.ts` |
+| `catalogRowSelect` | Явный набор полей БД для таблицы без закупки и истории | `server/src/modules/products/catalog.mapper.ts` |
+| `useGetCategoryTreeQuery`, `useCreateCategoryMutation` | Дерево и создание категории, тег Category | `front/src/features/categories/categories-api.ts` |
+| `useCreateCategoryForm(onCreated)` | Форма новой папки, родитель, валидация и сохранение | `front/src/features/categories/use-create-category-form.ts` |
+| `useGetCatalogQuery`, `useMoveProductsToCategoryMutation` | Серверная страница и перенос товаров, тег Product | `front/src/features/products/catalog-api.ts` |
+| `useProductCatalog()` | Выбор и раскрытие папок, поиск, страницы, выделение и перенос | `front/src/features/products/use-product-catalog.ts` |
 
 ### 1.7. Фоновые задачи и воркеры
 
@@ -206,12 +232,12 @@ shared/    # Общий код: типы контрактов, констант�
 
 | Документ | О чём |
 |---|---|
-| [architecture.md](docs/architecture.md) | Структура монорепозитория, слои `server/`, структура `front/` и `shared/`, решения по стеку, команды разработки, известные долги. |
-| [api-reference.md](docs/api-reference.md) | Контракты всех эндпоинтов API: параметры, ответы, коды ошибок. |
+| [architecture.md](docs/architecture.md) | Структура монорепозитория, слои `server/`, структура `front/` и `shared/`, модуль дерева категорий и серверного каталога, решения по стеку, команды разработки, известные долги. |
+| [api-reference.md](docs/api-reference.md) | Контракты всех эндпоинтов API, включая ручное дерево категорий, серверный список артикулов и перенос товаров: параметры, ответы, коды ошибок. |
 | [roadmap.md](docs/roadmap.md) | Roadmap проекта: три планируемых этапа — пользователи; товары (добавление, импорт из МойСклад, папки и карточка, склады); заказы из Kaspi и поставщики. Этапы после 0–3 (закупки, выгрузка на Kaspi, офлайн-заказы, автоматизация, Dashboard, складской учёт, магазин) сохранены с наработками, без сроков. Риски и открытые вопросы. |
-| [app-structure.md](docs/app-structure.md) | Дерево маршрутов `front/src/app/`, как работают группы в скобках, почему сайдбар не в корневом layout админки, темы, два входа, где лежат компоненты. |
+| [app-structure.md](docs/app-structure.md) | Дерево маршрутов `front/src/app/`, как работают группы в скобках, почему сайдбар не в корневом layout админки, темы, два входа, где лежат компоненты; готовая логика дерева/таблицы каталога, инструкция подключения к будущей странице и ручная проверка. |
 | [deployment.md](docs/deployment.md) | Единый `.env` в корне и как его находит каждый пакет, список переменных, команды миграций и shadow-база, зависимости сборки. |
-| [data-model.md](docs/data-model.md) | Модели Prisma: `User` (сотрудник), `Customer` (клиент магазина), enum `UserRole`, общие правила по id, паролям и отключению записей, список миграций. |
+| [data-model.md](docs/data-model.md) | Модели Prisma пользователей, сессий, складов и каталога; ручные папки Category, служебный пункт «Все товары», Product/Variant, цены, остатки и ткани; список миграций. |
 | [analytics-spec.md](docs/analytics-spec.md) | Спецификация аналитического модуля: принципы визуализации (Tufte / Few / Munzner), информационная архитектура из 8 табов, состав графиков и KPI. Источник правды для имплементации дашборда. |
 | [kaspi-api-integration.md](docs/kaspi-api-integration.md) | Kaspi Shop API целиком: авторизация по `X-Auth-Token`, шифрование токена, эндпоинты заказов и позиций, стратегия синхронизации, маппинг полей, статусы заказов, схема БД, грабли. Раздел 10 — каталог товаров: разбор XML-выгрузки и JSON кабинета (`list?m=&p=&l=&a=`), маппинг всех полей, три цены и три идентификатора, картинки, штрихкод. Раздел 11 — дерево папок из `categoryPathCodes` и `familyId`. Раздел 12 — чек-лист непроверенного. |
 | [telegram-bot.md](docs/telegram-bot.md) | Telegram-бот: отправка сообщений и карточек-картинок заказа, маршрутизация получателям (поставщик / склад / доставка), уведомления об отменах и возвратах, cron и расписание, грабли. |

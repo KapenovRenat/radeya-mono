@@ -3,6 +3,7 @@ import { USER_ROLES } from '@radeya/shared';
 
 import { requireAuth, requireRole } from '../../middlewares/require-auth';
 import { getKnownSkus, postImportKaspiProducts } from './products.controller';
+import { getCatalog, patchProductsCategory } from './catalog.controller';
 
 /**
  * Каталог. Пока закрыт ролью ADMIN целиком: заполнение каталога — настройка
@@ -14,6 +15,8 @@ export const productsRouter = Router();
 productsRouter.use(requireAuth, requireRole(USER_ROLES.ADMIN));
 
 productsRouter.get('/skus', getKnownSkus);
+productsRouter.get('/variants', getCatalog);
+productsRouter.patch('/category', patchProductsCategory);
 
 // Весь каталог целиком сюда не присылают: полторы тысячи товаров с картинками
 // и историей изменений — это около пяти мегабайт, а общий лимит тела намеренно
