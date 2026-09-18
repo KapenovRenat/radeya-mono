@@ -11,4 +11,16 @@ export const createCategorySchema = z.object({
   parentId: z.string().uuid().nullable().default(null),
 }).strict();
 export const renameCategorySchema = z.object({ name: categoryNameSchema }).strict();
+
+/**
+ * Порядок папок одного уровня. Верхняя граница — защита от запроса, который
+ * положит транзакцию: столько категорий в дереве из двух уровней не бывает.
+ */
+export const reorderCategoriesSchema = z.object({
+  parentId: z.string().uuid().nullable().default(null),
+  ids: z.array(z.string().uuid()).min(1).max(200)
+    .refine((ids) => new Set(ids).size === ids.length, 'Повторяющиеся категории'),
+}).strict();
+
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
+export type ReorderCategoriesInput = z.infer<typeof reorderCategoriesSchema>;

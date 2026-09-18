@@ -50,11 +50,18 @@ export default function ProductsPage() {
               categoryForm.close();
               categoryActions.open("delete", category);
             }}
+            onMove={(category, direction) => void categoryActions.move(category, direction)}
+            search={catalog.categorySearch}
+            onSearchChange={catalog.setCategorySearch}
             disabled={categoryForm.isSaving || categoryActions.isSaving}
             isLoading={catalog.isLoadingCategories}
             error={catalog.categoriesError}
             onRetry={catalog.reloadCategories}
           />
+
+          {categoryActions.moveError && (
+            <p role="alert" className="text-sm text-destructive">{categoryActions.moveError}</p>
+          )}
 
           {categoryActions.action && (
             <form className="space-y-3 rounded-md border border-border p-3" onSubmit={(event) => {

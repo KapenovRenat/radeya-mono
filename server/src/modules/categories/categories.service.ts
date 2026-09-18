@@ -4,7 +4,7 @@ import { ALL_PRODUCTS_LABEL, type CategoryDto, type CategoryTreeNode,
 import { Prisma } from '../../generated/prisma/client';
 import { prisma } from '../../db/client';
 import { ConflictError, NotFoundError, ValidationError } from '../../lib/errors';
-import type { CreateCategoryInput } from './categories.schemas';
+import type { CreateCategoryInput, ReorderCategoriesInput } from './categories.schemas';
 
 const CHANGE_ATTEMPTS = 3;
 const categorySelect = { id: true, name: true, parentId: true } as const;
@@ -82,6 +82,41 @@ export async function renameCategory(id: string, name: string) {
       where: { id }, data: { name }, select: categorySelect,
     });
     return { before, after };
+  });
+}
+
+/**
+ * Порядок папок одного уровня.
+ *
+ * Принимается весь список детей родителя: частичный отклоняем. Иначе
+ * «переставить две» и «удалить одну параллельно» дают дерево, в котором
+ * половина уровня имеет новый порядок, а половина старый, и по данным уже
+ * не понять, что человек имел в виду.
+ */
+export async function reorderCategories(input: ReorderCategoriesInput) {
+  return changeCategory(async (tx) => {
+    const current = await tx.category.findMany({
+      where: { parentId: input.parentId },
+      select: { id: true, sortOrder: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+    });
+
+    if (current.length !== input.ids.length
+      || !input.ids.every((id) => current.some((row) => row.id === id))) {
+      throw new ConflictError('Категории изменились. Обновите страницу и повторите');
+    }
+
+    // Пишем только то, что реально съехало: лишние update раздувают журнал БД
+    // и мешают увидеть в логе настоящее изменение.
+    const changed = input.ids.filter((id, index) =>
+      current.find((row) => row.id === id)?.sortOrder !== index);
+
+    for (const [index, id] of input.ids.entries()) {
+      if (!changed.includes(id)) continue;
+      await tx.category.update({ where: { id }, data: { sortOrder: index } });
+    }
+
+    return { updated: changed.length, before: current.map((row) => row.id), after: input.ids };
   });
 }
 

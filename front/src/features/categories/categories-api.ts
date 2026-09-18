@@ -1,4 +1,5 @@
-import type { CategoryDto, CategoryTreeResponse, CreateCategoryRequest, RenameCategoryRequest, DeleteCategoryResponse } from "@radeya/shared";
+import type { CategoryDto, CategoryTreeResponse, CreateCategoryRequest, RenameCategoryRequest,
+  DeleteCategoryResponse, ReorderCategoriesRequest, ReorderCategoriesResponse } from "@radeya/shared";
 import { baseApi } from "@/shared/api/base-api";
 
 export const categoriesApi = baseApi.injectEndpoints({
@@ -19,6 +20,34 @@ export const categoriesApi = baseApi.injectEndpoints({
       query: (body) => ({ url: "/categories", method: "POST", body }),
       invalidatesTags: ["Category", "Audit"],
     }),
+    reorderCategories: build.mutation<ReorderCategoriesResponse, ReorderCategoriesRequest>({
+      query: (body) => ({ url: "/categories/order", method: "PATCH", body }),
+      // Порядок меняется нажатием на пункт меню, и папка должна переехать сразу:
+      // ожидание ответа с перерисовкой дерева выглядит как заедание.
+      async onQueryStarted(body, { dispatch, queryFulfilled }) {
+        const patch = dispatch(categoriesApi.util.updateQueryData("getCategoryTree", undefined, (draft) => {
+          const level = body.parentId === null
+            ? draft.items
+            : draft.items.find((item) => item.id === body.parentId)?.children;
+          if (!level) return;
+          const byId = new Map(level.map((item) => [item.id, item]));
+          const sorted = body.ids.map((id) => byId.get(id));
+          // Дерево могло измениться в другой вкладке: тогда отдаём его серверу,
+          // а не собираем список с дырами.
+          if (sorted.some((item) => item === undefined)) return;
+          level.splice(0, level.length, ...(sorted as typeof level));
+        }));
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      // Тег Category не сбрасываем: ответ ничего не добавляет к тому, что уже
+      // показано, а повторная загрузка дерева вернула бы прыжок прокрутки.
+      invalidatesTags: ["Audit"],
+    }),
   }),
 });
-export const { useGetCategoryTreeQuery, useCreateCategoryMutation, useRenameCategoryMutation, useDeleteCategoryMutation } = categoriesApi;
+export const { useGetCategoryTreeQuery, useCreateCategoryMutation, useRenameCategoryMutation,
+  useDeleteCategoryMutation, useReorderCategoriesMutation } = categoriesApi;

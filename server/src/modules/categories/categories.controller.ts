@@ -2,8 +2,10 @@ import type { RequestHandler } from 'express';
 import { AUDIT_ACTIONS } from '@radeya/shared';
 import { clientIp, logAction } from '../../lib/audit';
 import { ValidationError } from '../../lib/errors';
-import { categoryParamsSchema, createCategorySchema, renameCategorySchema } from './categories.schemas';
-import { createCategory, getCategoryTree, renameCategory, deleteCategory } from './categories.service';
+import { categoryParamsSchema, createCategorySchema, renameCategorySchema,
+  reorderCategoriesSchema } from './categories.schemas';
+import { createCategory, getCategoryTree, renameCategory, reorderCategories,
+  deleteCategory } from './categories.service';
 
 export const getCategories: RequestHandler = async (_req, res) => {
   res.json(await getCategoryTree());
@@ -31,6 +33,21 @@ export const patchCategory: RequestHandler = async (req, res) => {
       before, after, ip: clientIp(req) });
   }
   res.json(after);
+};
+
+export const patchCategoriesOrder: RequestHandler = async (req, res) => {
+  const parsed = reorderCategoriesSchema.safeParse(req.body);
+  if (!parsed.success) throw new ValidationError('Проверьте уровень и список категорий');
+  const { updated, before, after } = await reorderCategories(parsed.data);
+  // Порядок не поменялся — в журнал не пишем: иначе он забьётся пустыми записями.
+  if (updated > 0) {
+    const author = req.user!;
+    await logAction({ userId: author.id, userLogin: author.login, userRole: author.role,
+      action: AUDIT_ACTIONS.CATEGORIES_REORDERED, entityType: 'Category',
+      entityId: parsed.data.parentId ?? undefined,
+      before: { ids: before }, after: { ids: after }, ip: clientIp(req) });
+  }
+  res.json({ updated });
 };
 
 export const removeCategory: RequestHandler = async (req, res) => {

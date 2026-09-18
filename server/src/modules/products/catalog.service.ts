@@ -29,8 +29,16 @@ export async function listCatalog(input: CatalogInput): Promise<CatalogResponse>
     const totalPages = Math.ceil(total / input.pageSize);
     // После переноса последней строки из папки возвращаем последнюю непустую страницу.
     const page = Math.min(input.page, Math.max(1, totalPages));
+    // Сначала то, что продаётся, внутри — по алфавиту. `status: 'asc'` даёт
+    // ON_SALE первыми потому, что Postgres сортирует enum по порядку
+    // объявления, а ON_SALE в schema.prisma объявлен раньше OFF_SALE.
+    // Переставите значения в enum — сортировка поедет молча.
+    //
+    // `sku` третьим ключом обязателен: у товаров с одинаковым названием без
+    // него порядок между запросами не определён, и один артикул может попасть
+    // сразу на две страницы, а другой — ни на одну.
     const rows = await tx.variant.findMany({ where, select: catalogRowSelect,
-      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      orderBy: [{ status: 'asc' }, { product: { name: 'asc' } }, { sku: 'asc' }],
       skip: (page - 1) * input.pageSize, take: input.pageSize });
     return { items: rows.map(toCatalogRow), total, page, pageSize: input.pageSize, totalPages };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });

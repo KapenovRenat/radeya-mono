@@ -23,6 +23,22 @@ export interface CreateCategoryRequest {
 export interface RenameCategoryRequest { name: string }
 export interface DeleteCategoryResponse { id: string }
 
+/**
+ * Новый порядок папок одного уровня.
+ *
+ * Присылается **весь** список детей этого родителя, а не «подними одну на
+ * позицию вверх»: операция идемпотентна и не накапливает расхождений, а если
+ * двое админов переставят папки одновременно, слой перезапишется целиком,
+ * а не съедет на одну позицию дважды.
+ */
+export interface ReorderCategoriesRequest {
+  /** null — корневой уровень. */
+  parentId: string | null;
+  /** Полный список id детей в нужном порядке. */
+  ids: string[];
+}
+export interface ReorderCategoriesResponse { updated: number }
+
 export interface CatalogQuery {
   page?: number;
   pageSize?: CatalogPageSize;

@@ -42,6 +42,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `POST /api/products/import-kaspi` | Сохранение загруженных товаров в каталог; создаёт только новые | ADMIN | `server/src/modules/products/products.routes.ts` |
 | `GET /api/categories` | Дерево ручных папок и служебный пункт «Все товары» | ADMIN | `server/src/modules/categories/categories.controller.ts` |
 | `POST /api/categories` | Создать корневую папку или подпапку | ADMIN | `server/src/modules/categories/categories.controller.ts` |
+| `PATCH /api/categories/order` | Порядок папок одного уровня: полный список id, пишет `sortOrder` | ADMIN | `server/src/modules/categories/categories.controller.ts` |
 | `PATCH /api/categories/:id` | Переименовать папку, сохраняя родителя | ADMIN | `server/src/modules/categories/categories.controller.ts` |
 | `DELETE /api/categories/:id` | Удалить только пустую папку | ADMIN | `server/src/modules/categories/categories.controller.ts` |
 | `GET /api/products/variants` | Серверный поиск, поддерево категории, страницы 10/20/50; в строке все поля товара, включая закупку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
@@ -87,6 +88,7 @@ shared/    # Общий код: типы контрактов, констант�
 | categories | `getCategoryTree()` | Дерево папок одним запросом, «Все товары» отдельно | `server/src/modules/categories/categories.service.ts` |
 | categories | `createCategory(input)` | Создать корневую папку/подпапку (два уровня), проверить дубли, заполнить path | `server/src/modules/categories/categories.service.ts` |
 | categories | `renameCategory(id, name)` | Переименовать с проверкой дублей; before/after для аудита | `server/src/modules/categories/categories.service.ts` |
+| categories | `reorderCategories(input)` | Порядок уровня: сверяет полный состав, пишет `sortOrder` только изменившимся | `server/src/modules/categories/categories.service.ts` |
 | categories | `deleteCategory(id)` | Заблокировать запись и удалить только без товаров/подпапок | `server/src/modules/categories/categories.service.ts` |
 | products | `listCatalog(input)` | Страница артикулов с поиском и фильтром по поддереву | `server/src/modules/products/catalog.service.ts` |
 | products | `moveProductsToCategory(input)` | Атомарный перенос Product, старые категории для аудита | `server/src/modules/products/catalog.service.ts` |
@@ -143,10 +145,11 @@ shared/    # Общий код: типы контрактов, констант�
 | `DashboardMainLayout` | Сайдбар и рабочая область разделов админки | `front/src/app/dashboard/(main)/layout.tsx` |
 | `DashboardAuthLayout` | Форма входа по центру, без сайдбара | `front/src/app/dashboard/(auth)/layout.tsx` |
 | `PriceTag` | Ценник товара; образец SCSS-модуля с токенами темы | `front/src/components/price-tag/` |
-| `TreeFolder` | Два уровня папок: выбор, раскрытие, создание подпапки, переименование и удаление | `front/src/components/tree-folder/index.tsx`, `front/src/components/tree-folder/style.module.scss` |
+| `TreeFolder` | Два уровня папок: поиск, выбор, раскрытие; действия папки — в меню `Dropdown` (подпапка, переименовать, выше/ниже, удалить) | `front/src/components/tree-folder/index.tsx`, `front/src/components/tree-folder/style.module.scss` |
 | `Tables` | Таблица с children-строками, head и серверной пагинацией 10/20/50 | `front/src/components/tables/index.tsx`, `front/src/components/tables/style.module.scss` |
 | `ProductsLayout` | Защита раздела товаров ролью ADMIN | `front/src/app/dashboard/(main)/products/layout.tsx` |
 | `Loader` | Сегментное кольцо #f23428; size задаёт диаметр, hideLabel скрывает текст; label по умолчанию «Загрузка ...», подсветка букв каждые 160 мс | `front/src/components/loader/tree-list.tsx`, `front/src/components/loader/style.module.scss` |
+| `Dropdown` | Базовое меню на три точки: пункты списком в пропсе, клик вне, Escape, стрелки. Без портала — родитель не должен обрезать содержимое | `front/src/components/dropdown/` |
 | `Input` | Поле ввода: подпись, ошибка, нативные пропсы | `front/src/components/input/` |
 | `Button` | Кнопка: варианты через классы, нативные пропсы | `front/src/components/button/` |
 | `AuthGuard` | Пускает в разделы админки только вошедших | `front/src/features/auth/auth-guard.tsx` |
@@ -216,7 +219,9 @@ shared/    # Общий код: типы контрактов, констант�
 | `SaveWarehousesRequest`, `SaveWarehousesResponse`, `WarehouseDto` | Контракты справочника складов | `shared/src/types/kaspi-catalog.ts` |
 | `useGetWarehousesQuery`, `useImportKaspiWarehousesMutation` | Справочник складов; тег `Warehouse` | `front/src/features/warehouses/warehouses-api.ts` |
 | `useSaveWarehouses()` | Сохранение складов из выгрузки или кабинета: итог и ошибка | `front/src/features/warehouses/use-save-warehouses.ts` |
-| `TreeFolderProps` | Контракт управляемого дерева категорий | `front/src/components/tree-folder/index.tsx` |
+| `TreeFolderProps` | Контракт управляемого дерева категорий: выбор, раскрытие, действия, `onMove`, поиск | `front/src/components/tree-folder/index.tsx` |
+| `DropdownProps`, `DropdownItem` | Контракт меню: пункты (`label`, `onSelect`, `icon`, `disabled`, `danger`), свой триггер, выравнивание | `front/src/components/dropdown/index.tsx` |
+| `ReorderCategoriesRequest`, `ReorderCategoriesResponse` | Контракт порядка папок уровня | `shared/src/types/catalog.ts` |
 | `TablesProps` | Контракт таблицы, children и серверной пагинации | `front/src/components/tables/index.tsx` |
 | `LoaderProps` | label, size, hideLabel, className и нативные атрибуты span для Loader | `front/src/components/loader/tree-list.tsx` |
 | `cn()` | Склейка Tailwind-классов | `front/src/lib/utils.ts` |
@@ -233,10 +238,11 @@ shared/    # Общий код: типы контрактов, констант�
 | `catalogRowSelect` | Явный набор полей БД для таблицы без закупки и истории | `server/src/modules/products/catalog.mapper.ts` |
 | `useGetCategoryTreeQuery`, `useCreateCategoryMutation` | Дерево и создание категории, тег Category | `front/src/features/categories/categories-api.ts` |
 | `useRenameCategoryMutation`, `useDeleteCategoryMutation` | Переименование/удаление, обновление Category/Product/Audit | `front/src/features/categories/categories-api.ts` |
-| `useCategoryActions(onDeleted)` | Формы переименования и подтверждения удаления, ошибки и блокировка повтора | `front/src/features/categories/use-category-actions.ts` |
+| `useReorderCategoriesMutation` | Порядок папок уровня; обновление оптимистичное, при ошибке откатывается | `front/src/features/categories/categories-api.ts` |
+| `useCategoryActions(onDeleted)` | Формы переименования и подтверждения удаления, перестановка папок (`move`), ошибки и блокировка повтора | `front/src/features/categories/use-category-actions.ts` |
 | `useCreateCategoryForm(onCreated)` | Форма новой папки, родитель, валидация и сохранение | `front/src/features/categories/use-create-category-form.ts` |
 | `useGetCatalogQuery`, `useMoveProductsToCategoryMutation` | Серверная страница и перенос товаров, тег Product | `front/src/features/products/catalog-api.ts` |
-| `useProductCatalog()` | Текущий ответ API, выбор/раскрытие папок, onCategoryCreated/onCategoryDeleted, поиск, страницы и перенос | `front/src/features/products/use-product-catalog.ts` |
+| `useProductCatalog()` | Текущий ответ API, выбор/раскрытие папок, onCategoryCreated/onCategoryDeleted, поиск по товарам и по папкам, страницы и перенос | `front/src/features/products/use-product-catalog.ts` |
 
 ### 1.7. Фоновые задачи и воркеры
 

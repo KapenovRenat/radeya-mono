@@ -1,0 +1,77 @@
+/* Выпадающее меню. Цвета только через var(--токен): меню одинаково работает
+   в магазине и в админке, светлой и тёмной.
+
+   Меню позиционируется absolute относительно .dropdown, без портала —
+   родитель с overflow: hidden срежет список. Об этом сказано в комментарии
+   к компоненту; переезд в портал — задача следующей версии. */
+
+.dropdown {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 2rem;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+
+  &:hover:not(:disabled) { background: var(--muted); }
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 11rem;
+  padding: 0.25rem;
+  color: var(--popover-foreground);
+  background: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  /* Тень своя, не токеном: тени в темах пока не описаны. */
+  box-shadow: 0 8px 24px oklch(0 0 0 / 0.12);
+}
+
+.alignEnd { right: 0; }
+.alignStart { left: 0; }
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  color: inherit;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+
+  &:hover:not(:disabled) { background: var(--muted); }
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.danger { color: var(--destructive); }
+
+.icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}

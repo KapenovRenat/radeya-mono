@@ -1,13 +1,48 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ALL_PRODUCTS_LABEL, CATALOG_DEFAULT_PAGE_SIZE, CATALOG_PAGE_SIZES,
-  CATALOG_SEARCH_MAX_LENGTH, type CatalogPageSize, type CatalogQuery, type CategoryDto } from "@radeya/shared";
+  CATALOG_SEARCH_MAX_LENGTH, CATEGORY_NAME_MAX_LENGTH, type CatalogPageSize, type CatalogQuery,
+  type CategoryDto, type CategoryTreeNode } from "@radeya/shared";
 import { useGetCategoryTreeQuery } from "@/features/categories/categories-api";
 import { apiErrorMessage } from "@/shared/api/error-message";
 import { useGetCatalogQuery, useMoveProductsToCategoryMutation } from "./catalog-api";
 
 const SEARCH_DELAY_MS = 300;
+
+/** Сравнимый вид: регистр не важен, «ё» люди набирают как «е». */
+const normalize = (value: string) => value.trim().toLowerCase().replace(/ё/g, "е");
+
+/**
+ * Отбор папок по названию.
+ *
+ * Дерево приходит целиком одним запросом, поэтому фильтруем на клиенте:
+ * запрос на сервер за двумя уровнями папок — лишний круг.
+ *
+ * Совпал родитель — показываем его со всеми детьми. Совпал ребёнок —
+ * показываем родителя с подошедшими детьми и раскрываем его: иначе
+ * найденное прячется внутри свёрнутой папки, и поиск выглядит сломанным.
+ */
+function filterTree(items: CategoryTreeNode[], search: string) {
+  const query = normalize(search);
+  if (query === "") return { items, expand: [] as string[] };
+
+  const matched: CategoryTreeNode[] = [];
+  const expand: string[] = [];
+
+  for (const parent of items) {
+    if (normalize(parent.name).includes(query)) {
+      matched.push(parent);
+      continue;
+    }
+    const children = parent.children.filter((child) => normalize(child.name).includes(query));
+    if (children.length === 0) continue;
+    matched.push({ ...parent, children });
+    expand.push(parent.id);
+  }
+
+  return { items: matched, expand };
+}
 
 /** Логика таблицы для ADMIN. items уже содержат страницу: повторно резать массив не нужно. */
 export function useProductCatalog() {
@@ -15,6 +50,7 @@ export function useProductCatalog() {
   const [query, setQuery] = useState<CatalogQuery>({
     page: 1, pageSize: CATALOG_DEFAULT_PAGE_SIZE, search: "",
   });
+  const [categorySearch, setCategorySearchValue] = useState("");
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<string[]>([]);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [moveError, setMoveError] = useState<string | null>(null);
@@ -46,6 +82,9 @@ export function useProductCatalog() {
     setQuery((previous) => ({ ...previous, categoryId: id ?? undefined, page: 1 }));
     resetSelection();
   }, [resetSelection]);
+  const setCategorySearch = useCallback((value: string) => {
+    setCategorySearchValue(value.slice(0, CATEGORY_NAME_MAX_LENGTH));
+  }, []);
   const toggleCategory = useCallback((id: string) => {
     setExpandedCategoryIds((previous) => previous.includes(id)
       ? previous.filter((value) => value !== id) : [...previous, id]);
@@ -113,14 +152,23 @@ export function useProductCatalog() {
     }
   }, [moveProducts, selectedProductIds, isSearchPending, catalog.isFetching, catalog.isError]);
 
+  const filtered = useMemo(
+    () => filterTree(tree.data?.items ?? [], categorySearch),
+    [tree.data, categorySearch],
+  );
+
   return {
     allProducts: tree.data?.allProducts ?? { id: null, name: ALL_PRODUCTS_LABEL },
-    categories: tree.data?.items ?? [],
+    categories: filtered.items,
+    categorySearch, setCategorySearch,
     isLoadingCategories: tree.isLoading,
     categoriesError: tree.isError ? apiErrorMessage(tree.error, "Не удалось загрузить категории") : null,
     reloadCategories: tree.refetch,
     categoryId: query.categoryId ?? null, selectCategory,
-    expandedCategoryIds, toggleCategory, onCategoryCreated, onCategoryDeleted,
+    // Найденное поиском раскрываем поверх того, что человек раскрыл руками:
+    // свой выбор он потом найдёт на месте, когда очистит поиск.
+    expandedCategoryIds: [...new Set([...expandedCategoryIds, ...filtered.expand])],
+    toggleCategory, onCategoryCreated, onCategoryDeleted,
     search, setSearch, pageSizes: CATALOG_PAGE_SIZES,
     page: current?.page ?? query.page ?? 1,
     pageSize: query.pageSize ?? CATALOG_DEFAULT_PAGE_SIZE, setPage, setPageSize,
