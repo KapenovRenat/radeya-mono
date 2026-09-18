@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState,
+  type ComponentPropsWithoutRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { MoreVertical } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import styles from "./style.module.scss";
+
+/** Запас до края окна, чтобы меню не прилипало к нему вплотную. */
+const VIEWPORT_GAP = 8;
 
 export interface DropdownItem {
   /** Подпись пункта. Используется и как ключ списка, поэтому в одном меню не повторяется. */
@@ -31,43 +36,76 @@ export interface DropdownProps extends Omit<ComponentPropsWithoutRef<"div">, "ch
  * Базовое выпадающее меню.
  *
  * Своё, а не из UI-кита: китов в проекте нет по решению из STATUS.md.
- * Намеренно простое — пункты списком в пропсе, без вложенных подменю
- * и без портала. Дорабатывать будем по мере надобности; пока закрыты
- * три вещи, без которых меню раздражает: клик вне, Escape и стрелки.
+ * Намеренно простое — пункты списком в пропсе, без вложенных подменю.
+ * Закрыто то, без чего меню раздражает: клик вне, Escape, стрелки.
  *
- * Меню не в портале, поэтому родитель не должен обрезать содержимое
- * (`overflow: hidden`) — иначе список окажется срезан. Это главное
- * ограничение текущей версии.
+ * Меню уходит в портал на document.body и позиционируется fixed по месту
+ * кнопки. Иначе его режет любой скроллящийся родитель: `overflow-x: auto`
+ * у таблицы обрезает и по вертикали, и у нижних строк меню оказывалось
+ * недоступно. Побочный эффект портала — меню не переезжает вместе со
+ * страницей, поэтому при прокрутке и смене размера окна оно закрывается.
  */
 export function Dropdown({ items, trigger, label = "Действия", align = "end",
   disabled = false, className, ...props }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const menuId = useId();
   const root = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
+
+  const close = useCallback((returnFocus: boolean) => {
+    setIsOpen(false);
+    setPosition(null);
+    // Возврат фокуса на кнопку: иначе после Escape фокус уходит в никуда
+    // и следующий Tab начинает обход страницы заново.
+    if (returnFocus) root.current?.querySelector("button")?.focus();
+  }, []);
+
+  // Позиция считается после отрисовки меню: нужны его настоящие размеры,
+  // чтобы понять, разворачивать вверх или вниз. Обычный useEffect, а не
+  // useLayoutEffect: тот ругается при серверном рендере, а мигания и так нет —
+  // до подсчёта меню скрыто через visibility.
+  useEffect(() => {
+    if (!isOpen) return;
+    const button = root.current?.getBoundingClientRect();
+    const box = menu.current?.getBoundingClientRect();
+    if (!button || !box) return;
+
+    const below = button.bottom + 4;
+    const fitsBelow = below + box.height + VIEWPORT_GAP <= window.innerHeight;
+    const top = fitsBelow ? below : Math.max(VIEWPORT_GAP, button.top - box.height - 4);
+    const raw = align === "end" ? button.right - box.width : button.left;
+    const left = Math.min(Math.max(VIEWPORT_GAP, raw), window.innerWidth - box.width - VIEWPORT_GAP);
+
+    setPosition({ top, left });
+  }, [isOpen, align, items.length]);
 
   useEffect(() => {
     if (!isOpen) return;
 
     const onPointerDown = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setIsOpen(false);
+      const target = event.target as Node;
+      if (root.current?.contains(target) || menu.current?.contains(target)) return;
+      close(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-        // Возврат фокуса на кнопку: иначе после Escape фокус уходит в никуда
-        // и следующий Tab начинает обход страницы заново.
-        root.current?.querySelector("button")?.focus();
-      }
+      if (event.key === "Escape") close(true);
     };
+    // Меню закреплено за окном, а не за строкой таблицы: при прокрутке оно
+    // отъехало бы от своей кнопки. Дешевле закрыть, чем пересчитывать.
+    const onViewportChange = () => close(false);
 
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onViewportChange);
+    document.addEventListener("scroll", onViewportChange, true);
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onViewportChange);
+      document.removeEventListener("scroll", onViewportChange, true);
     };
-  }, [isOpen]);
+  }, [isOpen, close]);
 
   // Фокус на первый доступный пункт: с клавиатуры меню бесполезно без этого.
   useEffect(() => {
@@ -99,13 +137,17 @@ export function Dropdown({ items, trigger, label = "Действия", align = "
         {trigger ?? <MoreVertical size={16} aria-hidden="true" />}
       </button>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <div
           ref={menu}
           id={menuId}
           role="menu"
           aria-label={label}
-          className={cn(styles.menu, align === "start" ? styles.alignStart : styles.alignEnd)}
+          // Пока позиция не посчитана, меню невидимо: иначе оно на кадр
+          // мигнёт в левом верхнем углу экрана.
+          style={{ top: position?.top ?? 0, left: position?.left ?? 0,
+            visibility: position ? "visible" : "hidden" }}
+          className={styles.menu}
           onKeyDown={(event) => {
             if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
             event.preventDefault();
@@ -122,7 +164,7 @@ export function Dropdown({ items, trigger, label = "Действия", align = "
               onClick={() => {
                 // Закрываем до действия: оно может перерисовать сам список
                 // пунктов, и тогда закрывать будет уже нечего.
-                setIsOpen(false);
+                close(false);
                 item.onSelect();
               }}
             >
@@ -130,7 +172,8 @@ export function Dropdown({ items, trigger, label = "Действия", align = "
               {item.label}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

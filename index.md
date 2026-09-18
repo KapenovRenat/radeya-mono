@@ -149,7 +149,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `Tables` | Таблица с children-строками, head и серверной пагинацией 10/20/50 | `front/src/components/tables/index.tsx`, `front/src/components/tables/style.module.scss` |
 | `ProductsLayout` | Защита раздела товаров ролью ADMIN | `front/src/app/dashboard/(main)/products/layout.tsx` |
 | `Loader` | Сегментное кольцо #f23428; size задаёт диаметр, hideLabel скрывает текст; label по умолчанию «Загрузка ...», подсветка букв каждые 160 мс | `front/src/components/loader/tree-list.tsx`, `front/src/components/loader/style.module.scss` |
-| `Dropdown` | Базовое меню на три точки: пункты списком в пропсе, клик вне, Escape, стрелки. Без портала — родитель не должен обрезать содержимое | `front/src/components/dropdown/` |
+| `Dropdown` | Меню на три точки: пункты списком в пропсе, клик вне, Escape, стрелки. Список в портале с `position: fixed`, закрывается при прокрутке | `front/src/components/dropdown/` |
+| `Checkbox` | Чекбокс поверх нативного input, с частичным состоянием (`indeterminate`) | `front/src/components/checkbox/` |
 | `Input` | Поле ввода: подпись, ошибка, нативные пропсы | `front/src/components/input/` |
 | `Button` | Кнопка: варианты через классы, нативные пропсы | `front/src/components/button/` |
 | `AuthGuard` | Пускает в разделы админки только вошедших | `front/src/features/auth/auth-guard.tsx` |
@@ -164,7 +165,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `CatalogPagination` | Панель пагинации под таблицей: размер страницы, номера, диапазон | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-pagination.tsx` |
 | `CabinetFetch` | Кука, запуск загрузки из кабинета, счётчики, склады, фильтр и таблица | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-fetch.tsx` |
 | `CabinetTable` | Таблица товаров из кабинета: картинка, штрихкод, цены со скидкой, размер | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-table.tsx` |
-| `CatalogRow`, `CatalogTableHead`, `CATALOG_COLUMN_COUNT` | Строка и шапка таблицы каталога: кружок статуса, квадратное фото, два названия, цена Kaspi в две строки со скидкой, склады. Стили — `catalog-row.module.scss` | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
+| `CatalogRow`, `CatalogTableHead`, `CATALOG_COLUMN_COUNT` | Строка и шапка таблицы каталога: галка выделения, кружок статуса, квадратное фото, два названия, цена Kaspi в две строки со скидкой, склады, закреплённое меню действий. Стили — `catalog-row.module.scss` | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
+| `MoveToCategoryDialog` | Модалка переноса выбранных товаров: дерево папок с поиском, затем подтверждение | `front/src/app/dashboard/(main)/products/_components/move-to-category-dialog.tsx` |
 
 ### 1.6. Общие функции, хуки, константы
 
@@ -221,6 +223,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `useSaveWarehouses()` | Сохранение складов из выгрузки или кабинета: итог и ошибка | `front/src/features/warehouses/use-save-warehouses.ts` |
 | `TreeFolderProps` | Контракт управляемого дерева категорий: выбор, раскрытие, действия, `onMove`, поиск | `front/src/components/tree-folder/index.tsx` |
 | `DropdownProps`, `DropdownItem` | Контракт меню: пункты (`label`, `onSelect`, `icon`, `disabled`, `danger`), свой триггер, выравнивание | `front/src/components/dropdown/index.tsx` |
+| `CheckboxProps` | Контракт чекбокса: `label`, `indeterminate` и нативные атрибуты input | `front/src/components/checkbox/index.tsx` |
+| `filterTree(items, search)` | Отбор папок по названию с родителями найденных подпапок; общий для панели и модалки | `front/src/features/categories/filter-tree.ts` |
 | `ReorderCategoriesRequest`, `ReorderCategoriesResponse` | Контракт порядка папок уровня | `shared/src/types/catalog.ts` |
 | `TablesProps` | Контракт таблицы, children и серверной пагинации | `front/src/components/tables/index.tsx` |
 | `LoaderProps` | label, size, hideLabel, className и нативные атрибуты span для Loader | `front/src/components/loader/tree-list.tsx` |

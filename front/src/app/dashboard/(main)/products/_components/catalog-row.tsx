@@ -1,3 +1,4 @@
+import { Pencil } from "lucide-react";
 import {
   LISTING_STATUSES,
   LISTING_STATUS_LABELS,
@@ -6,14 +7,18 @@ import {
   type CatalogRowDto,
 } from "@radeya/shared";
 
+import { Checkbox } from "@/components/checkbox";
+import { Dropdown } from "@/components/dropdown";
 import { formatMoney, moneyToNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import styles from "./catalog-row.module.scss";
 
 /**
- * Колонки таблицы. Класс колонки задаётся здесь один раз и применяется
+ * Колонки с подписями. Класс колонки задаётся здесь один раз и применяется
  * и к шапке, и к ячейке — иначе ширина и выравнивание разъезжаются.
- * Отсюда же берётся количество колонок: Tables нужен colSpan для пустого состояния.
+ *
+ * Галка выделения и меню действий в этот список не входят: подписей у них нет,
+ * и разметка у них своя.
  */
 const COLUMNS = [
   { title: "Статус", className: styles.colStatus },
@@ -26,14 +31,41 @@ const COLUMNS = [
   { title: "Склады", className: styles.colStock },
 ] as const;
 
-export const CATALOG_COLUMN_COUNT = COLUMNS.length;
+/** Подписанные колонки плюс галка и меню. Tables считает этим colSpan пустого состояния. */
+export const CATALOG_COLUMN_COUNT = COLUMNS.length + 2;
 
-export function CatalogTableHead() {
+interface CatalogTableHeadProps {
+  /** Выбрана вся страница. */
+  allSelected: boolean;
+  /** Выбрано что-то, но не всё: галка показывает чёрточку вместо птички. */
+  someSelected: boolean;
+  onSelectAll: (selected: boolean) => void;
+  disabled?: boolean;
+}
+
+export function CatalogTableHead({ allSelected, someSelected, onSelectAll,
+  disabled = false }: CatalogTableHeadProps) {
   return (
     <tr>
+      <th scope="col" className={styles.colSelect}>
+        <Checkbox
+          checked={allSelected}
+          indeterminate={!allSelected && someSelected}
+          disabled={disabled}
+          aria-label="Выделить все товары на странице"
+          onChange={(event) => onSelectAll(event.target.checked)}
+        />
+      </th>
+
       {COLUMNS.map((column) => (
         <th key={column.title} scope="col" className={column.className}>{column.title}</th>
       ))}
+
+      {/* Подписи у колонки действий нет, но ячейка в шапке нужна: без неё
+          съедет выравнивание и закреплённое меню встанет не под своей колонкой. */}
+      <th scope="col" className={styles.colActions}>
+        <span className={styles.srOnly}>Действия</span>
+      </th>
     </tr>
   );
 }
@@ -45,7 +77,13 @@ export function CatalogTableHead() {
  * появится цена сайта — и нулевым окажется не тот элемент, порядок задаёт
  * сортировка по названию канала.
  */
-export function CatalogRow({ item }: { item: CatalogRowDto }) {
+export function CatalogRow({ item, selected, onSelectedChange, disabled = false }: {
+  item: CatalogRowDto;
+  selected: boolean;
+  /** Выделение живёт на Product: переносится товар целиком, со всеми модификациями. */
+  onSelectedChange: (productId: string, selected: boolean) => void;
+  disabled?: boolean;
+}) {
   const listing = item.listings.find((entry) => entry.channel === SALES_CHANNELS.KASPI);
   const isOnSale = item.status === LISTING_STATUSES.ON_SALE;
 
@@ -56,7 +94,16 @@ export function CatalogRow({ item }: { item: CatalogRowDto }) {
   const oldPrice = discount !== null ? base : null;
 
   return (
-    <tr className={styles.row}>
+    <tr className={cn(styles.row, selected && styles.rowSelected)}>
+
+      <td className={styles.colSelect}>
+        <Checkbox
+          checked={selected}
+          disabled={disabled}
+          aria-label={"Выбрать «" + item.name + "», артикул " + item.sku}
+          onChange={(event) => onSelectedChange(item.productId, event.target.checked)}
+        />
+      </td>
 
       <td className={styles.colStatus}>
         {/*
@@ -138,6 +185,25 @@ export function CatalogRow({ item }: { item: CatalogRowDto }) {
             ))}
           </span>
         )}
+      </td>
+
+      {/*
+        Меню закреплено у правого края: колонка sticky, поэтому при
+        горизонтальной прокрутке таблицы точки остаются на виду рядом
+        со своим товаром, а не уезжают за кадр вместе со складами.
+      */}
+      <td className={styles.colActions}>
+        <Dropdown
+          label={"Действия с «" + item.sku + "»"}
+          disabled={disabled}
+          items={[{
+            label: "Редактировать",
+            icon: <Pencil size={16} />,
+            // Карточки товара пока нет — пункт на месте, но неактивен.
+            disabled: true,
+            onSelect: () => undefined,
+          }]}
+        />
       </td>
 
     </tr>

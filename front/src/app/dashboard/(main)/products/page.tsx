@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CATEGORY_NAME_MAX_LENGTH, CATALOG_SEARCH_MAX_LENGTH, type CatalogResponse } from "@radeya/shared";
+import { Button } from "@/components/button";
 import { Loader } from "@/components/loader";
 import { Tables } from "@/components/tables";
 import { TreeFolder } from "@/components/tree-folder";
@@ -9,9 +10,11 @@ import { useCreateCategoryForm } from "@/features/categories/use-create-category
 import { useCategoryActions } from "@/features/categories/use-category-actions";
 import { useProductCatalog } from "@/features/products/use-product-catalog";
 import { CATALOG_COLUMN_COUNT, CatalogRow, CatalogTableHead } from "./_components/catalog-row";
+import { MoveToCategoryDialog } from "./_components/move-to-category-dialog";
 
 export default function ProductsPage() {
   const catalog = useProductCatalog();
+  const [isMoveOpen, setIsMoveOpen] = useState(false);
   const categoryForm = useCreateCategoryForm(catalog.onCategoryCreated);
   const categoryActions = useCategoryActions(catalog.onCategoryDeleted);
   const lastLogged = useRef<CatalogResponse | undefined>(undefined);
@@ -134,6 +137,31 @@ export default function ProductsPage() {
               className="w-full rounded-md border border-border bg-background px-3 py-2" />
           </label>
 
+          <div className="flex flex-wrap items-center gap-2">
+            <Button className="" type="button"
+              disabled={catalog.selectedProductIds.length === 0 || catalog.isMoving}
+              onClick={() => setIsMoveOpen(true)}>
+              Переместить в папку
+              {catalog.selectedProductIds.length > 0 && ": " + catalog.selectedProductIds.length}
+            </Button>
+
+            {/* Массового редактора ещё нет: кнопка на месте, но неактивна. */}
+            <Button className="" type="button" disabled
+              title="Массовое редактирование появится вместе с карточкой товара">
+              Массовое редактирование
+            </Button>
+
+            {catalog.moveResult !== null && (
+              <span className="text-sm text-muted-foreground" aria-live="polite">
+                Перемещено товаров: {catalog.moveResult}
+              </span>
+            )}
+          </div>
+
+          {catalog.moveError && !isMoveOpen && (
+            <p role="alert" className="text-sm text-destructive">{catalog.moveError}</p>
+          )}
+
           <Tables
             page={catalog.page}
             pageSize={catalog.pageSize}
@@ -143,14 +171,38 @@ export default function ProductsPage() {
             isLoading={catalog.isLoading}
             error={catalog.error}
             onRetry={catalog.reload}
-            head={<CatalogTableHead />}
+            head={
+              <CatalogTableHead
+                allSelected={catalog.items.length > 0
+                  && catalog.items.every((item) => catalog.selectedProductIds.includes(item.productId))}
+                someSelected={catalog.selectedProductIds.length > 0}
+                onSelectAll={catalog.selectPage}
+                disabled={catalog.isMoving || catalog.items.length === 0}
+              />
+            }
             columnCount={CATALOG_COLUMN_COUNT}
             caption="Каталог товаров"
           >
             {catalog.items.map((item) => (
-              <CatalogRow key={item.variantId} item={item} />
+              <CatalogRow
+                key={item.variantId}
+                item={item}
+                selected={catalog.selectedProductIds.includes(item.productId)}
+                onSelectedChange={catalog.setProductSelected}
+                disabled={catalog.isMoving}
+              />
             ))}
           </Tables>
+
+          <MoveToCategoryDialog
+            open={isMoveOpen}
+            onClose={() => setIsMoveOpen(false)}
+            categories={catalog.allCategories}
+            count={catalog.selectedProductIds.length}
+            isMoving={catalog.isMoving}
+            error={catalog.moveError}
+            onConfirm={catalog.moveSelected}
+          />
 
         </div>
       </div>

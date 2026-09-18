@@ -3,46 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ALL_PRODUCTS_LABEL, CATALOG_DEFAULT_PAGE_SIZE, CATALOG_PAGE_SIZES,
   CATALOG_SEARCH_MAX_LENGTH, CATEGORY_NAME_MAX_LENGTH, type CatalogPageSize, type CatalogQuery,
-  type CategoryDto, type CategoryTreeNode } from "@radeya/shared";
+  type CategoryDto } from "@radeya/shared";
 import { useGetCategoryTreeQuery } from "@/features/categories/categories-api";
+import { filterTree } from "@/features/categories/filter-tree";
 import { apiErrorMessage } from "@/shared/api/error-message";
 import { useGetCatalogQuery, useMoveProductsToCategoryMutation } from "./catalog-api";
 
 const SEARCH_DELAY_MS = 300;
-
-/** Сравнимый вид: регистр не важен, «ё» люди набирают как «е». */
-const normalize = (value: string) => value.trim().toLowerCase().replace(/ё/g, "е");
-
-/**
- * Отбор папок по названию.
- *
- * Дерево приходит целиком одним запросом, поэтому фильтруем на клиенте:
- * запрос на сервер за двумя уровнями папок — лишний круг.
- *
- * Совпал родитель — показываем его со всеми детьми. Совпал ребёнок —
- * показываем родителя с подошедшими детьми и раскрываем его: иначе
- * найденное прячется внутри свёрнутой папки, и поиск выглядит сломанным.
- */
-function filterTree(items: CategoryTreeNode[], search: string) {
-  const query = normalize(search);
-  if (query === "") return { items, expand: [] as string[] };
-
-  const matched: CategoryTreeNode[] = [];
-  const expand: string[] = [];
-
-  for (const parent of items) {
-    if (normalize(parent.name).includes(query)) {
-      matched.push(parent);
-      continue;
-    }
-    const children = parent.children.filter((child) => normalize(child.name).includes(query));
-    if (children.length === 0) continue;
-    matched.push({ ...parent, children });
-    expand.push(parent.id);
-  }
-
-  return { items: matched, expand };
-}
 
 /** Логика таблицы для ADMIN. items уже содержат страницу: повторно резать массив не нужно. */
 export function useProductCatalog() {
@@ -160,6 +127,8 @@ export function useProductCatalog() {
   return {
     allProducts: tree.data?.allProducts ?? { id: null, name: ALL_PRODUCTS_LABEL },
     categories: filtered.items,
+    /** Дерево без фильтра поиска: для переноса нужен весь список папок. */
+    allCategories: tree.data?.items ?? [],
     categorySearch, setCategorySearch,
     isLoadingCategories: tree.isLoading,
     categoriesError: tree.isError ? apiErrorMessage(tree.error, "Не удалось загрузить категории") : null,

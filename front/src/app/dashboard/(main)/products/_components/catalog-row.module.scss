@@ -12,6 +12,46 @@
   &:hover { background: var(--muted); }
 }
 
+/* Выбранная строка заметна и без взгляда на галку: пачку переносят
+   целиком, и важно видеть, что именно уедет. */
+.rowSelected { background: var(--accent); }
+
+/* ── Выделение ──────────────────────────────────────────── */
+
+.colSelect {
+  width: 1px;
+  text-align: center;
+}
+
+/* ── Меню действий ──────────────────────────────────────── */
+
+/* Закреплено у правого края: при горизонтальной прокрутке точки остаются
+   на виду. Фон обязателен — иначе сквозь ячейку видно уезжающие колонки. */
+.colActions {
+  position: sticky;
+  right: 0;
+  width: 1px;
+  text-align: center;
+  border-left: 1px solid var(--border);
+}
+
+td.colActions { background: var(--background); }
+.row:hover td.colActions { background: var(--muted); }
+.rowSelected td.colActions { background: var(--accent); }
+
+/* Ячейка в шапке держит цвет шапки, иначе на прокрутке видно строки под ней. */
+th.colActions { background: var(--muted); }
+
+/* Подпись только для скринридера: глазами колонка и так понятна по точкам. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* ── Статус ─────────────────────────────────────────────── */
 
 /* Подписи в колонке нет, поэтому она узкая: место занимает только шапка.

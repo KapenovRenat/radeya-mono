@@ -1,0 +1,58 @@
+/* Чекбокс. Цвета только через var(--токен): один компонент на магазин и админку.
+
+   Видимый квадрат — соседний элемент скрытого input, поэтому состояния
+   читаются селекторами :checked и :focus-visible у самого input.
+   Сам input не убран display: none — так он потерял бы фокус и клавиатуру. */
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.box {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.125rem;
+  height: 1.125rem;
+  color: transparent;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.5);
+
+  svg { display: block; }
+}
+
+.input:checked + .box,
+.input:indeterminate + .box {
+  color: var(--primary-foreground);
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.input:focus-visible + .box {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.label {
+  font-size: 0.875rem;
+  user-select: none;
+}
