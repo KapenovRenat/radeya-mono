@@ -20,6 +20,9 @@ export interface CreateCategoryRequest {
   /** null или отсутствие поля — папка верхнего уровня. */
   parentId?: string | null;
 }
+export interface RenameCategoryRequest { name: string }
+export interface DeleteCategoryResponse { id: string }
+
 export interface CatalogQuery {
   page?: number;
   pageSize?: CatalogPageSize;

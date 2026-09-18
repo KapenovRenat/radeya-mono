@@ -17,6 +17,8 @@ export const AUDIT_ACTIONS = {
   KASPI_CABINET_FETCH: 'KASPI_CABINET_FETCH',
   KASPI_PRODUCTS_IMPORTED: 'KASPI_PRODUCTS_IMPORTED',
   CATEGORY_CREATED: 'CATEGORY_CREATED',
+  CATEGORY_RENAMED: 'CATEGORY_RENAMED',
+  CATEGORY_DELETED: 'CATEGORY_DELETED',
   PRODUCTS_CATEGORY_CHANGED: 'PRODUCTS_CATEGORY_CHANGED',
 } as const;
 
@@ -35,5 +37,7 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   KASPI_CABINET_FETCH: 'Загрузка каталога из кабинета Kaspi',
   KASPI_PRODUCTS_IMPORTED: 'Сохранены товары из кабинета Kaspi',
   CATEGORY_CREATED: 'Создана категория товаров',
+  CATEGORY_RENAMED: 'Категория переименована',
+  CATEGORY_DELETED: 'Категория удалена',
   PRODUCTS_CATEGORY_CHANGED: 'Товары перемещены в категорию',
 };

@@ -103,8 +103,8 @@ function mapOffer(raw: RawOffer, status: ListingStatus): KaspiCatalogOffer {
 
   const { name, subtitle } = splitModel(rawModel);
 
-  const availabilities = toArray(raw.availabilities, 'availability');
-  const cityPrices = toArray(raw.cityprices, 'cityprice');
+  const availabilities = toArray<RawAvailability>(raw.availabilities, 'availability');
+  const cityPrices = toArray<RawCityPrice>(raw.cityprices, 'cityprice');
 
   const stocks = buildStocks(availabilities, cityPrices, raw, problems, status);
 

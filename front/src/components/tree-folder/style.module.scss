@@ -1,0 +1,48 @@
+.tree {
+  min-width: 0;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  flex-direction: column;
+}
+.title { font-weight: 600; }
+.create, .toggle, .folder, .all, .action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: inherit;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+.create { padding: 0.375rem; font-size: 0.875rem; }
+.list { list-style: none; margin: 0; padding: 0; }
+.row { display: flex; align-items: center; border-radius: var(--radius); }
+.row:hover, .all:hover { background: var(--muted); }
+.selected { background: var(--muted); color: var(--primary); }
+.folder { min-width: 0; flex: 1; padding: 0.625rem 0.5rem; text-align: left; }
+.folder span { overflow-wrap: anywhere; }
+.folder svg, .all svg { flex-shrink: 0; }
+.toggle, .toggleSpace { width: 1.75rem; flex-shrink: 0; }
+.toggle { justify-content: center; padding: 0.625rem 0; }
+.nested { padding-left: 1rem; }
+.all { width: 100%; text-align: left; padding: 0.75rem; }
+.message { padding: 0.75rem; font-size: 0.875rem; }
+
+.actions { display: flex; align-items: center; flex-shrink: 0; padding-right: 0.25rem; }
+.action { justify-content: center; width: 1.75rem; height: 2rem; padding: 0; border-radius: var(--radius); }
+.action:hover:not(:disabled) { background: var(--background); }
+.delete { color: var(--destructive); }

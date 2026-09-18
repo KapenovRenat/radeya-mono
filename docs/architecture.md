@@ -279,8 +279,10 @@ Tailwind 4, zod 4. Мажоры свежие — перед написанием
 Product связан с одной папкой, все его Variant наследуют её при фильтрации.
 
 - `server/src/modules/categories/`: routes, controller, schemas, service — дерево
-  и создание папок. getCategoryTree() собирает дерево за один запрос;
-  createCategory() проверяет родителя и уникальность имени в Serializable-транзакции.
+  и создание/переименование/удаление папок. getCategoryTree() собирает дерево одним запросом;
+  createCategory() разрешает только два уровня. Создание и renameCategory() проверяют
+  уникальность имени в Serializable-транзакции. deleteCategory() блокирует запись
+  через FOR UPDATE и удаляет только пустую папку в ReadCommitted-транзакции.
 - `server/src/modules/products/catalog.schemas.ts`: проверка поиска, пагинации,
   UUID папки и списка перемещаемых товаров.
 - `server/src/modules/products/catalog.service.ts`: listCatalog() — страница
@@ -290,7 +292,8 @@ Product связан с одной папкой, все его Variant насл�
 - `server/src/modules/products/catalog.controller.ts`: HTTP-обработчики и аудит переноса.
 - `shared/src/constants/catalog.ts`, `shared/src/types/catalog.ts`: размеры страниц,
   лимиты, служебное название и общий контракт дерева/таблицы/переноса.
-- `front/src/features/categories/categories-api.ts`: запрос дерева, создание папки.
+- `front/src/features/categories/categories-api.ts`: дерево, создание, переименование и удаление.
+- `front/src/features/categories/use-category-actions.ts`: формы переименования/удаления и ошибки.
 - `front/src/features/categories/use-create-category-form.ts`: форма создания.
 - `front/src/features/products/catalog-api.ts`: серверная таблица и перенос.
 - `front/src/features/products/use-product-catalog.ts`: выбор/раскрытие папок,
@@ -303,6 +306,10 @@ Product связан с одной папкой, все его Variant насл�
 на значительно большей базе потребуют пересмотра. Дерево загружается целиком;
 товары — только выбранной страницей. Новых зависимостей и миграций нет.
 
-API подробной карточки, редактирование/перемещение/удаление самих папок и вёрстка
-страницы не входят в текущую реализацию. Категория «Прима 320 Угловой» группирует
+API подробной карточки и перемещение самих папок не входят в текущую реализацию.
+Переименование и удаление пустых папок доступны. Вложенность ограничена двумя уровнями. Страница /dashboard/products подключает управляемые
+компоненты TreeFolder и Tables через useProductCatalog. Компоненты лежат в
+front/src/components/tree-folder/ и front/src/components/tables/, в каждой папке
+index.tsx и style.module.scss. Строки товаров для Tables.children пользователь
+добавляет самостоятельно. Компоненты не знают маршрута и не обращаются к API. Категория «Прима 320 Угловой» группирует
 товары, но не объединяет их в один Product с модификациями.

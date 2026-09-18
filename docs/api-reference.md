@@ -399,12 +399,13 @@
 
 ## Дерево категорий и серверный каталог (18.09.2026)
 
-Все четыре операции ниже доступны только авторизованному ADMIN; общие ошибки:
+Все операции ниже доступны только авторизованному ADMIN; общие ошибки:
 401 UNAUTHORIZED — нет сессии, 403 FORBIDDEN — нет роли. Контракты находятся в
 `shared/src/types/catalog.ts`, настройки — в `shared/src/constants/catalog.ts`.
 
 ### GET /api/categories
-Получить созданные вручную папки произвольной вложенности.
+Получить созданные вручную папки. Новые категории ограничены двумя уровнями:
+корневая категория → подпапка. Ранее созданные более глубокие узлы не скрываются.
 - Auth: ADMIN.
 - Параметры: нет.
 - Ответ 200: `{ allProducts: { id: null, name: "Все товары" }, items: CategoryTreeNode[] }`.
@@ -418,11 +419,12 @@
 - Файл: `server/src/modules/categories/categories.controller.ts` (getCategories).
 
 ### POST /api/categories
-Создать папку верхнего уровня или подпапку.
+Создать папку верхнего уровня или подпапку (максимум два уровня).
 - Auth: ADMIN.
 - Body: `{ name: string, parentId?: string | null }`.
 - name: 1–150 символов после trim; parentId — UUID существующей папки.
-  Отсутствующий parentId или null создаёт корневую папку.
+  Отсутствующий parentId или null создаёт корневую папку. Указанный родитель
+  обязан быть корневым; создание внутри подпапки возвращает 400 VALIDATION_ERROR.
 - Ответ 201: `{ id, name, parentId }` (CategoryDto).
 - Ошибки: 400 VALIDATION_ERROR — неверное тело либо зарезервированное имя
   «Все товары» без учёта регистра; 404 NOT_FOUND — родителя нет;
@@ -490,3 +492,31 @@ quantity=null не заменяется нулём. Нет Listing для кан
 - Аудит: PRODUCTS_CATEGORY_CHANGED; before — старые категории изменённых товаров,
   after — целевая категория и их ID. Повторный перенос в ту же папку не пишет аудит.
 - Файл: `server/src/modules/products/catalog.controller.ts` (patchProductsCategory).
+
+### PATCH /api/categories/:id
+Переименовать папку без изменения родителя и привязки товаров.
+- Auth: ADMIN.
+- Path: id — UUID существующей Category.
+- Body: { name: string }, 1–150 символов после trim. Другие поля запрещены.
+- Ответ 200: CategoryDto { id, name, parentId }.
+- Ошибки: 400 VALIDATION_ERROR — неверный UUID/название, включая «Все товары»;
+  404 NOT_FOUND — папки нет; 409 CONFLICT — дубликат имени внутри родителя
+  без учёта регистра либо конфликт параллельного изменения; общие 401/403.
+- Уникальность проверяется в Serializable-транзакции, включая корневые папки.
+  path и slug при переименовании сохраняются. Повтор того же имени не пишет аудит.
+- Аудит: CATEGORY_RENAMED, before/after с прежним и новым названием.
+- Файл: server/src/modules/categories/categories.controller.ts (patchCategory).
+
+### DELETE /api/categories/:id
+Удалить пустую папку, не удаляя товары и подпапки.
+- Auth: ADMIN.
+- Path: id — UUID существующей Category. Body не требуется.
+- Ответ 200: DeleteCategoryResponse { id }.
+- Ошибки: 400 VALIDATION_ERROR — неверный UUID; 404 NOT_FOUND — папки нет;
+  409 CONFLICT — есть хотя бы один товар (в том числе неактивный) или подпапка;
+  общие 401/403. «Все товары» — служебный пункт без UUID, удалить его нельзя.
+- В транзакции ReadCommitted запись Category блокируется FOR UPDATE перед
+  проверкой товаров и подпапок. Новые FK-ссылки ждут блокировку; удаление не
+  должно неявно отвязать конкурентно добавленный товар через onDelete: SetNull.
+- Аудит: CATEGORY_DELETED, удалённая папка в before.
+- Файл: server/src/modules/categories/categories.controller.ts (removeCategory).

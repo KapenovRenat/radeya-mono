@@ -57,6 +57,12 @@ export function useProductCatalog() {
     }
     selectCategory(category.id);
   }, [selectCategory]);
+  const onCategoryDeleted = useCallback((category: CategoryDto) => {
+    setQuery((previous) => previous.categoryId === category.id
+      ? { ...previous, categoryId: category.parentId ?? undefined, page: 1 } : previous);
+    setExpandedCategoryIds((previous) => previous.filter((id) => id !== category.id));
+    resetSelection();
+  }, [resetSelection]);
   const setPageSize = useCallback((pageSize: CatalogPageSize) => {
     if (!CATALOG_PAGE_SIZES.includes(pageSize)) return;
     setQuery((previous) => ({ ...previous, pageSize, page: 1 }));
@@ -114,10 +120,11 @@ export function useProductCatalog() {
     categoriesError: tree.isError ? apiErrorMessage(tree.error, "Не удалось загрузить категории") : null,
     reloadCategories: tree.refetch,
     categoryId: query.categoryId ?? null, selectCategory,
-    expandedCategoryIds, toggleCategory, onCategoryCreated,
+    expandedCategoryIds, toggleCategory, onCategoryCreated, onCategoryDeleted,
     search, setSearch, pageSizes: CATALOG_PAGE_SIZES,
     page: current?.page ?? query.page ?? 1,
     pageSize: query.pageSize ?? CATALOG_DEFAULT_PAGE_SIZE, setPage, setPageSize,
+    response: current,
     items, total: current?.total ?? 0, totalPages: current?.totalPages ?? 0,
     isLoading: catalog.isLoading || catalog.isFetching || isSearchPending,
     error: catalog.isError ? apiErrorMessage(catalog.error, "Не удалось загрузить товары") : null,

@@ -2,8 +2,8 @@ import type { RequestHandler } from 'express';
 import { AUDIT_ACTIONS } from '@radeya/shared';
 import { clientIp, logAction } from '../../lib/audit';
 import { ValidationError } from '../../lib/errors';
-import { createCategorySchema } from './categories.schemas';
-import { createCategory, getCategoryTree } from './categories.service';
+import { categoryParamsSchema, createCategorySchema, renameCategorySchema } from './categories.schemas';
+import { createCategory, getCategoryTree, renameCategory, deleteCategory } from './categories.service';
 
 export const getCategories: RequestHandler = async (_req, res) => {
   res.json(await getCategoryTree());
@@ -17,4 +17,29 @@ export const postCategory: RequestHandler = async (req, res) => {
     action: AUDIT_ACTIONS.CATEGORY_CREATED, entityType: 'Category', entityId: category.id,
     after: category, ip: clientIp(req) });
   res.status(201).json(category);
+};
+
+export const patchCategory: RequestHandler = async (req, res) => {
+  const params = categoryParamsSchema.safeParse(req.params);
+  const body = renameCategorySchema.safeParse(req.body);
+  if (!params.success || !body.success) throw new ValidationError('Проверьте категорию и название');
+  const { before, after } = await renameCategory(params.data.id, body.data.name);
+  if (before.name !== after.name) {
+    const author = req.user!;
+    await logAction({ userId: author.id, userLogin: author.login, userRole: author.role,
+      action: AUDIT_ACTIONS.CATEGORY_RENAMED, entityType: 'Category', entityId: after.id,
+      before, after, ip: clientIp(req) });
+  }
+  res.json(after);
+};
+
+export const removeCategory: RequestHandler = async (req, res) => {
+  const params = categoryParamsSchema.safeParse(req.params);
+  if (!params.success) throw new ValidationError('Некорректная категория');
+  const before = await deleteCategory(params.data.id);
+  const author = req.user!;
+  await logAction({ userId: author.id, userLogin: author.login, userRole: author.role,
+    action: AUDIT_ACTIONS.CATEGORY_DELETED, entityType: 'Category', entityId: before.id,
+    before, ip: clientIp(req) });
+  res.json({ id: before.id });
 };
