@@ -1,0 +1,160 @@
+/* Строка таблицы каталога.
+
+   Цвета только через var(--токен) — строка сама подстроится под тему админки
+   и под тёмную схему. Ширины колонок заданы здесь, а не в общем компоненте
+   Tables: Tables ничего не знает о каталоге и знать не должен.
+
+   Кружок статуса просит два цвета, которых в темах пока нет. Объявлены
+   с запасным значением: захотите завести --status-on-sale и --status-off-sale
+   в styles/themes.css — они подхватятся сами, править модуль не придётся. */
+
+.row {
+  &:hover { background: var(--muted); }
+}
+
+/* ── Статус ─────────────────────────────────────────────── */
+
+/* Подписи в колонке нет, поэтому она узкая: место занимает только шапка.
+   Кружок по центру — иначе он висит у левого края широкой ячейки. */
+.colStatus {
+  width: 1px;
+  text-align: center;
+}
+
+.dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+
+.dotOn { background: var(--status-on-sale, oklch(0.62 0.17 145)); }
+.dotOff { background: var(--status-off-sale, var(--destructive)); }
+
+/* ── Фото ───────────────────────────────────────────────── */
+
+.colImage { width: 5rem; }
+
+.image,
+.noImage {
+  display: block;
+  width: 4rem;
+  height: 4rem;
+  /* Квадрат держится на aspect-ratio, а не только на height: preflight
+     Tailwind ставит img { height: auto } и в этой сборке перебивает модуль.
+     С заданным соотношением даже auto вычислит квадрат. */
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius);
+  background: var(--muted);
+}
+
+/* Картинки Kaspi не квадратные — обрезаем по центру, а не сплющиваем. */
+.image { object-fit: cover; }
+
+.noImage {
+  display: grid;
+  place-items: center;
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+  text-align: center;
+}
+
+/* ── Названия ───────────────────────────────────────────── */
+
+/* Единственная колонка, которой разрешено переноситься: остальные держат
+   строку, и таблица уезжает в горизонтальный скролл, а не сплющивается. */
+.colName {
+  min-width: 20rem;
+  max-width: 32rem;
+}
+
+.names {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.master { font-weight: 500; }
+
+.own {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+
+/* ── Артикул, числа, предзаказ ──────────────────────────── */
+
+.colSku {
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.875rem;
+}
+
+.colPrice,
+.colPreOrder {
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* Цена: сумма к оплате первой строкой, старая цена и скидка — второй и мельче.
+   Не PriceTag: он общий с витриной, там ценник в одну строку и крупный. */
+.price {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.priceCurrent {
+  color: var(--price-current);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.priceWas {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.priceOld {
+  color: var(--price-old);
+  font-size: 0.75rem;
+}
+
+.priceBadge {
+  padding: 0 0.3125rem;
+  border-radius: var(--radius);
+  background: var(--price-badge);
+  color: var(--primary-foreground);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.muted { color: var(--muted-foreground); }
+
+/* ── Склады ─────────────────────────────────────────────── */
+
+.colStock { white-space: nowrap; }
+
+.warehouses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.chip {
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.chipCount {
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}

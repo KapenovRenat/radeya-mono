@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
 
+import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import styles from "./style.module.scss";
 
@@ -9,13 +10,6 @@ interface PriceTagProps extends ComponentProps<"div"> {
   /** Старая цена — если есть, показывается зачёркнутой. */
   oldPrice?: number;
 }
-
-const formatPrice = (value: number) =>
-  new Intl.NumberFormat("ru-KZ", {
-    style: "currency",
-    currency: "KZT",
-    maximumFractionDigits: 0,
-  }).format(value);
 
 /**
  * Ценник товара. Компонент общий: и для витрины, и для админки.
@@ -35,9 +29,9 @@ export function PriceTag({
 
   return (
     <div className={cn(styles.priceTag, className)} {...props}>
-      <span className={styles.current}>{formatPrice(price)}</span>
+      <span className={styles.current}>{formatMoney(price)}</span>
 
-      {oldPrice && <span className={styles.old}>{formatPrice(oldPrice)}</span>}
+      {oldPrice && <span className={styles.old}>{formatMoney(oldPrice)}</span>}
 
       {discount && <span className={styles.badge}>−{discount}%</span>}
     </div>

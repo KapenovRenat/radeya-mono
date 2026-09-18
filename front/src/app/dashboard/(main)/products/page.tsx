@@ -8,6 +8,7 @@ import { TreeFolder } from "@/components/tree-folder";
 import { useCreateCategoryForm } from "@/features/categories/use-create-category-form";
 import { useCategoryActions } from "@/features/categories/use-category-actions";
 import { useProductCatalog } from "@/features/products/use-product-catalog";
+import { CATALOG_COLUMN_COUNT, CatalogRow, CatalogTableHead } from "./_components/catalog-row";
 
 export default function ProductsPage() {
   const catalog = useProductCatalog();
@@ -135,8 +136,13 @@ export default function ProductsPage() {
             isLoading={catalog.isLoading}
             error={catalog.error}
             onRetry={catalog.reload}
+            head={<CatalogTableHead />}
+            columnCount={CATALOG_COLUMN_COUNT}
+            caption="Каталог товаров"
           >
-            {/* Здесь будут ваши строки: catalog.items.map(...) с <tr> и <td>. */}
+            {catalog.items.map((item) => (
+              <CatalogRow key={item.variantId} item={item} />
+            ))}
           </Tables>
 
         </div>

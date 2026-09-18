@@ -161,6 +161,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `CatalogPagination` | Панель пагинации под таблицей: размер страницы, номера, диапазон | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-pagination.tsx` |
 | `CabinetFetch` | Кука, запуск загрузки из кабинета, счётчики, склады, фильтр и таблица | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-fetch.tsx` |
 | `CabinetTable` | Таблица товаров из кабинета: картинка, штрихкод, цены со скидкой, размер | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-table.tsx` |
+| `CatalogRow`, `CatalogTableHead`, `CATALOG_COLUMN_COUNT` | Строка и шапка таблицы каталога: кружок статуса, квадратное фото, два названия, цена Kaspi в две строки со скидкой, склады. Стили — `catalog-row.module.scss` | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
 
 ### 1.6. Общие функции, хуки, константы
 
@@ -194,6 +195,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `useCreateUserForm(onSuccess)` | Состояние формы создания сотрудника | `front/src/features/users/use-create-user-form.ts` |
 | `useGetAuditLogQuery` | Журнал действий | `front/src/features/audit/audit-api.ts` |
 | `formatDateTime(iso)` | Дата и время в часовом поясе пользователя | `front/src/lib/format.ts` |
+| `moneyToNumber(value)` | Цена из API (строка `"48230.00"`) в число для показа; пусто → null, не 0 | `front/src/lib/format.ts` |
+| `formatMoney(value)` | Цена для показа: `114 990 ₸`, без тиын. Используют и `PriceTag`, и строка каталога | `front/src/lib/format.ts` |
 | `usePagination(items, pageSize)` | Постраничный показ списка из памяти: срез страницы, номера с разрывами, диапазон | `front/src/lib/use-pagination.ts` |
 | `PAGE_SIZE_OPTIONS`, `DEFAULT_PAGE_SIZE`, `PAGINATION_GAP` | Размеры страницы (10/20/30) и метка разрыва в ряду номеров | `front/src/lib/use-pagination.ts` |
 | `SALES_CHANNELS`, `LISTING_STATUSES` и подписи | Каналы продаж (SITE, KASPI, OZON) и статус размещения | `shared/src/constants/sales-channels.ts` |
