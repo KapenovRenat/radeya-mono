@@ -47,6 +47,9 @@ shared/    # Общий код: типы контрактов, констант�
 | `DELETE /api/categories/:id` | Удалить только пустую папку | ADMIN | `server/src/modules/categories/categories.controller.ts` |
 | `GET /api/products/variants` | Серверный поиск, поддерево категории, страницы 10/20/50; в строке все поля товара, включая закупку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
 | `PATCH /api/products/category` | Перенести товары со всеми модификациями в папку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
+| `GET /api/orders` | Страница заказов из нашей базы: поиск по номеру, свежие сверху | ADMIN | `server/src/modules/orders/orders.controller.ts` |
+| `GET /api/orders/kaspi` | Страница заказов Kaspi, разобранная в нашу модель; без записи в БД | ADMIN | `server/src/modules/orders/orders.controller.ts` |
+| `POST /api/orders/sync` | Шаг синхронизации заказов: чанки по 3 дня, курсор, запись в БД | ADMIN | `server/src/modules/orders/orders.controller.ts` |
 
 Подробные контракты — в [docs/api-reference.md](docs/api-reference.md).
 
@@ -82,6 +85,12 @@ shared/    # Общий код: типы контрактов, констант�
 | — | `rename-products` | Переименование сохранённых товаров правилом `readModelName()`. Без `--apply` только показывает; правки руками не затирает без `--force`; `--diagnose` добавляет разбор источников. Запуск `npm run rename:products --workspace=server` | `server/src/scripts/rename-products.ts` |
 | products | `listKnownSkus()` | Артикулы, уже лежащие в базе | `server/src/modules/products/products.service.ts` |
 | products | `importKaspiProducts(input, authorId)` | Импорт товаров кабинета: только новые, отчёт по пропущенным и сбойным | `server/src/modules/products/products.service.ts` |
+| orders | `fetchKaspiOrders(params)`, `fetchKaspiOrdersRaw(params)` | Страница заказов Kaspi Shop API: со списком и `meta` либо тело целиком | `server/src/modules/orders/kaspi-orders.client.ts` |
+| orders | `toOrderDraft(raw)` | Сырой заказ Kaspi в нашу модель; спорное помечает проблемой, поля кабинета оставляет пустыми | `server/src/modules/orders/kaspi-orders.mapper.ts` |
+| orders | `syncKaspiOrders(input)` | Шаг синхронизации: отрезки по 3 дня от свежих к старым, upsert по номеру, поля кабинета не затирает | `server/src/modules/orders/orders.service.ts` |
+| orders | `listOrders(input)` | Страница заказов из базы: поиск по номеру, узкий DTO без персональных данных сверх нужного | `server/src/modules/orders/orders.service.ts` |
+| orders | `readDeliveryType(input)`, `readOrderStatus(input, type)` | Тип доставки и стадия заказа из полей Kaspi (алгоритм раздела 5.3) | `server/src/modules/orders/kaspi-order-status.ts` |
+| orders | `isKnownStatus(value)`, `isKnownState(value)`, `KNOWN_KASPI_STATUSES`, `KNOWN_KASPI_STATES` | Список известных значений Kaspi; незнакомое помечается проблемой, а не падает в «Новый» | `server/src/modules/orders/kaspi-order-status.ts` |
 | db | `prisma` | Единственный экземпляр Prisma Client | `server/src/db/client.ts` |
 | db | `isDatabaseReachable()` | Проверка соединения с базой | `server/src/db/client.ts` |
 | db | `disconnectDatabase()` | Закрытие пула при остановке | `server/src/db/client.ts` |
@@ -111,10 +120,17 @@ shared/    # Общий код: типы контрактов, констант�
 | `Fabric` | Ткань обивки: наш справочник, Kaspi её не знает | `shades`, `variants` |
 | `FabricShade` | Оттенок ткани, принадлежит своей ткани | `fabric`, `variants` |
 | `VariantChange` | История изменений артикула: поле, было, стало, источник | `variant` |
+| `Order` | Заказ Kaspi: два статуса площадки + наш вычисленный, даты, деньги, покупатель, адрес, склад. Поля кабинета заведены пустыми | `warehouse` → `Warehouse`, `entries`, `markers`, `steps` |
+| `OrderEntry` | Позиция заказа: артикул, названия обоих источников, количество, цены | `order`, `variant` (необязательная) |
+| `OrderMarker` | Событие истории заказа: кто и когда двигал. Только из кабинета | `order`; `@@unique([orderId, marker, at])` |
+| `OrderStep` | Этап заказа со сроками и дедлайном. Только из кабинета | `order`; `@@unique([orderId, step])` |
 | `UserRole` (enum) | Роли сотрудников: ADMIN, MANAGER, SELLER | — |
 | `SalesChannel` (enum) | Каналы продаж: SITE, KASPI, OZON | — |
 | `ListingStatus` (enum) | Статус размещения: ON_SALE, OFF_SALE | — |
 | `ChangeSource` (enum) | Источник изменения: KASPI_SYNC, MANUAL | — |
+| `OrderSource` (enum) | Откуда заказ: SITE, KASPI, OFFLINE | — |
+| `OrderDeliveryType` (enum) | Тип доставки: KASPI, PICKUP, OWN | — |
+| `OrderStatus` (enum) | 13 стадий заказа, от NEW до RETURNED | — |
 
 Подробности — в [docs/data-model.md](docs/data-model.md).
 
@@ -126,7 +142,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `/dashboard` | Админка — сводка; сейчас проверяет связь с API | `front/src/app/dashboard/(main)/page.tsx` |
 | `/dashboard/login` | Вход сотрудника в админку | `front/src/app/dashboard/(auth)/login/page.tsx` |
 | `/dashboard/accounts` | Аккаунты и История: таблица сотрудников, создание, журнал действий | `front/src/app/dashboard/(main)/accounts/page.tsx` |
-| `/dashboard/products` | Каталог: два уровня папок, создание/переименование/удаление категорий, серверный поиск и таблица с пагинацией; строки ожидают children | `front/src/app/dashboard/(main)/products/page.tsx` |
+| `/dashboard/products` | Каталог: два уровня папок с поиском и порядком, серверный поиск, таблица с выделением и переносом в папку | `front/src/app/dashboard/(main)/products/page.tsx` |
+| `/dashboard/orders` | Заказы: две кнопки синхронизации с Kaspi, поиск по номеру, выбор периода, таблица. При загрузке печатает сырьё Kaspi в консоль (отладка, убрать после сверки статусов) | `front/src/app/dashboard/(main)/orders/page.tsx` |
 | `/dashboard/kaspi-sync` | Синхронизация с Kaspi: загрузка выгрузок, предпросмотр каталога | `front/src/app/dashboard/(main)/kaspi-sync/page.tsx` |
 
 **Каталог с деревом папок:** `/dashboard/products` подключён к API; дерево, создание папок, поиск и пагинация готовы. Строки товаров через children добавляет пользователь. Ответ API выводится в консоль браузера. См. [docs/app-structure.md](docs/app-structure.md).
@@ -145,12 +162,13 @@ shared/    # Общий код: типы контрактов, констант�
 | `DashboardMainLayout` | Сайдбар и рабочая область разделов админки | `front/src/app/dashboard/(main)/layout.tsx` |
 | `DashboardAuthLayout` | Форма входа по центру, без сайдбара | `front/src/app/dashboard/(auth)/layout.tsx` |
 | `PriceTag` | Ценник товара; образец SCSS-модуля с токенами темы | `front/src/components/price-tag/` |
-| `TreeFolder` | Два уровня папок: поиск, выбор, раскрытие; действия папки — в меню `Dropdown` (подпапка, переименовать, выше/ниже, удалить) | `front/src/components/tree-folder/index.tsx`, `front/src/components/tree-folder/style.module.scss` |
-| `Tables` | Таблица с children-строками, head и серверной пагинацией 10/20/50 | `front/src/components/tables/index.tsx`, `front/src/components/tables/style.module.scss` |
+| `TreeFolder` | Два уровня папок: поиск, выбор, раскрытие; действия папки — в меню `Dropdown` (подпапка, переименовать, выше/ниже, удалить) | `front/src/components/tree-folder/page.tsx`, `front/src/components/tree-folder/style.module.scss` |
+| `Tables` | Таблица с children-строками, head и серверной пагинацией 10/20/50 | `front/src/components/tables/page.tsx`, `front/src/components/tables/style.module.scss` |
 | `ProductsLayout` | Защита раздела товаров ролью ADMIN | `front/src/app/dashboard/(main)/products/layout.tsx` |
 | `Loader` | Сегментное кольцо #f23428; size задаёт диаметр, hideLabel скрывает текст; label по умолчанию «Загрузка ...», подсветка букв каждые 160 мс | `front/src/components/loader/tree-list.tsx`, `front/src/components/loader/style.module.scss` |
 | `Dropdown` | Меню на три точки: пункты списком в пропсе, клик вне, Escape, стрелки. Список в портале с `position: fixed`, закрывается при прокрутке | `front/src/components/dropdown/` |
 | `Checkbox` | Чекбокс поверх нативного input, с частичным состоянием (`indeterminate`) | `front/src/components/checkbox/` |
+| `DateRangePicker` | Календарь выбора периода: месяц листается отдельно от выбора, подсветка диапазона по курсору, «Сбросить» и «Применить» | `front/src/components/date-range-picker/` |
 | `Input` | Поле ввода: подпись, ошибка, нативные пропсы | `front/src/components/input/` |
 | `Button` | Кнопка: варианты через классы, нативные пропсы | `front/src/components/button/` |
 | `AuthGuard` | Пускает в разделы админки только вошедших | `front/src/features/auth/auth-guard.tsx` |
@@ -167,6 +185,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `CabinetTable` | Таблица товаров из кабинета: картинка, штрихкод, цены со скидкой, размер | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-table.tsx` |
 | `CatalogRow`, `CatalogTableHead`, `CATALOG_COLUMN_COUNT` | Строка и шапка таблицы каталога: галка выделения, кружок статуса, квадратное фото, два названия, цена Kaspi в две строки со скидкой, склады, закреплённое меню действий. Стили — `catalog-row.module.scss` | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
 | `MoveToCategoryDialog` | Модалка переноса выбранных товаров: дерево папок с поиском, затем подтверждение | `front/src/app/dashboard/(main)/products/_components/move-to-category-dialog.tsx` |
+| `OrderRow`, `OrderTableHead`, `ORDER_COLUMN_COUNT` | Строка и шапка таблицы заказов: дата и время, кружок статуса, номер, покупатель, город, доставка, сумма, планируемая доставка. Стили — `order-row.module.scss` | `front/src/app/dashboard/(main)/orders/_components/order-row.tsx` |
 
 ### 1.6. Общие функции, хуки, константы
 
@@ -180,6 +199,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `requireAuth`, `requireRole(...roles)` | Проверка сессии и ролей | `server/src/middlewares/require-auth.ts` |
 | `SESSION_COOKIE_NAME`, `sessionCookieOptions` | Настройки куки сессии | `server/src/config/session.ts` |
 | `ORDER_SOURCES`, `ORDER_SOURCE_LABELS` | Источники заказов: SITE, KASPI, OFFLINE | `shared/src/constants/order-sources.ts` |
+| `ORDER_STATUSES`, `ORDER_STATUS_LABELS`, `ORDER_STATUS_ORDER`, `ORDER_FINAL_STATUSES` | 13 стадий заказа, подписи как в кабинете, порядок для вкладок и список закрытых | `shared/src/constants/order-statuses.ts` |
+| `ORDER_DELIVERY_TYPES`, `ORDER_DELIVERY_TYPE_LABELS` | Тип доставки: Kaspi Доставка, Самовывоз, Своя доставка | `shared/src/constants/order-statuses.ts` |
 | `ApiErrorResponse`, `PaginatedResponse` | Общие формы ответов API | `shared/src/types/api.ts` |
 | `env`, `corsOrigins`, `isProduction` | Проверенные переменные окружения | `server/src/config/env.ts` |
 | `logger` | Логирование с уровнями | `server/src/lib/logger.ts` |
@@ -221,12 +242,15 @@ shared/    # Общий код: типы контрактов, констант�
 | `SaveWarehousesRequest`, `SaveWarehousesResponse`, `WarehouseDto` | Контракты справочника складов | `shared/src/types/kaspi-catalog.ts` |
 | `useGetWarehousesQuery`, `useImportKaspiWarehousesMutation` | Справочник складов; тег `Warehouse` | `front/src/features/warehouses/warehouses-api.ts` |
 | `useSaveWarehouses()` | Сохранение складов из выгрузки или кабинета: итог и ошибка | `front/src/features/warehouses/use-save-warehouses.ts` |
-| `TreeFolderProps` | Контракт управляемого дерева категорий: выбор, раскрытие, действия, `onMove`, поиск | `front/src/components/tree-folder/index.tsx` |
-| `DropdownProps`, `DropdownItem` | Контракт меню: пункты (`label`, `onSelect`, `icon`, `disabled`, `danger`), свой триггер, выравнивание | `front/src/components/dropdown/index.tsx` |
-| `CheckboxProps` | Контракт чекбокса: `label`, `indeterminate` и нативные атрибуты input | `front/src/components/checkbox/index.tsx` |
+| `TreeFolderProps` | Контракт управляемого дерева категорий: выбор, раскрытие, действия, `onMove`, поиск | `front/src/components/tree-folder/page.tsx` |
+| `DropdownProps`, `DropdownItem` | Контракт меню: пункты (`label`, `onSelect`, `icon`, `disabled`, `danger`), свой триггер, выравнивание | `front/src/components/dropdown/page.tsx` |
+| `CheckboxProps` | Контракт чекбокса: `label`, `indeterminate` и нативные атрибуты input | `front/src/components/checkbox/page.tsx` |
 | `filterTree(items, search)` | Отбор папок по названию с родителями найденных подпапок; общий для панели и модалки | `front/src/features/categories/filter-tree.ts` |
 | `ReorderCategoriesRequest`, `ReorderCategoriesResponse` | Контракт порядка папок уровня | `shared/src/types/catalog.ts` |
-| `TablesProps` | Контракт таблицы, children и серверной пагинации | `front/src/components/tables/index.tsx` |
+| `TablesProps` | Контракт таблицы, children и серверной пагинации | `front/src/components/tables/page.tsx` |
+| `DateRangePickerProps`, `DateRange` | Контракт выбора периода: `{ from, to }` в `YYYY-MM-DD`, границы `min`/`max` | `front/src/components/date-range-picker/index.tsx` |
+| `buildMonthGrid`, `addMonths`, `fromIso`, `toIso`, `formatMonth`, `orderRange` | Календарная арифметика: сетка 6×7 с хвостами соседних месяцев, разбор дат в местном времени | `front/src/components/date-range-picker/calendar.ts` |
+| `useAnchoredPanel(align)` | Всплывающая панель у кнопки: портал, `position: fixed`, разворот вверх при нехватке места, клик вне и Escape. Общий для меню и календаря | `front/src/lib/use-anchored-panel.ts` |
 | `LoaderProps` | label, size, hideLabel, className и нативные атрибуты span для Loader | `front/src/components/loader/tree-list.tsx` |
 | `cn()` | Склейка Tailwind-классов | `front/src/lib/utils.ts` |
 | `CATALOG_PAGE_SIZES`, `CATALOG_DEFAULT_PAGE_SIZE` | Серверные размеры страниц 10/20/50, по умолчанию 20 | `shared/src/constants/catalog.ts` |
@@ -246,6 +270,16 @@ shared/    # Общий код: типы контрактов, констант�
 | `useCategoryActions(onDeleted)` | Формы переименования и подтверждения удаления, перестановка папок (`move`), ошибки и блокировка повтора | `front/src/features/categories/use-category-actions.ts` |
 | `useCreateCategoryForm(onCreated)` | Форма новой папки, родитель, валидация и сохранение | `front/src/features/categories/use-create-category-form.ts` |
 | `useGetCatalogQuery`, `useMoveProductsToCategoryMutation` | Серверная страница и перенос товаров, тег Product | `front/src/features/products/catalog-api.ts` |
+| `useGetKaspiOrdersQuery`, `useLazyGetKaspiOrdersQuery` | Страница заказов Kaspi, разобранная в нашу модель, плюс первый заказ сырым | `front/src/features/orders/orders-api.ts` |
+| `KaspiOrderDraft`, `KaspiOrdersPreview` | Контракт разбора заказов: имена полей совпадают с моделью `Order` | `shared/src/types/orders.ts` |
+| `SyncKaspiOrdersRequest`, `SyncKaspiOrdersResponse` | Контракт шага синхронизации: период, якорь, курсор, счётчики шага | `shared/src/types/orders.ts` |
+| `KASPI_ORDER_PERIODS`, `KASPI_ORDER_PERIOD_LABELS`, `KASPI_ORDER_PERIOD_DAYS` | Периоды кнопок: 3 месяца и 2 года | `shared/src/constants/kaspi-orders.ts` |
+| `KASPI_ORDER_CHUNK_DAYS`, `KASPI_ORDER_PAGE_SIZE`, `KASPI_SYNC_DEFAULT_CHUNKS`, `KASPI_SYNC_MAX_CHUNKS` | Ширина отрезка (3 дня), размер страницы Kaspi, сколько отрезков за вызов | `shared/src/constants/kaspi-orders.ts` |
+| `useSyncKaspiOrdersMutation` | Один шаг синхронизации; тег `Order` сбрасывается только на последнем | `front/src/features/orders/orders-api.ts` |
+| `useKaspiOrdersSync()` | Крутит шаги до `done`, складывает счётчики, даёт прогресс и отмену | `front/src/features/orders/use-kaspi-orders-sync.ts` |
+| `useGetOrdersQuery` | Страница заказов из базы, тег `Order` | `front/src/features/orders/orders-api.ts` |
+| `useOrdersList()` | Список заказов: серверный поиск по номеру с задержкой 300 мс, страницы | `front/src/features/orders/use-orders-list.ts` |
+| `OrderListQuery`, `OrderRowDto`, `OrderListResponse` | Контракт списка заказов | `shared/src/types/orders.ts` |
 | `useProductCatalog()` | Текущий ответ API, выбор/раскрытие папок, onCategoryCreated/onCategoryDeleted, поиск по товарам и по папкам, страницы и перенос | `front/src/features/products/use-product-catalog.ts` |
 
 ### 1.7. Фоновые задачи и воркеры

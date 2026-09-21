@@ -131,7 +131,7 @@ runEntriesSync(storeId):  startEntriesSync → крутим stepEntriesSync с �
 | `assembled` | `assembled` | собран/упакован |
 | `kaspiDelivery.waybillNumber` | `waybill_number` | накладная |
 | `kaspiDelivery.express` | `is_express` | |
-| `customer.{firstName,lastName,name}` | `customer_name` | |
+| `customer.{firstName,lastName,name}` | `customer_first_name`, `customer_last_name`, `customer_name` | **Три разных поля, не одно.** `name` — это только имя; фамилия приходит в `lastName` и обычно одной буквой: «Аскарбек» + «А». Показывать одно `name` значит терять фамилию |
 | `customer.cellPhone` | `customer_cell_phone` | |
 | `deliveryAddress.town` | `delivery_address_city` | ⚠️ у Kaspi-доставки часто пусто |
 | `deliveryAddress.formattedAddress` | `delivery_address_formatted` | адрес клиента (для своей доставки) |
@@ -158,6 +158,21 @@ runEntriesSync(storeId):  startEntriesSync → крутим stepEntriesSync с �
 - `state`: `NEW`, `SIGN_REQUIRED`, `PICKUP`, `DELIVERY`, `KASPI_DELIVERY`, `ARCHIVE`.
 - `deliveryMode`: `DELIVERY_PICKUP`, `DELIVERY_LOCAL`, `DELIVERY_REGIONAL_*`.
 
+**Списка всех значений Kaspi не публикует, и наш перечень заведомо неполон.**
+Единственный источник правды — сами данные: `GET /api/orders/kaspi` возвращает
+блок `seen` (сколько раз встретилось каждое `status`, `state`, `deliveryMode`)
+и `unknownValues` — значения, которых нет в нашем списке. Проверять на длинном
+периоде (`days=730`) и по нескольким страницам: редкие статусы за две недели
+просто не попадутся.
+
+Известные нам значения перечислены в `KNOWN_KASPI_STATUSES` и `KNOWN_KASPI_STATES`
+(`server/src/modules/orders/kaspi-order-status.ts`). Встретилось незнакомое —
+запись помечается проблемой и **не** проглатывается молча: иначе новый статус
+площадки тихо станет «Новым», и расхождение с кабинетом заметят не скоро.
+
+> В кабинете имена короче, чем в Shop API: там `ACCEPTED`, здесь
+> `ACCEPTED_BY_MERCHANT`. Смешивать словари двух источников нельзя.
+
 ### 5.2 Два измерения
 1. **Тип доставки** (фиксирован): Kaspi Доставка / Самовывоз / Своя доставка.
 2. **Стадия**: Новый → (Предзаказ | Упаковка) → Передача → Переданы → Доставлен + отмены/возвраты.
@@ -170,6 +185,7 @@ RETURNED                      → Возврат
 RETURN_REQUESTED              → Ожидают решения по возврату
 CANCELLING                    → Ожидают возврата/отмены
 COMPLETED / DELIVERED         → Доставлен
+state = SIGN_REQUIRED         → На подписании
 ACCEPTED_BY_MERCHANT | waybill (принят):
     preOrder                  → Предзаказ
     deliveryType = pickup     → Самовывоз
@@ -177,9 +193,20 @@ ACCEPTED_BY_MERCHANT | waybill (принят):
     courierTransmissionDate   → Переданы на доставку
     assembled                 → Передача
     иначе                     → Упаковка
-state = SIGN_REQUIRED         → На подписании
 иначе                         → Новый
 ```
+
+> **Исправлено 21.09.2026.** Раньше `SIGN_REQUIRED` стоял **после** ветки
+> «принят» — и это давало расхождение с кабинетом.
+>
+> Причина: **Kaspi ставит `ACCEPTED_BY_MERCHANT` ещё до подписи клиента.**
+> Заказ попадал в ветку принятых, там срабатывал `preOrder`, и он показывался
+> «Предзаказом», тогда как кабинет и склад пишут «На подписании».
+>
+> Проверено на заказе `1082757256`: `status = ACCEPTED_BY_MERCHANT`,
+> `state = SIGN_REQUIRED`, `signatureRequired = true`, накладной нет.
+> То есть «принят» и «подписан» — независимые вещи, и подпись важнее:
+> пока договор не подписан, заказ не подтверждён.
 **Тип доставки:**
 ```
 state = PICKUP                             → pickup (самовывоз клиентом)
@@ -190,6 +217,53 @@ isKaspiDelivery = false                    → own (своя доставка)
 ⚠️ Не путать `DELIVERY_REGIONAL_PICKUP` (это Kaspi-доставка в ПВЗ) с настоящим самовывозом (`state=PICKUP`).
 
 ### 5.4 Готовый код — см. отдельный `kaspi-order-statuses-guide.md` (функции `deliveryType` + `mapOrderStatus`).
+
+### 5.5 Наши значения и разделы кабинета
+
+Стадия хранится в `Order.status` (enum `OrderStatus`), подписи —
+в `shared/src/constants/order-statuses.ts`. Сверено с кабинетом 21.09.2026.
+
+| Наш статус | Подпись | Условие | Раздел кабинета |
+|---|---|---|---|
+| `NEW` | Новый | ничего из нижеперечисленного | — |
+| `SIGN_REQUIRED` | На подписании | `state = SIGN_REQUIRED` | — |
+| `PRE_ORDER` | Предзаказ | принят + `preOrder` | Kaspi Доставка → Предзаказ |
+| `PACKING` | Упаковка | принят, не собран | Упаковка |
+| `TRANSMISSION` | Передача | принят, `assembled` | Передача |
+| `TRANSMITTED` | Переданы на доставку | есть `courierTransmissionDate` | Переданы на доставку |
+| `PICKUP` | Самовывоз | `state = PICKUP` | — |
+| `OWN_DELIVERY` | Своя доставка | `isKaspiDelivery = false` | Моя доставка |
+| `DELIVERED` | Доставлен | `status = COMPLETED` | — |
+| `CANCELLING` | Ожидают возврата/отмены | `status = CANCELLING` | — |
+| `CANCELLED` | Отменён | `status = CANCELLED` | Отменены при доставке |
+| `RETURN_REQUESTED` | Ожидают решения по возврату | `status = RETURN_REQUESTED` | Возвраты → Ожидают решения |
+| `RETURNED` | Возврат | `status = RETURNED` | Возвраты → Новые заявки, На доставке |
+
+«Принят» = `status = ACCEPTED_BY_MERCHANT` **или** появился `waybillNumber`.
+Накладная надёжнее: статус меняется с задержкой.
+
+### 5.6 Где Shop API беднее кабинета
+
+Три места, в которых одного токена не хватит, и это надо знать заранее:
+
+1. **Возвраты.** В кабинете пять подсостояний: Новые заявки, На доставке,
+   Ожидают решения, Споры, Закрытые заявки. Shop API даёт два значения —
+   `RETURN_REQUESTED` и `RETURNED`. «Споры» и «Закрытые» по токену не отличить.
+2. **«Отменены при доставке».** В API это обычный `CANCELLED`. Отделить отмену
+   при доставке от отмены до сборки можно по `waybillNumber` и
+   `courierTransmissionDate` — это уже наше правило, а не поле Kaspi.
+3. **Сроки этапов.** Дедлайны каждого шага (`steps[].timeoutTime`) есть только
+   в кабинете. В Shop API из сроков — лишь `courierTransmissionPlanningDate`.
+
+### 5.7 Причина отмены
+
+- `attributes.cancellationReason` — Shop API, одна строка. Доступна по токену.
+- `cancelReason` + `cancelSubReason` — кабинет, причина и подпричина отдельно.
+- `moderated`, `moderatedReason`, `moderatedSubReason` — модерация заказа
+  самим Kaspi, тоже только кабинет.
+
+Все три набора хранятся отдельными полями: сливать их в одно нельзя — у них
+разные источники и разная подробность.
 
 ---
 

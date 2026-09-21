@@ -138,6 +138,13 @@ model Warehouse {
   /// Сумма остатков по складу на момент той же синхронизации.
   kaspiTotalStock Int?
 
+  /// Контакты точки. Приходят только из кабинета — в Shop API их нет.
+  contactName  String?
+  contactPhone String?
+
+  /// Как забирают товар: SELF_DELIVERY и т.п. Тоже поле кабинета.
+  pickupType String?
+
   /// Когда снимок сделан. Без даты цифры выше нечем датировать,
   /// и через месяц будет непонятно, свежие они или прошлогодние.
   kaspiStatsAt DateTime?
@@ -146,6 +153,7 @@ model Warehouse {
   updatedAt DateTime @updatedAt
 
   stocks VariantStock[]
+  orders Order[]
 }
 
 /// Каналы продаж. Значения обязаны совпадать с SALES_CHANNELS
@@ -167,6 +175,47 @@ enum ListingStatus {
 enum ChangeSource {
   KASPI_SYNC
   MANUAL
+}
+
+/// Откуда заказ. Значения обязаны совпадать с ORDER_SOURCES в shared.
+enum OrderSource {
+  SITE
+  KASPI
+  OFFLINE
+}
+
+/// Как заказ едет к покупателю. Измерение независимое от стадии: тип доставки
+/// у заказа фиксирован, а стадия меняется по ходу.
+enum OrderDeliveryType {
+  KASPI
+  PICKUP
+  OWN
+}
+
+/// Стадия заказа — **наша**, вычисленная из полей Kaspi.
+///
+/// Kaspi отдаёт `status` и `state` по отдельности, и ни одно из них не отвечает
+/// на вопрос «что с заказом сейчас»: собранный и отменённый заказ имеет
+/// `assembled = true` и `status = CANCELLED` одновременно. Алгоритм сведения —
+/// docs/kaspi-api-integration.md, раздел 5.
+///
+/// PICKUP и OWN_DELIVERY стоят в одном ряду со стадиями намеренно: у таких
+/// заказов нет упаковки и передачи курьеру, и в кабинете они живут отдельными
+/// разделами. Тип доставки при этом всё равно хранится отдельным полем.
+enum OrderStatus {
+  NEW
+  SIGN_REQUIRED
+  PRE_ORDER
+  PACKING
+  TRANSMISSION
+  TRANSMITTED
+  PICKUP
+  OWN_DELIVERY
+  DELIVERED
+  CANCELLING
+  CANCELLED
+  RETURN_REQUESTED
+  RETURNED
 }
 
 /// Категория каталога. Наша собственная: Kaspi отдаёт свои `categoryPathCodes`,
@@ -333,9 +382,10 @@ model Variant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  listings Listing[]
-  stocks   VariantStock[]
-  changes  VariantChange[]
+  listings     Listing[]
+  stocks       VariantStock[]
+  changes      VariantChange[]
+  orderEntries OrderEntry[]
 
   @@index([productId])
   @@index([fabricId])
@@ -514,4 +564,301 @@ model Customer {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Заказ. Пока только из Kaspi, поэтому полей площадки здесь много.
+///
+/// Данные приходят из двух источников, и это важно помнить, читая модель:
+///
+///   Shop API (токен, работает)  — статусы, даты, деньги, адреса, накладная.
+///   Кабинет (кука, вручную)     — сроки этапов, зоны, модерация, суммы рассрочки.
+///
+/// Поля кабинета заведены сразу и помечены ниже. Пока они пустые: заполнит их
+/// отдельная кнопка на заказе, когда решится вопрос с доступом. Заводим сейчас,
+/// чтобы не делать вторую миграцию на те же данные.
+model Order {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// Откуда заказ. Сайт и офлайн появятся позже, поэтому поле есть с самого начала.
+  source OrderSource @default(KASPI)
+
+  /// Ресурсный id Kaspi (`MTA1NTgxNTk1Nw` — base64 от номера). По нему тянется
+  /// состав заказа: в адресе `/orders/{id}/entries` стоит именно он, а не номер.
+  kaspiId String? @unique
+
+  /// Номер заказа, который видит покупатель. Ключ сопоставления двух источников:
+  /// ресурсного id в данных кабинета нет.
+  code String @unique
+
+  // ——— Статусы
+
+  /// Наша стадия. Считается из полей Kaspi, руками не выставляется.
+  status OrderStatus
+
+  /// Тип доставки. Отдельное измерение: у заказа он не меняется.
+  deliveryType OrderDeliveryType
+
+  /// `status` Kaspi как есть: COMPLETED, ACCEPTED_BY_MERCHANT, CANCELLED и т.п.
+  /// Храним сырым, потому что наша стадия — производная, и при ошибке в правиле
+  /// пересчитать её можно только из исходных значений.
+  kaspiStatus String
+
+  /// `state` Kaspi: NEW, SIGN_REQUIRED, PICKUP, DELIVERY, KASPI_DELIVERY, ARCHIVE.
+  kaspiState String?
+
+  // ——— Отмены, возвраты, модерация
+
+  /// Причина отмены из Shop API (`attributes.cancellationReason`).
+  cancellationReason String?
+
+  /// Причина и подпричина из кабинета — они подробнее, чем одна строка Shop API.
+  cancelReason    String?
+  cancelSubReason String?
+
+  /// Модерация заказа Kaspi. Только кабинет.
+  moderated          Boolean?
+  moderatedReason    String?
+  moderatedSubReason String?
+
+  // ——— Даты. Kaspi отдаёт их в Unix-миллисекундах UTC, храним как время.
+
+  /// Когда заказ создан у Kaspi. Не путать с `createdAt` — тот про нашу запись.
+  createdAtKaspi DateTime
+
+  /// Когда Kaspi последний раз менял заказ. Только кабинет.
+  updatedAtKaspi DateTime?
+
+  approvedByBankAt DateTime?
+  completedAt      DateTime?
+
+  /// Факт сборки. Только кабинет; в Shop API есть лишь флаг `assembled`.
+  assembledAt DateTime?
+
+  /// Факт передачи курьеру. Проставлена — заказ уже уехал.
+  courierTransmissionAt DateTime?
+
+  /// План передачи курьеру. Это и есть дедлайн «отвезите в пункт приёма».
+  courierTransmissionPlannedAt DateTime?
+
+  /// Плановая и фактическая доставка клиенту. Только кабинет.
+  plannedDeliveryAt DateTime?
+  actualDeliveryAt  DateTime?
+
+  /// Возврат на склад: когда вернулся и до какого срока лежит. Только кабинет.
+  returnedToWarehouseAt        DateTime?
+  returnedToWarehouseTimeoutAt DateTime?
+
+  // ——— Деньги
+
+  totalPrice            Decimal  @db.Decimal(12, 2)
+  /// Сколько за доставку платит покупатель и сколько удерживают с нас.
+  deliveryCost          Decimal? @db.Decimal(12, 2)
+  deliveryCostForSeller Decimal? @db.Decimal(12, 2)
+
+  /// Сумма рассрочки с наценкой банка — она больше цены товара. Только кабинет.
+  loanAmount Decimal? @db.Decimal(12, 2)
+
+  /// PAY_WITH_CREDIT и подобное, плюс срок рассрочки в месяцах.
+  paymentMode String?
+  creditTerm  Int?
+
+  signatureRequired Boolean @default(false)
+
+  // ——— Доставка и флаги
+
+  /// Товара нет в наличии — заказ приехал предзаказом.
+  preOrder Boolean @default(false)
+
+  assembled       Boolean @default(false)
+  isKaspiDelivery Boolean @default(false)
+  isExpress       Boolean @default(false)
+
+  /// Посылка доехала до пункта выдачи. Только кабинет.
+  isOrderArrived Boolean?
+
+  returnedToWarehouse Boolean @default(false)
+
+  /// DELIVERY_PICKUP, DELIVERY_LOCAL, DELIVERY_REGIONAL_*. Осторожно:
+  /// DELIVERY_REGIONAL_PICKUP — это Kaspi-доставка в пункт выдачи,
+  /// а не самовывоз покупателем.
+  deliveryMode String?
+
+  /// STANDARD и зона доставки (REGIONAL и т.п.). Только кабинет.
+  deliveryMethod String?
+  deliveryZone   String?
+
+  /// Мест груза. Только кабинет.
+  cargoSpace Int?
+
+  /// Накладная Kaspi. Появляется раньше, чем статус «принят», поэтому по ней
+  /// надёжнее определять принятый заказ, чем по самому статусу.
+  waybillNumber    String?
+  firstMileCourier String?
+
+  // ——— Покупатель.
+  //
+  // Персональные данные. Наружу отдаются только сотрудникам и только там, где
+  // без них не обойтись; на витрину не уходят никогда. У архивных заказов Kaspi
+  // отдаёт телефон замаскированным (`+0(000)-000-00-00`) — сохраняем как есть,
+  // подставлять вместо маски пустоту нельзя: разница «нет телефона» и
+  // «Kaspi его скрыл» видна только по значению.
+
+  kaspiCustomerId   String?
+  customerName      String?
+  customerFirstName String?
+  customerLastName  String?
+  customerPhone     String?
+
+  // ——— Адрес доставки.
+  //
+  // У Kaspi-доставки он почти всегда пуст: домашний адрес площадка не отдаёт.
+  // Заполнен он у своей доставки — там мы везём сами, и без адреса не поедем.
+
+  /// Код города из кабинета; в Shop API есть только название.
+  deliveryCityId           String?
+  deliveryTown             String?
+  deliveryDistrict         String?
+  deliveryStreetName       String?
+  deliveryStreetNumber     String?
+  deliveryBuilding         String?
+  deliveryApartment        String?
+  deliveryFloor            String?
+  deliveryEntrance         String?
+  deliveryIntercom         String?
+  deliveryComment          String?
+  deliveryIsPrivateHouse   Boolean?
+  deliveryFormattedAddress String?
+  deliveryLatitude         Float?
+  deliveryLongitude        Float?
+
+  // ——— Склад отгрузки
+
+  /// Наш склад. Может быть пуст: Kaspi называет точку, которой ещё нет
+  /// в справочнике, и терять из-за этого заказ нельзя.
+  warehouseId String?    @db.Uuid
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+
+  /// Идентификатор точки как его прислал Kaspi: `6871008_PP27`. Остаётся даже
+  /// когда склад не нашёлся — по нему потом и свяжем.
+  kaspiPickupPointId String?
+
+  /// Город отгрузки снимком: справочник складов могут поправить, а заказ должен
+  /// помнить, откуда уехал на самом деле.
+  originCityId           String?
+  originCityName         String?
+  originFormattedAddress String?
+
+  /// Ответ Kaspi целиком. Формат недокументирован и меняется — потерять поле,
+  /// которое понадобится через полгода, дороже, чем хранить json.
+  raw        Json?
+  /// Отдельно ответ кабинета: источники разные, мешать их в одном поле нельзя.
+  rawCabinet Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries OrderEntry[]
+  markers OrderMarker[]
+  steps   OrderStep[]
+
+  @@index([status])
+  @@index([createdAtKaspi])
+  @@index([warehouseId])
+  @@index([kaspiPickupPointId])
+}
+
+/// Позиция заказа. В списке заказов их нет — приходят отдельным запросом
+/// `/orders/{id}/entries`, поэтому тянутся своим проходом.
+model OrderEntry {
+  id String @id @default(uuid()) @db.Uuid
+
+  orderId String @db.Uuid
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// Номер позиции внутри заказа — ключ повторяемой загрузки. У заказов, где
+  /// позиций нет вовсе, ставим -1 заглушкой, иначе их состав будут тянуть вечно.
+  entryNumber Int
+
+  /// Идентификатор позиции у Kaspi: `1055815957##0`.
+  kaspiEntryId String?
+
+  /// Наш артикул (`offer.code` в Shop API, `merchantProduct.code` в кабинете).
+  /// По нему связываемся с каталогом.
+  sku String?
+
+  /// Модификация из нашего каталога. Пусто — товара у нас ещё нет: заказ мог
+  /// приехать по артикулу, который не импортирован.
+  variantId String?  @db.Uuid
+  variant   Variant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  /// Название нашего предложения и название карточки Kaspi — они разные.
+  offerName        String?
+  kaspiProductCode String?
+  kaspiProductName String?
+
+  /// Штрихкод и признак IMEI приходят только из кабинета.
+  barcode        String?
+  isImeiRequired Boolean?
+
+  quantity Int @default(1)
+
+  basePrice    Decimal? @db.Decimal(12, 2)
+  totalPrice   Decimal? @db.Decimal(12, 2)
+  deliveryCost Decimal? @db.Decimal(12, 2)
+
+  categoryCode  String?
+  categoryTitle String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orderId, entryNumber])
+  @@index([sku])
+  @@index([variantId])
+}
+
+/// Событие в истории заказа: кто и когда его двигал.
+///
+/// Только из кабинета — в Shop API истории нет вовсе. Таблица заведена заранее
+/// и будет пустой, пока не появится доступ.
+model OrderMarker {
+  id String @id @default(uuid()) @db.Uuid
+
+  orderId String @db.Uuid
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// APPROVED_BY_BANK, ACCEPTED_BY_MERCHANT и т.п.
+  marker String
+
+  at DateTime
+
+  /// Имя сотрудника или покупателя как его показывает кабинет.
+  userName String?
+
+  /// Одно и то же событие не должно задваиваться при повторной загрузке.
+  @@unique([orderId, marker, at])
+  @@index([orderId])
+}
+
+/// Этап заказа со сроками: APPROVAL, ACCEPTANCE, TRANSMISSION, TRANSIT, DELIVERY.
+///
+/// Только из кабинета. Ценны именно сроками: `timeoutAt` — дедлайн, после
+/// которого Kaspi наказывает, а в Shop API таких дат нет.
+model OrderStep {
+  id String @id @default(uuid()) @db.Uuid
+
+  orderId String @db.Uuid
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  step String
+
+  /// PASSED, CURRENT, UNKNOWN.
+  status String
+
+  plannedAt      DateTime?
+  timeoutAt      DateTime?
+  additionalDays Int?
+
+  @@unique([orderId, step])
+  @@index([orderId])
 }

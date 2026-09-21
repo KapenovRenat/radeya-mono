@@ -310,6 +310,6 @@ API подробной карточки и перемещение самих п�
 Переименование и удаление пустых папок доступны. Вложенность ограничена двумя уровнями. Страница /dashboard/products подключает управляемые
 компоненты TreeFolder и Tables через useProductCatalog. Компоненты лежат в
 front/src/components/tree-folder/ и front/src/components/tables/, в каждой папке
-index.tsx и style.module.scss. Строки товаров для Tables.children пользователь
+page.tsx и style.module.scss. Строки товаров для Tables.children пользователь
 добавляет самостоятельно. Компоненты не знают маршрута и не обращаются к API. Категория «Прима 320 Угловой» группирует
 товары, но не объединяет их в один Product с модификациями.

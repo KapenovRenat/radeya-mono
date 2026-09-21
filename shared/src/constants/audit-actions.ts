@@ -21,6 +21,7 @@ export const AUDIT_ACTIONS = {
   CATEGORY_DELETED: 'CATEGORY_DELETED',
   CATEGORIES_REORDERED: 'CATEGORIES_REORDERED',
   PRODUCTS_CATEGORY_CHANGED: 'PRODUCTS_CATEGORY_CHANGED',
+  KASPI_ORDERS_SYNCED: 'KASPI_ORDERS_SYNCED',
   PRODUCTS_RENAMED: 'PRODUCTS_RENAMED',
 } as const;
 
@@ -43,5 +44,6 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   CATEGORY_DELETED: 'Категория удалена',
   CATEGORIES_REORDERED: 'Изменён порядок категорий',
   PRODUCTS_CATEGORY_CHANGED: 'Товары перемещены в категорию',
+  KASPI_ORDERS_SYNCED: 'Синхронизация заказов Kaspi',
   PRODUCTS_RENAMED: 'Товары переименованы пачкой',
 };

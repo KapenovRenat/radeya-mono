@@ -1,0 +1,93 @@
+/* Строка таблицы заказов.
+
+   Цвета только через var(--токен): строка сама подстраивается под тему
+   и под тёмную схему. Ширины колонок здесь, а не в общем Tables:
+   Tables ничего не знает о заказах.
+
+   Цвета статусов объявлены с запасными значениями — заведёте
+   --status-* в styles/themes.css, подхватятся сами. */
+
+.row {
+  &:hover { background: var(--muted); }
+}
+
+/* ── Статус ─────────────────────────────────────────────── */
+
+.colStatus { white-space: nowrap; }
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.dot {
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+
+/* Три группы вместо тринадцати цветов: в работе, закрыт успешно, проблема.
+   Различать оттенками все стадии бесполезно — их читают подписью. */
+.dotActive { background: var(--status-active, oklch(0.65 0.16 250)); }
+.dotDone { background: var(--status-done, oklch(0.62 0.17 145)); }
+.dotFailed { background: var(--status-failed, var(--destructive)); }
+
+.preOrder {
+  padding: 0 0.3125rem;
+  border-radius: var(--radius);
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* ── Номер, дата, деньги ────────────────────────────────── */
+
+.colCode {
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.875rem;
+}
+
+.colDate,
+.colDelivery,
+.colPlanned {
+  white-space: nowrap;
+}
+
+/* Даты моноширинными цифрами: иначе столбец дрожит от строки к строке. */
+.colDate,
+.colPlanned {
+  font-variant-numeric: tabular-nums;
+}
+
+.colTotal {
+  white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* ── Покупатель и город ─────────────────────────────────── */
+
+.colCustomer { min-width: 12rem; }
+
+.customer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.phone {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.colTown { white-space: nowrap; }
+
+.muted { color: var(--muted-foreground); }
