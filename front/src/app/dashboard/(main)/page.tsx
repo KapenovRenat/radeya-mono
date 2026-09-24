@@ -4,6 +4,7 @@ import { useGetHealthQuery } from "@/features/health/health-api";
 import { useCreateSalesPointForm } from "@/features/sales-points/use-create-sales-point-form";
 import {Button} from "@/components/button";
 import { CreateSalesPointDialog } from "./_components/create-sales-point-dialog";
+import { StatsBlock } from "./_components/stats-block";
 
 /**
  * Временная страница: проверяет, что фронт видит API.
@@ -17,6 +18,16 @@ export default function DashboardPage() {
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Dashboard</h1>
 
+        <div>
+            <Button onClick={salesPointForm.open}>
+                Создать Офлайн точку продажи
+            </Button>
+        </div>
+
+        <CreateSalesPointDialog form={salesPointForm} />
+
+        <StatsBlock />
+
       <div className="rounded-lg border p-4 text-sm">
         <div className="mb-2 font-medium">Связь с API</div>
 
@@ -28,13 +39,7 @@ export default function DashboardPage() {
           </p>
         )}
 
-          <div>
-              <Button onClick={salesPointForm.open}>
-                  Создать Офлайн точку продажи
-              </Button>
-          </div>
 
-        <CreateSalesPointDialog form={salesPointForm} />
 
         {data && (
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">

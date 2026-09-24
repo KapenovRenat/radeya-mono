@@ -206,6 +206,23 @@ export async function listOrders(input: OrderListInput): Promise<OrderListRespon
       conditions.push({ sellerId: { in: input.sellerId } });
     }
 
+    // Фильтры по справочникам устроены одинаково, поэтому перечислены списком:
+    // четыре одинаковых if подряд только просят опечатку в пятом.
+    const byDictionary: [keyof OrderListInput, keyof Prisma.OrderWhereInput][] = [
+      ['deliveryStatusId', 'deliveryStatusId'],
+      ['paymentMethodId', 'paymentMethodId'],
+      ['shipmentOriginId', 'shipmentOriginId'],
+      ['customerSourceId', 'customerSourceId'],
+    ];
+
+    for (const [field, column] of byDictionary) {
+      const ids = input[field];
+
+      if (Array.isArray(ids) && ids.length > 0) {
+        conditions.push({ [column]: { in: ids } } as Prisma.OrderWhereInput);
+      }
+    }
+
     const where: Prisma.OrderWhereInput = { AND: conditions };
 
     const total = await tx.order.count({ where });
@@ -221,6 +238,15 @@ export async function listOrders(input: OrderListInput): Promise<OrderListRespon
         customerPhone: true, deliveryTown: true, preOrder: true,
         warehouse: { select: { code: true, name: true } },
         salesPoint: { select: { id: true, name: true, type: true } },
+        linkedOrder: { select: { id: true, code: true } },
+        externalNumber: true, paidAmount: true, balanceDue: true,
+        discountPercent: true, discountComment: true,
+        // Из справочников нужно только название: идентификатор в таблице
+        // не показать, а фильтруют по нему отдельным параметром.
+        customerSource: { select: { name: true } },
+        deliveryStatus: { select: { name: true } },
+        shipmentOrigin: { select: { name: true } },
+        paymentMethod: { select: { name: true } },
         // Логин и хеш пароля сюда не попадают намеренно: в таблице заказов
         // нужно имя, а не учётная запись сотрудника.
         seller: { select: { id: true, name: true, role: true } },
@@ -251,8 +277,20 @@ export async function listOrders(input: OrderListInput): Promise<OrderListRespon
         warehouse: row.warehouse,
         salesPoint: row.salesPoint,
         seller: row.seller,
+        linkedOrder: row.linkedOrder,
         entriesCount: row._count.entries,
         commentsCount: row._count.comments,
+        externalNumber: row.externalNumber,
+        // Деньги строками, как и цена: number на сумме теряет тиын.
+        paidAmount: row.paidAmount?.toFixed(2) ?? null,
+        balanceDue: row.balanceDue?.toFixed(2) ?? null,
+        // Процент числом: считать по нему проще, а два знака в число влезают.
+        discountPercent: row.discountPercent === null ? null : Number(row.discountPercent),
+        discountComment: row.discountComment,
+        customerSource: row.customerSource?.name ?? null,
+        deliveryStatus: row.deliveryStatus?.name ?? null,
+        shipmentOrigin: row.shipmentOrigin?.name ?? null,
+        paymentMethod: row.paymentMethod?.name ?? null,
       })),
       total, page, pageSize: input.pageSize, totalPages,
     };

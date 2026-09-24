@@ -5,6 +5,7 @@ import { CATALOG_DEFAULT_PAGE_SIZE, CATALOG_PAGE_SIZES, CATALOG_SEARCH_MAX_LENGT
   type CatalogPageSize, type OrderListQuery } from "@radeya/shared";
 
 import type { DateRange } from "@/components/date-range-picker";
+import { toMoment } from "@/lib/day-range";
 import { apiErrorMessage } from "@/shared/api/error-message";
 import { useGetOrdersQuery } from "./orders-api";
 
@@ -13,29 +14,12 @@ const SEARCH_DELAY_MS = 300;
 
 const EMPTY_RANGE: DateRange = { from: null, to: null };
 
-/**
- * Выбранная дата в момент времени.
- *
- * `YYYY-MM-DD` из пикера — это сутки **в поясе пользователя**, и переводить
- * их в момент должен клиент: сервер не знает, где сидит человек, а «за
- * 21 сентября» в Алматы и в UTC — разные наборы заказов.
- *
- * Начало суток для левой границы, конец — для правой, чтобы обе попадали
- * внутрь периода.
- */
-function toMoment(date: string | null, edge: "start" | "end"): string | undefined {
-  if (date === null) return undefined;
-
-  const [year, month, day] = date.split("-").map(Number);
-
-  if (year === undefined || month === undefined || day === undefined) return undefined;
-
-  const moment = edge === "start"
-    ? new Date(year, month - 1, day, 0, 0, 0, 0)
-    : new Date(year, month - 1, day, 23, 59, 59, 999);
-
-  return Number.isNaN(moment.getTime()) ? undefined : moment.toISOString();
-}
+/** Поля запроса, соответствующие пополняемым спискам. */
+export type DictionaryFilterField =
+  | "deliveryStatusId"
+  | "paymentMethodId"
+  | "shipmentOriginId"
+  | "customerSourceId";
 
 /**
  * Список заказов для таблицы.
@@ -101,6 +85,21 @@ export function useOrdersList() {
     }));
   }, []);
 
+  /**
+   * Фильтр по значению пополняемого списка.
+   *
+   * Один сеттер на все четыре справочника: поля называются одинаково
+   * и ведут себя одинаково, а четыре копии одного кода однажды разойдутся
+   * в мелочи вроде сброса страницы.
+   */
+  const setDictionaryFilter = useCallback((field: DictionaryFilterField, id: string) => {
+    setQuery((previous) => ({
+      ...previous,
+      [field]: id === "" ? undefined : [id],
+      page: 1,
+    }));
+  }, []);
+
   const setPage = useCallback((page: number) => {
     if (!Number.isSafeInteger(page) || page < 1) return;
     setQuery((previous) => ({ ...previous, page }));
@@ -127,6 +126,9 @@ export function useOrdersList() {
     setSalesPointIds,
     sellerIds: query.sellerId ?? [],
     setSellerIds,
+    /** Выбранное значение списка или "" — для управляемого select. */
+    dictionaryFilter: (field: DictionaryFilterField) => query[field]?.[0] ?? "",
+    setDictionaryFilter,
     isLoading: orders.isLoading || orders.isFetching || isSearchPending,
     error: orders.isError ? apiErrorMessage(orders.error, "Не удалось загрузить заказы") : null,
     reload: () => { if (!isSearchPending) void orders.refetch(); },

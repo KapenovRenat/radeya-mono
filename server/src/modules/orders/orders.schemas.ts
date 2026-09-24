@@ -37,6 +37,11 @@ export const orderListSchema = z.object({
   /** Разрезы статистики: точки продаж и продавцы. Пусто — без ограничения. */
   salesPointId: idList.optional(),
   sellerId: idList.optional(),
+  /** Разрезы по пополняемым спискам офлайн-точки. */
+  deliveryStatusId: idList.optional(),
+  paymentMethodId: idList.optional(),
+  shipmentOriginId: idList.optional(),
+  customerSourceId: idList.optional(),
 }).strict()
   .refine((query) => !query.from || !query.to || query.from <= query.to,
     'Начало периода позже конца');

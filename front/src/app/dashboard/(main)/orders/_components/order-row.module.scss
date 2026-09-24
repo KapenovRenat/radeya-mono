@@ -108,4 +108,21 @@
    не её, а номер и статус. */
 .colSeller { color: var(--muted-foreground); }
 
+/* ── Колонки офлайн-продажи ─────────────────────────────── */
+
+/* Показываются только когда в фильтре не выбрана площадка: у заказов Kaspi
+   эти поля пустые, и восемь колонок из прочерков читать невозможно. */
+.colOffline { white-space: nowrap; }
+
+.colExternal {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Остаток «0» читается словом: в рабочей таблице так и написано. */
+.paid {
+  color: var(--status-done, oklch(0.62 0.17 145));
+  font-size: 0.8125rem;
+}
+
 .muted { color: var(--muted-foreground); }

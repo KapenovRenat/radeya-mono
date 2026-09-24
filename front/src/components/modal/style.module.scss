@@ -16,8 +16,6 @@
   max-height: min(90vh, 48rem);
   padding: 0;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
   color: var(--foreground);
   background: var(--background);
   border: 1px solid var(--border);
@@ -28,6 +26,16 @@
   &::backdrop {
     background: oklch(0 0 0 / 0.5);
   }
+}
+
+/* display задаётся только открытому диалогу.
+   У браузера закрытый <dialog> скрыт правилом `dialog:not([open])`, но оно
+   из UA-стилей, а авторские побеждают UA независимо от специфичности:
+   `display: flex` прямо в `.modal` сделал бы окно видимым всегда — ещё
+   и в потоке страницы, без подложки и верхнего слоя. */
+.modal[open] {
+  display: flex;
+  flex-direction: column;
 }
 
 .header {

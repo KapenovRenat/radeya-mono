@@ -54,6 +54,15 @@ export function DashboardNavMenu({ children, className }: { children?: React.Rea
                     </li> : null}
 
                     {user?.role === USER_ROLES.ADMIN ? <li>
+                        <Link href="/dashboard/imports">
+                            <div>
+
+                            </div>
+                            <p>Импорты</p>
+                        </Link>
+                    </li> : null}
+
+                    {user?.role === USER_ROLES.ADMIN ? <li>
                         <Link href="/dashboard/kaspi-sync">
                             <div>
 

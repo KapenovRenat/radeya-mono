@@ -1,0 +1,114 @@
+/* Сводка по заказам. Цвета только через var(--токен). */
+
+.stats {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+/* Активный готовый период виден рамкой: иначе непонятно, что показано —
+   текущий месяц, прошлый или выбранное в календаре. */
+.presetActive button {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.groupHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.625rem;
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.badge {
+  padding: 0.0625rem 0.5rem;
+  background: var(--muted);
+  border-radius: var(--radius);
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+
+/* Плашки в ряд, переносятся при нехватке места. Минимум — чтобы длинная
+   сумма не ломала строку пополам. */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 0.625rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.875rem 1rem;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.cardLabel {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+
+.cardValue {
+  font-size: 1.375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.cardNote {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+
+/* Возвраты и отмены — не повод для тревоги сами по себе, но выделены,
+   чтобы глаз находил их первыми. */
+.cardWarn .cardValue { color: var(--destructive); }
+
+.cardDone .cardValue { color: var(--status-done, oklch(0.62 0.17 145)); }
+
+/* Итоговая полоса отделена от точек: это сумма всего, а не ещё одна точка. */
+.totalGroup .card {
+  background: var(--muted);
+}
+
+.linked {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+
+.empty {
+  padding: 1.25rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+
+.error {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 0.875rem;
+}

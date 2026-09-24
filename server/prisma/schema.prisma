@@ -584,6 +584,54 @@ model Customer {
 /// Поля кабинета заведены сразу и помечены ниже. Пока они пустые: заполнит их
 /// отдельная кнопка на заказе, когда решится вопрос с доступом. Заводим сейчас,
 /// чтобы не делать вторую миграцию на те же данные.
+/// Вид пополняемого списка. Перечень закрытый и живёт в коде: завести
+/// произвольный справочник через API нельзя, только тот, что здесь описан.
+/// Значения обязаны совпадать с DICTIONARY_KINDS в shared.
+enum DictionaryKind {
+  /// «Откуда клиенты пришли»: Проходящие, Инстаграм, Флаера.
+  CUSTOMER_SOURCE
+  /// Рабочий статус доставки офлайн-точки. Не путать с `Order.status` —
+  /// тот про стадию заказа, этот про то, что происходит с отправкой.
+  DELIVERY_STATUS
+  /// «Откуда поехал товар к клиенту»: витрины, склады, города поставщиков.
+  SHIPMENT_ORIGIN
+  /// Способ оплаты офлайн-продажи: наличка, QR, рассрочки банков.
+  PAYMENT_METHOD
+}
+
+/// Пополняемый список подписей.
+///
+/// Одна таблица на все четыре справочника, а не четыре отдельные: устроены они
+/// одинаково, и разделение дало бы вчетверо больше одинакового кода — модуль,
+/// API и экран управления на каждый. От превращения в свалку защищает закрытый
+/// перечень `kind`: вид списка выбирается из кода, а не приходит из запроса.
+///
+/// Пополнять списки можно из интерфейса — в этом весь смысл справочника.
+/// Удаления нет: на значении висят заказы. Ненужное закрывается `isActive`
+/// и перестаёт предлагаться в выпадашках, оставаясь в фильтрах и отчётах.
+model DictionaryItem {
+  id String @id @default(uuid()) @db.Uuid
+
+  kind DictionaryKind
+  name String
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customerSourceOrders  Order[] @relation("OrderCustomerSource")
+  deliveryStatusOrders  Order[] @relation("OrderDeliveryStatus")
+  shipmentOriginOrders  Order[] @relation("OrderShipmentOrigin")
+  paymentMethodOrders   Order[] @relation("OrderPaymentMethod")
+
+  /// Одно и то же название дважды в одном списке — почти всегда опечатка,
+  /// а в отчёте такие строки неотличимы.
+  @@unique([kind, name])
+  @@index([kind, sortOrder])
+}
+
 /// Точка продаж: и площадки (Kaspi, Ozon, сайт), и офлайн-магазины в одной
 /// таблице.
 ///
@@ -668,6 +716,21 @@ model Order {
   sellerId String? @db.Uuid
   seller   User?   @relation("OrderSeller", fields: [sellerId], references: [id], onDelete: Restrict)
 
+  /// Номер, записанный руками у офлайн-точки. Не ключ и не уникален: в таблице
+  /// продаж один и тот же номер стоит у десятков разных клиентов. Хранится
+  /// справочно — чтобы найти заказ по тому номеру, который человек помнит.
+  externalNumber String?
+
+  /// Тот же заказ на площадке.
+  ///
+  /// Офлайн-продажа, уехавшая Kaspi-доставкой, лежит в двух записях сразу.
+  /// Привязка нужна, чтобы не сложить их в статистике дважды: заказ
+  /// с заполненной привязкой в суммы не попадает — считается заказ площадки.
+  /// В отчёте по точке такие заказы показываются отдельной справочной строкой.
+  linkedOrderId String? @db.Uuid
+  linkedOrder   Order?  @relation("OrderLink", fields: [linkedOrderId], references: [id], onDelete: SetNull)
+  linkedBy      Order[] @relation("OrderLink")
+
   /// Ресурсный id Kaspi (`MTA1NTgxNTk1Nw` — base64 от номера). По нему тянется
   /// состав заказа: в адресе `/orders/{id}/entries` стоит именно он, а не номер.
   kaspiId String? @unique
@@ -682,7 +745,11 @@ model Order {
   status OrderStatus
 
   /// Тип доставки. Отдельное измерение: у заказа он не меняется.
-  deliveryType OrderDeliveryType
+  ///
+  /// Необязательный: у офлайн-предзаказа доставка ещё не выбрана, и записывать
+  /// туда «свою доставку» значило бы сохранить догадку. У заказов площадки
+  /// значение есть всегда — оно вычисляется из полей Kaspi.
+  deliveryType OrderDeliveryType?
 
   /// `status` Kaspi как есть: COMPLETED, ACCEPTED_BY_MERCHANT, CANCELLED и т.п.
   /// Храним сырым, потому что наша стадия — производная, и при ошибке в правиле
@@ -749,9 +816,43 @@ model Order {
   /// Сумма рассрочки с наценкой банка — она больше цены товара. Только кабинет.
   loanAmount Decimal? @db.Decimal(12, 2)
 
+  /// Сколько клиент уже отдал и сколько остался должен. Только офлайн:
+  /// Kaspi платит целиком и сразу, недоплат там не бывает.
+  /// Остаток `0` интерфейс показывает как «оплачено» — отдельного статуса
+  /// для этого не нужно, он выводится из суммы.
+  paidAmount Decimal? @db.Decimal(12, 2)
+  balanceDue Decimal? @db.Decimal(12, 2)
+
+  /// Скидка двумя полями: сколько процентов и почему.
+  ///
+  /// В таблице продаж в одной колонке лежат и `0.05`, и «ликвидация»,
+  /// и «800тг», и суммы вроде `420000`. Одним полем это не выразить: процент
+  /// должен оставаться числом, иначе по нему ничего не посчитать, а причина —
+  /// текстом, иначе её некуда деть.
+  discountPercent Decimal? @db.Decimal(5, 2)
+  discountComment String?
+
   /// PAY_WITH_CREDIT и подобное, плюс срок рассрочки в месяцах.
+  ///
+  /// Это поле Kaspi, как оно пришло. Способ оплаты офлайн-продажи лежит
+  /// отдельно, в `paymentMethod`: там свой пополняемый список («Каспи 0-0-24»,
+  /// «QR Halyk»), и смешивать его с сырым значением площадки нельзя.
   paymentMode String?
   creditTerm  Int?
+
+  // ——— Пополняемые списки офлайн-точки
+
+  customerSourceId String?         @db.Uuid
+  customerSource   DictionaryItem? @relation("OrderCustomerSource", fields: [customerSourceId], references: [id], onDelete: Restrict)
+
+  deliveryStatusId String?         @db.Uuid
+  deliveryStatus   DictionaryItem? @relation("OrderDeliveryStatus", fields: [deliveryStatusId], references: [id], onDelete: Restrict)
+
+  shipmentOriginId String?         @db.Uuid
+  shipmentOrigin   DictionaryItem? @relation("OrderShipmentOrigin", fields: [shipmentOriginId], references: [id], onDelete: Restrict)
+
+  paymentMethodId String?         @db.Uuid
+  paymentMethod   DictionaryItem? @relation("OrderPaymentMethod", fields: [paymentMethodId], references: [id], onDelete: Restrict)
 
   signatureRequired Boolean @default(false)
 
@@ -861,6 +962,9 @@ model Order {
   /// и «продавец за период» — читаются одним проходом по индексу, без сортировки.
   @@index([salesPointId, placedAt])
   @@index([sellerId, placedAt])
+  /// Привязанные заказы исключаются из сумм статистики — условие по этому
+  /// полю стоит в каждом отчёте.
+  @@index([linkedOrderId])
 }
 
 /// Позиция заказа. В списке заказов их нет — приходят отдельным запросом
@@ -886,6 +990,11 @@ model OrderEntry {
   /// приехать по артикулу, который не импортирован.
   variantId String?  @db.Uuid
   variant   Variant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  /// Что дописал продавец про этот товар: ткань, оттенок, комплектация.
+  /// Не путать с комментариями заказа (`OrderComment`) — те про сам заказ,
+  /// этот про позицию.
+  note String?
 
   /// Название нашего предложения и название карточки Kaspi — они разные.
   offerName        String?

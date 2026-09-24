@@ -175,6 +175,17 @@ export interface OrderListQuery {
   salesPointId?: string[];
   /** Продавцы. Пусто — все, включая заказы без продавца (Kaspi). */
   sellerId?: string[];
+  /**
+   * Разрезы по пополняемым спискам. Пусто — без ограничения.
+   *
+   * Заказы площадки под эти фильтры не подходят: у них поля справочников
+   * пустые. Так и задумано — фильтр по способу оплаты «Наличка» и не должен
+   * показывать заказ Kaspi.
+   */
+  deliveryStatusId?: string[];
+  paymentMethodId?: string[];
+  shipmentOriginId?: string[];
+  customerSourceId?: string[];
 }
 
 /** Точка продаж в строке заказа: без счётчиков и служебных полей справочника. */
@@ -202,7 +213,8 @@ export interface OrderRowDto {
   id: string;
   code: string;
   status: OrderStatus;
-  deliveryType: OrderDeliveryType;
+  /** Пусто у офлайн-предзаказа: доставку там ещё не выбрали. */
+  deliveryType: OrderDeliveryType | null;
   /** Статус площадки как есть — рядом с нашим, чтобы видеть расхождение. */
   kaspiStatus: string;
   placedAt: string;
@@ -228,12 +240,38 @@ export interface OrderRowDto {
   warehouse: { code: string; name: string | null } | null;
   /** Откуда заказ: площадка или конкретная офлайн-точка. Есть всегда. */
   salesPoint: OrderSalesPointDto;
-  /** Кто завёл заказ. null у заказов площадки. */
+  /** Кто завёл заказ. null у заказов площадки и у импортированных строк. */
   seller: OrderSellerDto | null;
+  /**
+   * Заказ площадки, к которому привязана эта офлайн-продажа.
+   *
+   * Заполнено — заказ не попадает в суммы статистики: та же продажа уже
+   * посчитана на стороне площадки, и сложить обе значило бы удвоить выручку.
+   * В отчёте по точке такие заказы идут отдельной справочной строкой.
+   */
+  linkedOrder: { id: string; code: string } | null;
   /** Сколько позиций сохранено. Ноль — состав ещё не тянули. */
   entriesCount: number;
   /** Сколько комментариев на заказе. Сами тексты — в карточке. */
   commentsCount: number;
+
+  /**
+   * Поля офлайн-продажи.
+   *
+   * У заказов площадки они пустые: Kaspi платит целиком и сразу, скидку
+   * считает сам, а свои справочники у него не спросишь. Интерфейс прячет
+   * эти колонки, когда в фильтре выбрана площадка, — иначе половина таблицы
+   * состоит из прочерков.
+   */
+  externalNumber: string | null;
+  paidAmount: string | null;
+  balanceDue: string | null;
+  discountPercent: number | null;
+  discountComment: string | null;
+  customerSource: string | null;
+  deliveryStatus: string | null;
+  shipmentOrigin: string | null;
+  paymentMethod: string | null;
 }
 
 /**

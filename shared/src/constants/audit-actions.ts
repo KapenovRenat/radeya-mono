@@ -27,6 +27,11 @@ export const AUDIT_ACTIONS = {
   SALES_POINT_RENAMED: 'SALES_POINT_RENAMED',
   SALES_POINT_CLOSED: 'SALES_POINT_CLOSED',
   SALES_POINT_REOPENED: 'SALES_POINT_REOPENED',
+  DICTIONARY_ITEM_CREATED: 'DICTIONARY_ITEM_CREATED',
+  DICTIONARY_ITEM_RENAMED: 'DICTIONARY_ITEM_RENAMED',
+  DICTIONARY_ITEM_CLOSED: 'DICTIONARY_ITEM_CLOSED',
+  DICTIONARY_ITEM_REOPENED: 'DICTIONARY_ITEM_REOPENED',
+  OFFLINE_ORDERS_IMPORTED: 'OFFLINE_ORDERS_IMPORTED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -54,4 +59,9 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   SALES_POINT_RENAMED: 'Точка продаж переименована',
   SALES_POINT_CLOSED: 'Точка продаж закрыта',
   SALES_POINT_REOPENED: 'Точка продаж открыта заново',
+  DICTIONARY_ITEM_CREATED: 'Добавлено значение в справочник',
+  DICTIONARY_ITEM_RENAMED: 'Значение справочника переименовано',
+  DICTIONARY_ITEM_CLOSED: 'Значение справочника закрыто',
+  DICTIONARY_ITEM_REOPENED: 'Значение справочника открыто заново',
+  OFFLINE_ORDERS_IMPORTED: 'Импорт продаж офлайн-точки',
 };

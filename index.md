@@ -47,6 +47,12 @@ shared/    # Общий код: типы контрактов, констант�
 | `DELETE /api/categories/:id` | Удалить только пустую папку | ADMIN | `server/src/modules/categories/categories.controller.ts` |
 | `GET /api/products/variants` | Серверный поиск, поддерево категории, страницы 10/20/50; в строке все поля товара, включая закупку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
 | `PATCH /api/products/category` | Перенести товары со всеми модификациями в папку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
+| `GET /api/stats/orders` | Сводка по заказам за период в разрезе точек: заказы, возвраты, выручка | ADMIN | `server/src/modules/stats/stats.controller.ts` |
+| `POST /api/imports/offline-orders/preview` | Разбор листа книги Excel, без записи; без `?sheet=` — только список листов | ADMIN | `server/src/modules/imports/imports.controller.ts` |
+| `POST /api/imports/offline-orders/commit` | Запись разобранных строк в заказы офлайн-точки | ADMIN | `server/src/modules/imports/imports.controller.ts` |
+| `GET /api/dictionaries` | Пополняемые списки: все четыре разом либо один по `?kind=` | любой вошедший | `server/src/modules/dictionaries/dictionaries.controller.ts` |
+| `POST /api/dictionaries` | Добавить значение в список | ADMIN, MANAGER | `server/src/modules/dictionaries/dictionaries.controller.ts` |
+| `PATCH /api/dictionaries/:id` | Переименовать или закрыть значение; удаления нет | ADMIN, MANAGER | `server/src/modules/dictionaries/dictionaries.controller.ts` |
 | `GET /api/sales-points` | Справочник точек продаж: площадки и офлайн-точки | любой вошедший | `server/src/modules/sales-points/sales-points.controller.ts` |
 | `POST /api/sales-points` | Создать офлайн-точку; код и тип ставит сервер | ADMIN | `server/src/modules/sales-points/sales-points.controller.ts` |
 | `PATCH /api/sales-points/:id` | Переименовать, закрыть или открыть точку; удаления нет | ADMIN | `server/src/modules/sales-points/sales-points.controller.ts` |
@@ -95,6 +101,13 @@ shared/    # Общий код: типы контрактов, констант�
 | orders | `syncKaspiOrders(input)` | Шаг синхронизации: отрезки по 3 дня от свежих к старым, upsert по номеру, поля кабинета не затирает | `server/src/modules/orders/orders.service.ts` |
 | orders | `listOrders(input)` | Страница заказов из базы: поиск, период, фильтры по точке и продавцу, узкий DTO без персональных данных сверх нужного | `server/src/modules/orders/orders.service.ts` |
 | orders | `listOrderComments(orderId)`, `addOrderComment(orderId, text, author)` | Лента комментариев; автор из сессии, роль снимком, правок и удалений нет | `server/src/modules/orders/order-comments.service.ts` |
+| stats | `getOrderStats(input)` | Сводка за период: две группировки, привязанные заказы вне сумм | `server/src/modules/stats/stats.service.ts` |
+| imports | `readWorkbook(file)`, `listSheets(wb)`, `parseSheet(wb, name, dict)` | Разбор книги Excel: колонки по заголовкам, спорное — в `problems`, а не в заказ | `server/src/modules/imports/offline-orders.parser.ts` |
+| imports | `previewOfflineImport(file, input)` | Предпросмотр листа: строки, пропуски, значения не из справочников | `server/src/modules/imports/imports.service.ts` |
+| imports | `commitOfflineImport(input, author)` | Запись строк в заказы точки: номера `OFF-1-000001`, всё одной транзакцией | `server/src/modules/imports/imports.service.ts` |
+| dictionaries | `listDictionaries(input)` | Значения списков: все либо один вид, с счётчиком заказов | `server/src/modules/dictionaries/dictionaries.service.ts` |
+| dictionaries | `createDictionaryItem(input)`, `updateDictionaryItem(id, input)` | Добавление, переименование и закрытие значения; вид не меняется | `server/src/modules/dictionaries/dictionaries.service.ts` |
+| dictionaries | `loadDictionaryIndex()`, `normalizeName(name)` | Индекс «вид → название → id» для импорта; приведение названия к сравнимому виду | `server/src/modules/dictionaries/dictionaries.service.ts` |
 | sales-points | `listSalesPoints()` | Справочник целиком, вместе с закрытыми и счётчиком заказов | `server/src/modules/sales-points/sales-points.service.ts` |
 | sales-points | `createOfflineSalesPoint(input)` | Новая офлайн-точка: код `OFF-N` генерится под Serializable | `server/src/modules/sales-points/sales-points.service.ts` |
 | sales-points | `updateSalesPoint(id, input)` | Переименование и закрытие; код и тип не меняются | `server/src/modules/sales-points/sales-points.service.ts` |
@@ -131,6 +144,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `FabricShade` | Оттенок ткани, принадлежит своей ткани | `fabric`, `variants` |
 | `VariantChange` | История изменений артикула: поле, было, стало, источник | `variant` |
 | `SalesPoint` | Точка продаж: площадки (`KASPI`, `OZON`, `SITE`) и офлайн-точки в одном справочнике. Удаления нет, только закрытие | `orders` → `Order` |
+| `DictionaryItem` | Пополняемые списки офлайн-точки: откуда клиент, статус доставки, откуда поехал товар, способ оплаты. Различаются полем `kind` | четыре связи с `Order` |
 | `OrderComment` | Комментарий к заказу: автор связью, роль снимком. Только добавление | `order`, `author` → `User` |
 | `Order` | Заказ: точка продаж, продавец, два статуса площадки + наш вычисленный, даты, деньги, покупатель, адрес, склад. Поля кабинета заведены пустыми | `salesPoint`, `seller` → `User`, `warehouse` → `Warehouse`, `entries`, `markers`, `steps`, `comments` |
 | `OrderEntry` | Позиция заказа: артикул, названия обоих источников, количество, цены | `order`, `variant` (необязательная) |
@@ -141,6 +155,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `ListingStatus` (enum) | Статус размещения: ON_SALE, OFF_SALE | — |
 | `ChangeSource` (enum) | Источник изменения: KASPI_SYNC, MANUAL | — |
 | `SalesPointType` (enum) | Вид точки продаж: KASPI, OZON, SITE, OFFLINE. Не путать с `SalesChannel` | — |
+| `DictionaryKind` (enum) | Вид пополняемого списка: CUSTOMER_SOURCE, DELIVERY_STATUS, SHIPMENT_ORIGIN, PAYMENT_METHOD | — |
 | `OrderDeliveryType` (enum) | Тип доставки: KASPI, PICKUP, OWN | — |
 | `OrderStatus` (enum) | 13 стадий заказа, от NEW до RETURNED | — |
 
@@ -155,7 +170,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `/dashboard/login` | Вход сотрудника в админку | `front/src/app/dashboard/(auth)/login/page.tsx` |
 | `/dashboard/accounts` | Аккаунты и История: таблица сотрудников, создание, журнал действий | `front/src/app/dashboard/(main)/accounts/page.tsx` |
 | `/dashboard/products` | Каталог: два уровня папок с поиском и порядком, серверный поиск, таблица с выделением и переносом в папку | `front/src/app/dashboard/(main)/products/page.tsx` |
-| `/dashboard/orders` | Заказы: две кнопки синхронизации с Kaspi, поиск по номеру, выбор периода, таблица. При загрузке печатает сырьё Kaspi в консоль (отладка, убрать после сверки статусов) | `front/src/app/dashboard/(main)/orders/page.tsx` |
+| `/dashboard/orders` | Заказы: две кнопки синхронизации с Kaspi, поиск по номеру, фильтр по точке продаж, выбор периода, таблица. При загрузке печатает сырьё Kaspi в консоль (отладка, убрать после сверки статусов) | `front/src/app/dashboard/(main)/orders/page.tsx` |
+| `/dashboard/imports` | Импорты: блок «Excel продаж офлайн-точки» (выбор точки, файл, лист, предпросмотр, запись) и заготовка блока поставщиков. Только ADMIN | `front/src/app/dashboard/(main)/imports/page.tsx` |
 | `/dashboard/kaspi-sync` | Синхронизация с Kaspi: загрузка выгрузок, предпросмотр каталога | `front/src/app/dashboard/(main)/kaspi-sync/page.tsx` |
 
 **Каталог с деревом папок:** `/dashboard/products` подключён к API; дерево, создание папок, поиск и пагинация готовы. Строки товаров через children добавляет пользователь. Ответ API выводится в консоль браузера. См. [docs/app-structure.md](docs/app-structure.md).
@@ -190,6 +206,11 @@ shared/    # Общий код: типы контрактов, констант�
 | `AuditTable` | Таблица журнала действий | `front/src/app/dashboard/(main)/accounts/_components/audit-table.tsx` |
 | `CreateUserDialog` | Модалка создания сотрудника на нативном `<dialog>` | `front/src/app/dashboard/(main)/accounts/_components/create-user-dialog.tsx` |
 | `CreateSalesPointDialog` | Модалка новой офлайн-точки на общем `Modal`: одно поле «Название», код и тип ставит сервер | `front/src/app/dashboard/(main)/_components/create-sales-point-dialog.tsx` |
+| `StatsBlock`, `StatsCards` | Сводка на «Статистике»: период (текущий/прошлый месяц, календарь), итог и блок плашек на каждую точку продаж | `front/src/app/dashboard/(main)/_components/stats-block.tsx` |
+| `OfflineOrdersImport` | Блок импорта продаж: выбор точки и листа, счётчики разбора, значения не из справочников, кнопка записи | `front/src/app/dashboard/(main)/imports/_components/offline-orders-import.tsx` |
+| `ImportPreviewTable` | Таблица разобранных строк файла: непригодные подсвечены, замечания отдельной строкой под записью | `front/src/app/dashboard/(main)/imports/_components/import-preview-table.tsx` |
+| `SuppliersImport` | Заготовка второго блока импорта — поставщики | `front/src/app/dashboard/(main)/imports/_components/suppliers-import.tsx` |
+| `ImportsLayout` | Защита раздела импортов ролью ADMIN | `front/src/app/dashboard/(main)/imports/layout.tsx` |
 | `CatalogSummary` | Счётчики разбора выгрузки над таблицей товаров | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-summary.tsx` |
 | `WarehousesPanel` | Таблица складов и сохранение их в справочник; общая для выгрузки и кабинета | `front/src/app/dashboard/(main)/kaspi-sync/_components/warehouses-panel.tsx` |
 | `ProductsImportPanel` | Счётчик новых товаров и сохранение их в каталог | `front/src/app/dashboard/(main)/kaspi-sync/_components/products-import-panel.tsx` |
@@ -199,7 +220,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `CabinetTable` | Таблица товаров из кабинета: картинка, штрихкод, цены со скидкой, размер | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-table.tsx` |
 | `CatalogRow`, `CatalogTableHead`, `CATALOG_COLUMN_COUNT` | Строка и шапка таблицы каталога: галка выделения, кружок статуса, квадратное фото, два названия, цена Kaspi в две строки со скидкой, склады, закреплённое меню действий. Стили — `catalog-row.module.scss` | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
 | `MoveToCategoryDialog` | Модалка переноса выбранных товаров: дерево папок с поиском, затем подтверждение | `front/src/app/dashboard/(main)/products/_components/move-to-category-dialog.tsx` |
-| `OrderRow`, `OrderTableHead`, `ORDER_COLUMN_COUNT` | Строка и шапка таблицы заказов: дата и время, кружок статуса, номер, покупатель, город, точка продаж, кто создал, доставка, сумма, планируемая доставка. Стили — `order-row.module.scss` | `front/src/app/dashboard/(main)/orders/_components/order-row.tsx` |
+| `OrderDictionaryFilters` | Четыре выпадашки под кнопками синхронизации: статус доставки, оплата, откуда товар, откуда клиент | `front/src/app/dashboard/(main)/orders/_components/order-dictionary-filters.tsx` |
+| `OrderRow`, `OrderTableHead`, `orderColumnCount(showOffline)` | Строка и шапка таблицы заказов. Общие колонки: дата, статус, номер, покупатель, город, точка продаж, кто создал, доставка, сумма, планируемая доставка. При `showOffline` добавляются восемь офлайновых: номер продавца, откуда товар, статус доставки, откуда клиент, оплата, скидка, оплачено, остаток. Стили — `order-row.module.scss` | `front/src/app/dashboard/(main)/orders/_components/order-row.tsx` |
 
 ### 1.6. Общие функции, хуки, константы
 
@@ -215,8 +237,19 @@ shared/    # Общий код: типы контрактов, констант�
 | `SALES_POINT_TYPES`, `SALES_POINT_TYPE_LABELS`, `isSystemSalesPointType()` | Виды точек продаж: KASPI, OZON, SITE, OFFLINE | `shared/src/constants/sales-points.ts` |
 | `SYSTEM_SALES_POINT_CODES`, `OFFLINE_SALES_POINT_CODE_PREFIX`, `SALES_POINT_NAME_MAX_LENGTH`, `ORDER_COMMENT_MAX_LENGTH` | Коды системных точек, префикс `OFF` и лимиты названия и комментария | `shared/src/constants/sales-points.ts` |
 | `SalesPointDto`, `SalesPointsResponse`, `CreateSalesPointRequest`, `UpdateSalesPointRequest` | Контракты справочника точек продаж | `shared/src/types/sales-points.ts` |
+| `DICTIONARY_KINDS`, `DICTIONARY_KIND_LABELS`, `DICTIONARY_NAME_MAX_LENGTH`, `WRONG_ENTRY_DELIVERY_STATUS` | Виды пополняемых списков и пометка «Ошибочный ввод» | `shared/src/constants/dictionaries.ts` |
+| `DictionaryItemDto`, `DictionariesResponse`, `CreateDictionaryItemRequest`, `UpdateDictionaryItemRequest` | Контракты пополняемых списков | `shared/src/types/dictionaries.ts` |
+| `OfflineOrderDraft`, `OfflineImportPreview`, `ImportRowProblem`, `ImportUnknownValue` | Контракты разбора книги Excel: строка, предпросмотр, замечания | `shared/src/types/imports.ts` |
+| `CommitOfflineImportRequest`, `CommitOfflineImportResponse` | Контракт записи импортированных строк | `shared/src/types/imports.ts` |
 | `OrderSalesPointDto`, `OrderSellerDto`, `OrderCommentDto`, `OrderCommentsResponse`, `CreateOrderCommentRequest` | Точка, продавец и комментарии в контрактах заказа | `shared/src/types/orders.ts` |
 | `useGetSalesPointsQuery`, `useCreateSalesPointMutation`, `useUpdateSalesPointMutation` | Справочник точек; тег `SalesPoint`, правка сбрасывает и `Order` | `front/src/features/sales-points/sales-points-api.ts` |
+| `useGetDictionariesQuery`, `useAddDictionaryItemMutation`, `useUpdateDictionaryItemMutation` | Пополняемые списки; тег `Dictionary`, правка сбрасывает и `Order` | `front/src/features/dictionaries/dictionaries-api.ts` |
+| `useGetOrderStatsQuery` | Сводка по заказам; тег `Order` — после синхронизации и импорта пересчитывается сама | `front/src/features/stats/stats-api.ts` |
+| `useOrderStats()` | Период сводки: текущий/прошлый месяц или календарь, карточки по точкам | `front/src/features/stats/use-order-stats.ts` |
+| `dayStart`, `dayEnd`, `toMoment`, `currentMonth`, `previousMonth` | Границы суток и готовые периоды в поясе пользователя; общие для реестра и сводки | `front/src/lib/day-range.ts` |
+| `OrderStatsCard`, `OrderStatsQuery`, `OrderStatsResponse` | Контракт сводки по заказам | `shared/src/types/stats.ts` |
+| `usePreviewOfflineImportMutation`, `useCommitOfflineImportMutation` | Разбор книги Excel и запись строк; файл уходит двоичным телом | `front/src/features/imports/imports-api.ts` |
+| `useOfflineImport()` | Импорт продаж: файл, список листов, разбор, счётчики, запись, сброс | `front/src/features/imports/use-offline-import.ts` |
 | `useCreateSalesPointForm(onCreated)` | Форма новой офлайн-точки: одно поле, защита от двойной отправки | `front/src/features/sales-points/use-create-sales-point-form.ts` |
 | `useGetOrderCommentsQuery`, `useAddOrderCommentMutation` | Лента комментариев заказа; тег с id заказа | `front/src/features/orders/orders-api.ts` |
 | `ORDER_STATUSES`, `ORDER_STATUS_LABELS`, `ORDER_STATUS_ORDER`, `ORDER_FINAL_STATUSES` | 13 стадий заказа, подписи как в кабинете, порядок для вкладок и список закрытых | `shared/src/constants/order-statuses.ts` |
@@ -299,7 +332,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `useSyncKaspiOrdersMutation` | Один шаг синхронизации; тег `Order` сбрасывается только на последнем | `front/src/features/orders/orders-api.ts` |
 | `useKaspiOrdersSync()` | Крутит шаги до `done`, складывает счётчики, даёт прогресс и отмену | `front/src/features/orders/use-kaspi-orders-sync.ts` |
 | `useGetOrdersQuery` | Страница заказов из базы, тег `Order` | `front/src/features/orders/orders-api.ts` |
-| `useOrdersList()` | Список заказов: серверный поиск по номеру с задержкой 300 мс, период, фильтры по точкам и продавцам, страницы | `front/src/features/orders/use-orders-list.ts` |
+| `useOrdersList()` | Список заказов: серверный поиск по номеру с задержкой 300 мс, период, фильтры по точкам, продавцам и четырём справочникам, страницы | `front/src/features/orders/use-orders-list.ts` |
+| `DictionaryFilterField` | Поля запроса заказов, соответствующие пополняемым спискам | `front/src/features/orders/use-orders-list.ts` |
 | `OrderListQuery`, `OrderRowDto`, `OrderListResponse` | Контракт списка заказов | `shared/src/types/orders.ts` |
 | `useProductCatalog()` | Текущий ответ API, выбор/раскрытие папок, onCategoryCreated/onCategoryDeleted, поиск по товарам и по папкам, страницы и перенос | `front/src/features/products/use-product-catalog.ts` |
 
