@@ -1,6 +1,8 @@
 import type { CatalogPageSize } from '../constants/catalog';
 import type { KaspiOrderPeriod } from '../constants/kaspi-orders';
 import type { OrderDeliveryType, OrderStatus } from '../constants/order-statuses';
+import type { UserRole } from '../constants/roles';
+import type { SalesPointType } from '../constants/sales-points';
 import type { PaginatedResponse } from './api';
 
 /**
@@ -32,7 +34,8 @@ export interface KaspiOrderDraft {
   moderatedReason: string | null;
   moderatedSubReason: string | null;
 
-  createdAtKaspi: string;
+  /** Когда заказ оформлен. У Kaspi это `creationDate`, у офлайна — момент ввода. */
+  placedAt: string;
   /** Только кабинет. */
   updatedAtKaspi: string | null;
   approvedByBankAt: string | null;
@@ -157,7 +160,7 @@ export interface OrderListQuery {
   /** Поиск по номеру заказа. */
   search?: string;
   /**
-   * Период по дате заказа у Kaspi, ISO-время включительно.
+   * Период по дате оформления заказа, ISO-время включительно.
    *
    * Именно время, а не `YYYY-MM-DD`: границы суток зависят от часового пояса,
    * и «за 21 сентября» в Алматы и в UTC — разные наборы заказов. Клиент
@@ -165,6 +168,33 @@ export interface OrderListQuery {
    */
   from?: string;
   to?: string;
+  /**
+   * Точки продаж. Пусто — все. Список, а не одно значение: «Kaspi и Абая вместе»
+   * — обычный вопрос к статистике, и городить под него отдельный запрос незачем.
+   */
+  salesPointId?: string[];
+  /** Продавцы. Пусто — все, включая заказы без продавца (Kaspi). */
+  sellerId?: string[];
+}
+
+/** Точка продаж в строке заказа: без счётчиков и служебных полей справочника. */
+export interface OrderSalesPointDto {
+  id: string;
+  name: string;
+  type: SalesPointType;
+}
+
+/**
+ * Кто завёл заказ.
+ *
+ * Пусто у заказов площадки — их никто не заводил руками. Интерфейс в этом
+ * случае показывает название точки продаж, отдельного поля «источник» для
+ * этого не нужно.
+ */
+export interface OrderSellerDto {
+  id: string;
+  name: string;
+  role: UserRole;
 }
 
 /** Строка списка заказов. Только то, что видно в таблице. */
@@ -175,7 +205,7 @@ export interface OrderRowDto {
   deliveryType: OrderDeliveryType;
   /** Статус площадки как есть — рядом с нашим, чтобы видеть расхождение. */
   kaspiStatus: string;
-  createdAtKaspi: string;
+  placedAt: string;
   /**
    * Когда Kaspi обещает доставить заказ клиенту. Пусто у отменённых и у тех,
    * где площадка срок ещё не назначила.
@@ -196,8 +226,40 @@ export interface OrderRowDto {
   preOrder: boolean;
   /** Склад отгрузки. null — Kaspi назвал точку, которой нет в справочнике. */
   warehouse: { code: string; name: string | null } | null;
+  /** Откуда заказ: площадка или конкретная офлайн-точка. Есть всегда. */
+  salesPoint: OrderSalesPointDto;
+  /** Кто завёл заказ. null у заказов площадки. */
+  seller: OrderSellerDto | null;
   /** Сколько позиций сохранено. Ноль — состав ещё не тянули. */
   entriesCount: number;
+  /** Сколько комментариев на заказе. Сами тексты — в карточке. */
+  commentsCount: number;
+}
+
+/**
+ * Комментарий к заказу.
+ *
+ * Роль — снимком на момент написания: продавец мог стать менеджером, а «это
+ * писал продавец» — часть смысла записи. Имя, наоборот, читается из `User`
+ * по связи: переименовали сотрудника — поправилось во всех комментариях.
+ */
+export interface OrderCommentDto {
+  id: string;
+  orderId: string;
+  authorId: string;
+  authorName: string;
+  authorRole: UserRole;
+  text: string;
+  createdAt: string;
+}
+
+export interface OrderCommentsResponse {
+  items: OrderCommentDto[];
+}
+
+/** Автор не передаётся: его берут из сессии, иначе любой подпишется кем угодно. */
+export interface CreateOrderCommentRequest {
+  text: string;
 }
 
 export interface OrderListResponse extends PaginatedResponse<OrderRowDto> {
@@ -213,6 +275,12 @@ export interface OrderListResponse extends PaginatedResponse<OrderRowDto> {
  */
 export interface SyncKaspiOrdersRequest {
   period: KaspiOrderPeriod;
+  /**
+   * Правый край всего периода, ISO. Его задаёт первый вызов и повторяют
+   * остальные: без якоря «два года назад» на каждом шаге означало бы чуть
+   * другую дату, окно ползло бы за временем, и последний отрезок не сходился.
+   */
+  to?: string;
   /**
    * Граница, с которой продолжать: ISO-время правого края следующего отрезка.
    * Пусто — начать с текущего момента и идти в прошлое.

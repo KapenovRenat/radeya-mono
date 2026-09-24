@@ -7,6 +7,7 @@ import { kaspiCatalogRouter } from './modules/kaspi-catalog/kaspi-catalog.routes
 import { categoriesRouter } from './modules/categories/categories.routes';
 import { ordersRouter } from './modules/orders/orders.routes';
 import { productsRouter } from './modules/products/products.routes';
+import { salesPointsRouter } from './modules/sales-points/sales-points.routes';
 import { usersRouter } from './modules/users/users.routes';
 import { warehousesRouter } from './modules/warehouses/warehouses.routes';
 
@@ -24,4 +25,5 @@ apiRouter.use('/kaspi-catalog', kaspiCatalogRouter);
 apiRouter.use('/warehouses', warehousesRouter);
 apiRouter.use('/products', productsRouter);
 apiRouter.use('/categories', categoriesRouter);
+apiRouter.use('/sales-points', salesPointsRouter);
 apiRouter.use('/orders', ordersRouter);

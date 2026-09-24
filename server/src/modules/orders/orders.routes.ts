@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { USER_ROLES } from '@radeya/shared';
 
 import { requireAuth, requireRole } from '../../middlewares/require-auth';
-import { getKaspiOrders, getOrders, postSyncKaspiOrders } from './orders.controller';
+import { getKaspiOrders, getOrderComments, getOrders, postOrderComment,
+  postSyncKaspiOrders } from './orders.controller';
 
 /**
  * Заказы. Пока только чтение из Kaspi с разбором в нашу модель, без записи.
@@ -15,5 +16,8 @@ export const ordersRouter = Router();
 ordersRouter.use(requireAuth, requireRole(USER_ROLES.ADMIN));
 
 ordersRouter.get('/', getOrders);
+// Строго до '/:id/...': иначе «kaspi» и «sync» попали бы в параметр заказа.
 ordersRouter.get('/kaspi', getKaspiOrders);
 ordersRouter.post('/sync', postSyncKaspiOrders);
+ordersRouter.get('/:id/comments', getOrderComments);
+ordersRouter.post('/:id/comments', postOrderComment);

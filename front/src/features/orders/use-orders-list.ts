@@ -78,6 +78,29 @@ export function useOrdersList() {
     }));
   }, []);
 
+  /**
+   * Разрезы отчёта: точки продаж и продавцы.
+   *
+   * Пустой список означает «все», а не «ни одного»: сняв последнюю галку,
+   * человек ждёт полный реестр, а не пустую таблицу. Поэтому пустой массив
+   * в запрос не уходит вовсе.
+   */
+  const setSalesPointIds = useCallback((ids: string[]) => {
+    setQuery((previous) => ({
+      ...previous,
+      salesPointId: ids.length > 0 ? ids : undefined,
+      page: 1,
+    }));
+  }, []);
+
+  const setSellerIds = useCallback((ids: string[]) => {
+    setQuery((previous) => ({
+      ...previous,
+      sellerId: ids.length > 0 ? ids : undefined,
+      page: 1,
+    }));
+  }, []);
+
   const setPage = useCallback((page: number) => {
     if (!Number.isSafeInteger(page) || page < 1) return;
     setQuery((previous) => ({ ...previous, page }));
@@ -100,6 +123,10 @@ export function useOrdersList() {
     setPage, setPageSize,
     search, setSearch,
     range, setRange,
+    salesPointIds: query.salesPointId ?? [],
+    setSalesPointIds,
+    sellerIds: query.sellerId ?? [],
+    setSellerIds,
     isLoading: orders.isLoading || orders.isFetching || isSearchPending,
     error: orders.isError ? apiErrorMessage(orders.error, "Не удалось загрузить заказы") : null,
     reload: () => { if (!isSearchPending) void orders.refetch(); },

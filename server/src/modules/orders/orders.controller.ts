@@ -8,7 +8,9 @@ import { AppError, ValidationError } from '../../lib/errors';
 import { isKnownState, isKnownStatus } from './kaspi-order-status';
 import { fetchKaspiOrders } from './kaspi-orders.client';
 import { toOrderDraft } from './kaspi-orders.mapper';
-import { kaspiOrdersQuerySchema, orderListSchema, syncOrdersSchema } from './orders.schemas';
+import { addOrderComment, listOrderComments } from './order-comments.service';
+import { createOrderCommentSchema, kaspiOrdersQuerySchema, orderListSchema,
+  orderParamsSchema, syncOrdersSchema } from './orders.schemas';
 import { listOrders, syncKaspiOrders } from './orders.service';
 
 /** Страница заказов из нашей базы: поиск по номеру, свежие сверху. */
@@ -18,6 +20,33 @@ export const getOrders: RequestHandler = async (req, res) => {
   if (!parsed.success) throw new ValidationError('Проверьте параметры списка');
 
   res.json(await listOrders(parsed.data));
+};
+
+/** Лента комментариев заказа, старые сверху. */
+export const getOrderComments: RequestHandler = async (req, res) => {
+  const params = orderParamsSchema.safeParse(req.params);
+
+  if (!params.success) throw new ValidationError('Некорректный заказ');
+
+  res.json(await listOrderComments(params.data.id));
+};
+
+/**
+ * Новый комментарий.
+ *
+ * В журнал действий не пишем: комментарий сам себе запись — в нём уже есть
+ * автор, роль и время, а удалить его нельзя. Дублировать это в аудит значит
+ * хранить одно и то же дважды.
+ */
+export const postOrderComment: RequestHandler = async (req, res) => {
+  const params = orderParamsSchema.safeParse(req.params);
+  const body = createOrderCommentSchema.safeParse(req.body);
+
+  if (!params.success || !body.success) throw new ValidationError('Проверьте заказ и текст');
+
+  const comment = await addOrderComment(params.data.id, body.data.text, req.user!);
+
+  res.status(201).json(comment);
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;

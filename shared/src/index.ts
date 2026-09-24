@@ -2,7 +2,7 @@
 // Добавил файл в constants/ или types/ — не забудь реэкспортировать здесь.
 
 export * from './constants/roles';
-export * from './constants/order-sources';
+export * from './constants/sales-points';
 export * from './constants/order-statuses';
 export * from './constants/kaspi-orders';
 export * from './types/orders';
@@ -18,3 +18,4 @@ export * from './types/kaspi-cabinet';
 export * from './types/products';
 export * from './constants/catalog';
 export * from './types/catalog';
+export * from './types/sales-points';

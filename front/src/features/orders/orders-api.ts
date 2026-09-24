@@ -1,5 +1,6 @@
-import type { KaspiOrdersPreview, OrderListQuery, OrderListResponse,
-  SyncKaspiOrdersRequest, SyncKaspiOrdersResponse } from "@radeya/shared";
+import type { CreateOrderCommentRequest, KaspiOrdersPreview, OrderCommentDto,
+  OrderCommentsResponse, OrderListQuery, OrderListResponse, SyncKaspiOrdersRequest,
+  SyncKaspiOrdersResponse } from "@radeya/shared";
 
 import { baseApi } from "@/shared/api/base-api";
 
@@ -43,8 +44,35 @@ export const ordersApi = baseApi.injectEndpoints({
       // перезапрашивался бы после каждого из десятка вызовов.
       invalidatesTags: (result) => (result?.done ? ["Order", "Audit"] : ["Audit"]),
     }),
+
+    /** Лента комментариев заказа, старые сверху. */
+    getOrderComments: build.query<OrderCommentsResponse, string>({
+      query: (orderId) => ({ url: `/orders/${orderId}/comments` }),
+      // Тег с id: комментарий к одному заказу не должен сбрасывать ленту другого.
+      providesTags: (_result, _error, orderId) => [{ type: "OrderComment", id: orderId }],
+    }),
+
+    /**
+     * Новый комментарий.
+     *
+     * Сбрасывается и `Order`: в строке реестра стоит счётчик комментариев,
+     * и после добавления он обязан вырасти.
+     */
+    addOrderComment: build.mutation<
+      OrderCommentDto,
+      CreateOrderCommentRequest & { orderId: string }
+    >({
+      query: ({ orderId, ...body }) => ({
+        url: `/orders/${orderId}/comments`, method: "POST", body,
+      }),
+      invalidatesTags: (_result, _error, { orderId }) => [
+        { type: "OrderComment", id: orderId },
+        "Order",
+      ],
+    }),
   }),
 });
 
 export const { useGetOrdersQuery, useGetKaspiOrdersQuery, useLazyGetKaspiOrdersQuery,
-  useSyncKaspiOrdersMutation } = ordersApi;
+  useSyncKaspiOrdersMutation, useGetOrderCommentsQuery,
+  useAddOrderCommentMutation } = ordersApi;

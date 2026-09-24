@@ -1,6 +1,9 @@
 "use client";
 
 import { useGetHealthQuery } from "@/features/health/health-api";
+import { useCreateSalesPointForm } from "@/features/sales-points/use-create-sales-point-form";
+import {Button} from "@/components/button";
+import { CreateSalesPointDialog } from "./_components/create-sales-point-dialog";
 
 /**
  * Временная страница: проверяет, что фронт видит API.
@@ -8,6 +11,7 @@ import { useGetHealthQuery } from "@/features/health/health-api";
  */
 export default function DashboardPage() {
   const { data, isLoading, isError } = useGetHealthQuery();
+  const salesPointForm = useCreateSalesPointForm();
 
   return (
     <div className="space-y-4">
@@ -23,6 +27,14 @@ export default function DashboardPage() {
             API недоступен. Запущен ли сервер на порту 4000?
           </p>
         )}
+
+          <div>
+              <Button onClick={salesPointForm.open}>
+                  Создать Офлайн точку продажи
+              </Button>
+          </div>
+
+        <CreateSalesPointDialog form={salesPointForm} />
 
         {data && (
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">

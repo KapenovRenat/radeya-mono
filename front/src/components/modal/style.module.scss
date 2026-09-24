@@ -1,0 +1,91 @@
+/* Модальное окно. Цвета только через var(--токен): окно одинаково работает
+   в магазине и в админке, светлой и тёмной.
+
+   Внутренних отступов у самого .modal нет намеренно: клик по подложке
+   у нативного <dialog> приходит на него же, и padding превратился бы
+   в полосу, клик по которой закрывает окно. Отступы — у шапки, тела
+   и подвала по отдельности. */
+
+.modal {
+  /* Диалог из верхнего слоя центрируется полями, а не flex-ом родителя. */
+  margin: auto;
+  width: 100%;
+  max-width: 28rem;
+  /* Выше экрана окно не растёт: длинное тело прокручивается внутри,
+     а шапка с крестиком остаётся на виду. */
+  max-height: min(90vh, 48rem);
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  /* Тень своя, не токеном: тени в темах пока не описаны. */
+  box-shadow: 0 16px 48px oklch(0 0 0 / 0.18);
+
+  &::backdrop {
+    background: oklch(0 0 0 / 0.5);
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-shrink: 0;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--foreground);
+    background: var(--muted);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+}
+
+.body {
+  /* Прокручивается только тело: min-height нужен, иначе flex-элемент
+     не даёт содержимому сжаться и окно вылезает за экран. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--border);
+}

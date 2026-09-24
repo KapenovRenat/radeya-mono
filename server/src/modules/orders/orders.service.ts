@@ -11,6 +11,7 @@ import { Prisma } from '../../generated/prisma/client';
 import { prisma } from '../../db/client';
 import { env } from '../../config/env';
 import { AppError } from '../../lib/errors';
+import { getKaspiSalesPointId } from '../sales-points/sales-points.service';
 import { isKnownState, isKnownStatus } from './kaspi-order-status';
 import { fetchKaspiOrders } from './kaspi-orders.client';
 import { toOrderDraft } from './kaspi-orders.mapper';
@@ -70,6 +71,7 @@ export async function syncKaspiOrders(input: SyncOrdersInput): Promise<SyncKaspi
   const chunksTotal = Math.max(1, Math.ceil((periodTo - periodFrom) / chunkWidth));
 
   const warehouses = await loadWarehouses();
+  const kaspiSalesPointId = await getKaspiSalesPointId();
   const unknownValues = new Set<string>();
   const unknownWarehouses = new Set<string>();
 
@@ -101,10 +103,10 @@ export async function syncKaspiOrders(input: SyncOrdersInput): Promise<SyncKaspi
       for (const raw of result.orders) {
         const draft = toOrderDraft(raw);
 
-        // Без номера или даты создания заказ не сохранить: по номеру его ищут
+        // Без номера или даты оформления заказ не сохранить: по номеру его ищут
         // и обновляют, по дате считают выручку. Подставлять «сейчас» нельзя —
         // заказ уедет не в тот день.
-        if (draft === null || draft.createdAtKaspi === '') {
+        if (draft === null || draft.placedAt === '') {
           skipped += 1;
           continue;
         }
@@ -128,10 +130,11 @@ export async function syncKaspiOrders(input: SyncOrdersInput): Promise<SyncKaspi
       await pause();
     }
 
-    const saved = await saveOrders(parsed, warehouses, unknownWarehouses);
+    const saved = await saveOrders(parsed, warehouses, unknownWarehouses, kaspiSalesPointId);
 
     created += saved.created;
     updated += saved.updated;
+    skipped += saved.foreign;
 
     end = start - 1;
     chunksHandled += 1;
@@ -186,11 +189,21 @@ export async function listOrders(input: OrderListInput): Promise<OrderListRespon
     // внутри. Момент считает клиент — только он знает свой часовой пояс.
     if (input.from || input.to) {
       conditions.push({
-        createdAtKaspi: {
+        placedAt: {
           ...(input.from ? { gte: new Date(input.from) } : {}),
           ...(input.to ? { lte: new Date(input.to) } : {}),
         },
       });
+    }
+
+    // Пустой список — «все», а не «ни одного»: иначе снятие всех галок
+    // в фильтре показывало бы пустую таблицу вместо полного реестра.
+    if (input.salesPointId && input.salesPointId.length > 0) {
+      conditions.push({ salesPointId: { in: input.salesPointId } });
+    }
+
+    if (input.sellerId && input.sellerId.length > 0) {
+      conditions.push({ sellerId: { in: input.sellerId } });
     }
 
     const where: Prisma.OrderWhereInput = { AND: conditions };
@@ -203,13 +216,17 @@ export async function listOrders(input: OrderListInput): Promise<OrderListRespon
       where,
       select: {
         id: true, code: true, status: true, deliveryType: true, kaspiStatus: true,
-        createdAtKaspi: true, plannedDeliveryAt: true, totalPrice: true,
+        placedAt: true, plannedDeliveryAt: true, totalPrice: true,
         customerName: true, customerFirstName: true, customerLastName: true,
         customerPhone: true, deliveryTown: true, preOrder: true,
         warehouse: { select: { code: true, name: true } },
-        _count: { select: { entries: true } },
+        salesPoint: { select: { id: true, name: true, type: true } },
+        // Логин и хеш пароля сюда не попадают намеренно: в таблице заказов
+        // нужно имя, а не учётная запись сотрудника.
+        seller: { select: { id: true, name: true, role: true } },
+        _count: { select: { entries: true, comments: true } },
       },
-      orderBy: [{ createdAtKaspi: 'desc' }, { code: 'asc' }],
+      orderBy: [{ placedAt: 'desc' }, { code: 'asc' }],
       skip: (page - 1) * input.pageSize,
       take: input.pageSize,
     });
@@ -221,7 +238,7 @@ export async function listOrders(input: OrderListInput): Promise<OrderListRespon
         status: row.status,
         deliveryType: row.deliveryType,
         kaspiStatus: row.kaspiStatus,
-        createdAtKaspi: row.createdAtKaspi.toISOString(),
+        placedAt: row.placedAt.toISOString(),
         plannedDeliveryAt: row.plannedDeliveryAt?.toISOString() ?? null,
         // Строкой, а не числом: number на цене теряет тиын.
         totalPrice: row.totalPrice.toFixed(2),
@@ -232,7 +249,10 @@ export async function listOrders(input: OrderListInput): Promise<OrderListRespon
         deliveryTown: row.deliveryTown,
         preOrder: row.preOrder,
         warehouse: row.warehouse,
+        salesPoint: row.salesPoint,
+        seller: row.seller,
         entriesCount: row._count.entries,
+        commentsCount: row._count.comments,
       })),
       total, page, pageSize: input.pageSize, totalPages,
     };
@@ -252,42 +272,62 @@ async function saveOrders(
   parsed: Parsed[],
   warehouses: Map<string, string>,
   unknownWarehouses: Set<string>,
-): Promise<{ created: number; updated: number }> {
+  kaspiSalesPointId: string,
+): Promise<{ created: number; updated: number; foreign: number }> {
   let created = 0;
   let updated = 0;
+  let foreign = 0;
 
   for (let from = 0; from < parsed.length; from += WRITE_BATCH) {
     const batch = parsed.slice(from, from + WRITE_BATCH);
 
     // Узнаём заранее, что уже лежит в базе: upsert сам этого не скажет,
-    // а «создано» и «обновлено» — разные новости для человека.
+    // а «создано» и «обновлено» — разные новости для человека. Заодно видим
+    // точку продаж — по ней отсеиваются чужие заказы.
     const existing = await prisma.order.findMany({
       where: { code: { in: batch.map((item) => item.draft.code) } },
-      select: { code: true },
+      select: { code: true, salesPointId: true },
     });
-    const known = new Set(existing.map((row) => row.code));
+    const known = new Map(existing.map((row) => [row.code, row.salesPointId]));
 
-    await prisma.$transaction(batch.map((item) => {
+    // Заказ с тем же номером, но не от Kaspi, синхронизация не трогает.
+    // Номера офлайн-заказов начинаются с букв и с цифровыми номерами площадки
+    // совпасть не могут, но пояс и подтяжки тут дешевле разбирательства:
+    // затёртый офлайн-заказ восстанавливать нечем.
+    const writable = batch.filter((item) => {
+      const owner = known.get(item.draft.code);
+
+      if (owner !== undefined && owner !== kaspiSalesPointId) {
+        foreign += 1;
+
+        return false;
+      }
+
+      return true;
+    });
+
+    await prisma.$transaction(writable.map((item) => {
       const warehouseId = readWarehouseId(item.draft, warehouses, unknownWarehouses);
       const fields = toShopApiFields(item.draft, warehouseId, item.raw);
 
       return prisma.order.upsert({
         where: { code: item.draft.code },
-        create: { code: item.draft.code, ...fields },
+        create: { code: item.draft.code, salesPointId: kaspiSalesPointId, ...fields },
         // Обновляются только поля Shop API. Кабинетные в набор не входят
         // намеренно: синхронизация по токену не должна затирать их пустотой —
-        // их заполняет отдельный проход.
+        // их заполняет отдельный проход. Точки продаж и продавца здесь тоже
+        // нет: у заказа площадки они не меняются.
         update: fields,
       });
     }));
 
-    for (const item of batch) {
+    for (const item of writable) {
       if (known.has(item.draft.code)) updated += 1;
       else created += 1;
     }
   }
 
-  return { created, updated };
+  return { created, updated, foreign };
 }
 
 function readWarehouseId(
@@ -320,7 +360,7 @@ function toShopApiFields(draft: KaspiOrderDraft, warehouseId: string | null, raw
     kaspiState: draft.kaspiState,
     cancellationReason: draft.cancellationReason,
 
-    createdAtKaspi: new Date(draft.createdAtKaspi),
+    placedAt: new Date(draft.placedAt),
     approvedByBankAt: toDate(draft.approvedByBankAt),
     completedAt: toDate(draft.completedAt),
     courierTransmissionAt: toDate(draft.courierTransmissionAt),

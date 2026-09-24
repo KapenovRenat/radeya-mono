@@ -23,6 +23,10 @@ export const AUDIT_ACTIONS = {
   PRODUCTS_CATEGORY_CHANGED: 'PRODUCTS_CATEGORY_CHANGED',
   KASPI_ORDERS_SYNCED: 'KASPI_ORDERS_SYNCED',
   PRODUCTS_RENAMED: 'PRODUCTS_RENAMED',
+  SALES_POINT_CREATED: 'SALES_POINT_CREATED',
+  SALES_POINT_RENAMED: 'SALES_POINT_RENAMED',
+  SALES_POINT_CLOSED: 'SALES_POINT_CLOSED',
+  SALES_POINT_REOPENED: 'SALES_POINT_REOPENED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -46,4 +50,8 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   PRODUCTS_CATEGORY_CHANGED: 'Товары перемещены в категорию',
   KASPI_ORDERS_SYNCED: 'Синхронизация заказов Kaspi',
   PRODUCTS_RENAMED: 'Товары переименованы пачкой',
+  SALES_POINT_CREATED: 'Создана точка продаж',
+  SALES_POINT_RENAMED: 'Точка продаж переименована',
+  SALES_POINT_CLOSED: 'Точка продаж закрыта',
+  SALES_POINT_REOPENED: 'Точка продаж открыта заново',
 };

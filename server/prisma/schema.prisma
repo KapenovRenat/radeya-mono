@@ -53,6 +53,10 @@ model User {
 
   sessions Session[]
 
+  /// Заказы, которые сотрудник завёл сам: офлайн-точка, позже сайт.
+  soldOrders    Order[]        @relation("OrderSeller")
+  orderComments OrderComment[]
+
   @@index([role])
 }
 
@@ -177,10 +181,14 @@ enum ChangeSource {
   MANUAL
 }
 
-/// Откуда заказ. Значения обязаны совпадать с ORDER_SOURCES в shared.
-enum OrderSource {
-  SITE
+/// Вид точки продаж. Значения обязаны совпадать с SALES_POINT_TYPES в shared.
+///
+/// Не путать с `SalesChannel`: тот про канал размещения товара (`Listing.channel`),
+/// этот — про происхождение заказа. Значения похожи, смысл разный.
+enum SalesPointType {
   KASPI
+  OZON
+  SITE
   OFFLINE
 }
 
@@ -576,11 +584,89 @@ model Customer {
 /// Поля кабинета заведены сразу и помечены ниже. Пока они пустые: заполнит их
 /// отдельная кнопка на заказе, когда решится вопрос с доступом. Заводим сейчас,
 /// чтобы не делать вторую миграцию на те же данные.
+/// Точка продаж: и площадки (Kaspi, Ozon, сайт), и офлайн-магазины в одной
+/// таблице.
+///
+/// Единый справочник, а не «перечисление для площадок плюс таблица для офлайна»:
+/// иначе фильтр в реестре и разрез статистики пришлось бы каждый раз склеивать
+/// из двух источников, а запрос «Kaspi и точка на Абая вместе» не написать одним
+/// `GROUP BY`.
+model SalesPoint {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// Стабильный читаемый ключ: `KASPI`, `OZON`, `SITE`, `OFF-1`.
+  ///
+  /// Синхронизация ищет точку Kaspi по коду, а не по id: uuid на каждой базе
+  /// свой, а код одинаков везде. Поэтому код неизменен, в отличие от названия.
+  code String @unique
+
+  /// Название для людей. Переименовывается свободно — связи идут по id,
+  /// и прошлая статистика от переименования не разъезжается.
+  name String
+
+  type SalesPointType
+
+  /// Закрытая точка не предлагается при создании заказа, но остаётся в фильтрах
+  /// и отчётах. Удаления нет вовсе: на точке висят заказы.
+  isActive Boolean @default(true)
+
+  /// Порядок в списках. Задаётся руками: алфавит ставит «Абая» выше Kaspi,
+  /// хотя открывают чаще Kaspi.
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+/// Комментарий к заказу.
+///
+/// Лента, а не одно поле в `Order`: заказ по очереди трогают продавец, сборщик
+/// и доставка, и одна колонка означала бы «кто написал последним, тот и стёр
+/// предыдущего». Правки и удаления нет — комментарий, который можно подтереть,
+/// доверия не заслуживает.
+model OrderComment {
+  id String @id @default(uuid()) @db.Uuid
+
+  orderId String @db.Uuid
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// Автор. Restrict: сотрудника не удаляют, а отключают, и комментарий обязан
+  /// остаться с подписью.
+  authorId String @db.Uuid
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  /// Роль снимком — на момент написания. Продавец мог стать менеджером, а «это
+  /// писал продавец» — часть смысла записи. Имя, наоборот, берётся из `User`
+  /// по связи: переименовали сотрудника — поправилось во всех комментариях.
+  authorRole UserRole
+
+  text String
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
+  @@index([authorId])
+}
+
 model Order {
   id String @id @default(uuid()) @db.Uuid
 
-  /// Откуда заказ. Сайт и офлайн появятся позже, поэтому поле есть с самого начала.
-  source OrderSource @default(KASPI)
+  /// Откуда заказ: площадка или конкретная офлайн-точка. Обязательное —
+  /// заказ без происхождения не посчитать ни в одном разрезе статистики.
+  salesPointId String     @db.Uuid
+  salesPoint   SalesPoint @relation(fields: [salesPointId], references: [id], onDelete: Restrict)
+
+  /// Кто завёл заказ. Пусто у заказов площадки — их никто не заводил руками.
+  ///
+  /// Отдельного поля «источник» для интерфейса не нужно: пусто — показываем
+  /// название точки продаж, заполнено — имя сотрудника.
+  sellerId String? @db.Uuid
+  seller   User?   @relation("OrderSeller", fields: [sellerId], references: [id], onDelete: Restrict)
 
   /// Ресурсный id Kaspi (`MTA1NTgxNTk1Nw` — base64 от номера). По нему тянется
   /// состав заказа: в адресе `/orders/{id}/entries` стоит именно он, а не номер.
@@ -622,8 +708,13 @@ model Order {
 
   // ——— Даты. Kaspi отдаёт их в Unix-миллисекундах UTC, храним как время.
 
-  /// Когда заказ создан у Kaspi. Не путать с `createdAt` — тот про нашу запись.
-  createdAtKaspi DateTime
+  /// Когда заказ оформлен. У Kaspi это `creationDate`, у офлайн-точки — момент
+  /// ввода продавцом. Не путать с `createdAt` — тот про нашу запись.
+  ///
+  /// Имя нейтральное намеренно: статистика за период обязана считать все
+  /// источники по одной дате, а `createdAtKaspi` у офлайн-заказа означал бы
+  /// событие, которого не было.
+  placedAt DateTime
 
   /// Когда Kaspi последний раз менял заказ. Только кабинет.
   updatedAtKaspi DateTime?
@@ -757,14 +848,19 @@ model Order {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  entries OrderEntry[]
-  markers OrderMarker[]
-  steps   OrderStep[]
+  entries  OrderEntry[]
+  markers  OrderMarker[]
+  steps    OrderStep[]
+  comments OrderComment[]
 
   @@index([status])
-  @@index([createdAtKaspi])
+  @@index([placedAt])
   @@index([warehouseId])
   @@index([kaspiPickupPointId])
+  /// Составные, а не по одному полю: оба разреза статистики — «точка за период»
+  /// и «продавец за период» — читаются одним проходом по индексу, без сортировки.
+  @@index([salesPointId, placedAt])
+  @@index([sellerId, placedAt])
 }
 
 /// Позиция заказа. В списке заказов их нет — приходят отдельным запросом

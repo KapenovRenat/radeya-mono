@@ -20,6 +20,8 @@ const COLUMNS = [
   { title: "Номер", className: styles.colCode },
   { title: "Покупатель", className: styles.colCustomer },
   { title: "Город", className: styles.colTown },
+  { title: "Точка продаж", className: styles.colSalesPoint },
+  { title: "Кто создал", className: styles.colSeller },
   { title: "Доставка", className: styles.colDelivery },
   { title: "Сумма", className: styles.colTotal },
   { title: "Планируемая доставка", className: styles.colPlanned },
@@ -75,7 +77,7 @@ export function OrderRow({ order }: { order: OrderRowDto }) {
   return (
     <tr className={styles.row}>
 
-      <td className={styles.colDate}>{formatDateTime(order.createdAtKaspi)}</td>
+      <td className={styles.colDate}>{formatDateTime(order.placedAt)}</td>
 
       <td className={styles.colStatus}>
         <span className={styles.status}>
@@ -83,7 +85,7 @@ export function OrderRow({ order }: { order: OrderRowDto }) {
               от скринридера: читать его отдельно нечего. */}
           <span aria-hidden="true" className={cn(styles.dot, statusDot(order.status))} />
           {ORDER_STATUS_LABELS[order.status]}
-          {order.preOrder && <span className={styles.preOrder}>предзаказ</span>}
+          {/*{order.preOrder && <span className={styles.preOrder}>предзаказ</span>}*/}
         </span>
       </td>
 
@@ -104,6 +106,16 @@ export function OrderRow({ order }: { order: OrderRowDto }) {
 
       <td className={styles.colTown}>
         {order.deliveryTown ?? <span className={styles.muted}>—</span>}
+      </td>
+
+      <td className={styles.colSalesPoint}>{order.salesPoint.name}</td>
+
+      {/* Заказ площадки никто не заводил руками — там прочерк, а не название
+          точки: оно уже стоит в соседней колонке, и повторять его незачем. */}
+      <td className={styles.colSeller}>
+        {order.seller === null
+          ? <span className={styles.muted}>—</span>
+          : order.seller.name}
       </td>
 
       <td className={styles.colDelivery}>

@@ -60,9 +60,9 @@ export function toOrderDraft(raw: unknown): KaspiOrderDraft | null {
   };
 
   const deliveryType = readDeliveryType(statusInput);
-  const createdAtKaspi = asDate(attributes.creationDate);
+  const placedAt = asDate(attributes.creationDate);
 
-  if (createdAtKaspi === null) problems.push('Нет даты создания заказа');
+  if (placedAt === null) problems.push('Нет даты создания заказа');
 
   return {
     kaspiId: asString(raw.id),
@@ -80,9 +80,9 @@ export function toOrderDraft(raw: unknown): KaspiOrderDraft | null {
     moderatedReason: null,
     moderatedSubReason: null,
 
-    // Дату создания подменять текущим временем нельзя: заказ уедет не в тот
+    // Дату оформления подменять текущим временем нельзя: заказ уедет не в тот
     // день, а по этим датам считается выручка.
-    createdAtKaspi: createdAtKaspi ?? '',
+    placedAt: placedAt ?? '',
     updatedAtKaspi: null,
     approvedByBankAt: asDate(attributes.approvedByBankDate),
     completedAt: asDate(attributes.completionDate),

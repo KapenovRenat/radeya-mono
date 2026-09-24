@@ -6,9 +6,23 @@ import {
   KASPI_ORDER_PERIODS,
   KASPI_SYNC_DEFAULT_CHUNKS,
   KASPI_SYNC_MAX_CHUNKS,
+  ORDER_COMMENT_MAX_LENGTH,
 } from '@radeya/shared';
 
-/** Список заказов из базы: страница, размер и поиск по номеру. */
+/**
+ * Список идентификаторов из query.
+ *
+ * Express отдаёт одно значение строкой, а повторённое — массивом; приводим
+ * к массиву сами, иначе фильтр по одной точке ломался бы, а по двум работал.
+ * Ограничение сверху — от запроса с тысячей id, который упрётся в лимит
+ * параметров Postgres.
+ */
+const idList = z.preprocess(
+  (value) => (value === undefined || Array.isArray(value) ? value : [value]),
+  z.array(z.string().uuid()).max(50),
+);
+
+/** Список заказов из базы: страница, размер, поиск, период и разрезы. */
 export const orderListSchema = z.object({
   page: z.coerce.number().int().min(1).max(1_000_000).default(1),
   pageSize: z.coerce.number().int()
@@ -20,6 +34,9 @@ export const orderListSchema = z.object({
   // «YYYY-MM-DD» в момент должен тот, кто знает пояс пользователя, — клиент.
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
+  /** Разрезы статистики: точки продаж и продавцы. Пусто — без ограничения. */
+  salesPointId: idList.optional(),
+  sellerId: idList.optional(),
 }).strict()
   .refine((query) => !query.from || !query.to || query.from <= query.to,
     'Начало периода позже конца');
@@ -48,6 +65,13 @@ export const syncOrdersSchema = z.object({
   cursor: z.string().datetime().optional(),
   maxChunks: z.number().int().min(1).max(KASPI_SYNC_MAX_CHUNKS)
     .default(KASPI_SYNC_DEFAULT_CHUNKS),
+}).strict();
+
+export const orderParamsSchema = z.object({ id: z.string().uuid() });
+
+/** Автор в теле не принимается: он берётся из сессии. */
+export const createOrderCommentSchema = z.object({
+  text: z.string().trim().min(1).max(ORDER_COMMENT_MAX_LENGTH),
 }).strict();
 
 export type KaspiOrdersQuery = z.infer<typeof kaspiOrdersQuerySchema>;
