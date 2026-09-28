@@ -11,6 +11,7 @@ import { ordersRouter } from './modules/orders/orders.routes';
 import { productsRouter } from './modules/products/products.routes';
 import { salesPointsRouter } from './modules/sales-points/sales-points.routes';
 import { statsRouter } from './modules/stats/stats.routes';
+import { suppliersRouter } from './modules/suppliers/suppliers.routes';
 import { usersRouter } from './modules/users/users.routes';
 import { warehousesRouter } from './modules/warehouses/warehouses.routes';
 
@@ -31,5 +32,6 @@ apiRouter.use('/categories', categoriesRouter);
 apiRouter.use('/sales-points', salesPointsRouter);
 apiRouter.use('/dictionaries', dictionariesRouter);
 apiRouter.use('/imports', importsRouter);
+apiRouter.use('/suppliers', suppliersRouter);
 apiRouter.use('/stats', statsRouter);
 apiRouter.use('/orders', ordersRouter);

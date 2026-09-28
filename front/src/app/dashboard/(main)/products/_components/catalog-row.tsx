@@ -1,5 +1,6 @@
 import { Pencil } from "lucide-react";
 import {
+  CURRENCY_LABELS,
   LISTING_STATUSES,
   LISTING_STATUS_LABELS,
   SALES_CHANNELS,
@@ -27,6 +28,10 @@ const COLUMNS = [
   { title: "Артикул", className: styles.colSku },
   // Цена принадлежит каналу, а не товару: на сайте она будет своя.
   { title: "Цена " + SALES_CHANNEL_LABELS[SALES_CHANNELS.KASPI], className: styles.colPrice },
+  // Закупка и поставщик приезжают из МойСклада. Валюта у закупки своя
+  // и в подпись колонки не выносится: у соседних строк она разная.
+  { title: "Закупка", className: styles.colPurchase },
+  { title: "Поставщик", className: styles.colSupplier },
   { title: "Предзаказ", className: styles.colPreOrder },
   { title: "Склады", className: styles.colStock },
 ] as const;
@@ -164,6 +169,26 @@ export function CatalogRow({ item, selected, onSelectedChange, disabled = false 
         )}
       </td>
 
+      <td className={styles.colPurchase}>
+        {item.purchasePrice === null ? (
+          <span className={styles.muted}>—</span>
+        ) : (
+          <>
+            {/* Не formatMoney: он подставляет тенге, а закупка бывает в рублях.
+                Приводить к одной валюте нельзя — курса на дату закупки нет. */}
+            {formatMoney(moneyToNumber(item.purchasePrice) ?? 0).replace("₸", "").trim()}
+            {" "}
+            {item.purchaseCurrency === null ? "?" : CURRENCY_LABELS[item.purchaseCurrency]}
+          </>
+        )}
+      </td>
+
+      <td className={styles.colSupplier} title={item.supplier?.name ?? undefined}>
+        {item.supplier === null
+          ? <span className={styles.muted}>—</span>
+          : item.supplier.name}
+      </td>
+
       <td className={styles.colPreOrder}>
         {item.preOrderDays === 0
           ? <span className={styles.muted}>-</span>
@@ -176,10 +201,16 @@ export function CatalogRow({ item, selected, onSelectedChange, disabled = false 
         ) : (
           <span className={styles.warehouses}>
             {item.stocks.map((stock) => (
+              // Код и название вместе: код — то, чем склад зовётся в Kaspi
+              // и в заказах, название — то, что понимает человек.
               <span key={stock.warehouse.id} className={styles.chip}>
-                {stock.warehouse.name ?? stock.warehouse.code}
+                {stock.warehouse.code}
+                {stock.warehouse.name !== null && " · " + stock.warehouse.name}
                 {stock.quantity !== null && (
-                  <span className={styles.chipCount}> · {stock.quantity}</span>
+                  <span className={styles.chipCount}> · {stock.quantity} шт.</span>
+                )}
+                {stock.preOrderDays > 0 && (
+                  <span className={styles.chipDays}> · {stock.preOrderDays} дн.</span>
                 )}
               </span>
             ))}

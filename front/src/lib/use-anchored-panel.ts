@@ -83,18 +83,33 @@ export function useAnchoredPanel(align: "start" | "end" = "end"): AnchoredPanel 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") close(true);
     };
-    const onViewportChange = () => close();
+    const onResize = () => close();
+
+    /**
+     * Прокрутка страницы закрывает панель: она позиционирована `fixed`
+     * и за содержимым не едет.
+     *
+     * А вот прокрутка **внутри самой панели** — обычная работа со списком.
+     * Слушатель стоит в фазе перехвата, поэтому сюда прилетает и она; без этой
+     * проверки длинный список закрывался бы от первого же движения колеса.
+     */
+    const onScroll = (event: Event) => {
+      const target = event.target as Node | null;
+
+      if (target !== null && panelRef.current?.contains(target)) return;
+      close();
+    };
 
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("resize", onViewportChange);
-    document.addEventListener("scroll", onViewportChange, true);
+    window.addEventListener("resize", onResize);
+    document.addEventListener("scroll", onScroll, true);
 
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("resize", onViewportChange);
-      document.removeEventListener("scroll", onViewportChange, true);
+      window.removeEventListener("resize", onResize);
+      document.removeEventListener("scroll", onScroll, true);
     };
   }, [isOpen, close]);
 

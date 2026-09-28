@@ -176,6 +176,26 @@ th.colActions { background: var(--muted); }
 
 .muted { color: var(--muted-foreground); }
 
+/* ── Закупка и поставщик ────────────────────────────────── */
+
+/* Закупка приходит в тенге или рублях и к одной валюте не приводится,
+   поэтому валюта стоит рядом с суммой, а не в подписи колонки. */
+.colPurchase {
+  white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Названия поставщиков длинные («[Петропавловск] Максим ИП Контур»)
+   и без ограничения растягивают таблицу. Полное — в title. */
+.colSupplier {
+  max-width: 12rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.8125rem;
+}
+
 /* ── Склады ─────────────────────────────────────────────── */
 
 .colStock { white-space: nowrap; }
@@ -196,5 +216,12 @@ th.colActions { background: var(--muted); }
 
 .chipCount {
   color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Срок предзаказа по складу — не то же, что остаток: он выделен цветом,
+   чтобы две цифры в одном чипе не читались как одна пара. */
+.chipDays {
+  color: var(--price-old, var(--muted-foreground));
   font-variant-numeric: tabular-nums;
 }

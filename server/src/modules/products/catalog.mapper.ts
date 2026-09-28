@@ -18,7 +18,8 @@ export const catalogRowSelect = {
   kaspiImages: true, kaspiUpdates: true, kaspiUpdatedAt: true,
   anyKaspiDelivery: true, anyKaspiDeliveryExpress: true, anyKaspiDeliveryLocal: true,
   anyMerchantDelivery: true, siteDelivery: true,
-  purchasePrice: true, minChannelPrice: true, maxChannelPrice: true,
+  purchasePrice: true, purchaseCurrency: true, minChannelPrice: true, maxChannelPrice: true,
+  supplier: { select: { id: true, name: true } },
   product: { select: { name: true, slug: true, description: true, brand: true,
     isActive: true, kaspiFamilyId: true, createdAt: true, updatedAt: true,
     category: { select: { id: true, name: true } } } },
@@ -107,6 +108,8 @@ export function toCatalogRow(row: CatalogRecord): CatalogRowDto {
     preOrderDays: row.stocks.reduce((max, stock) => Math.max(max, stock.preOrderDays), 0),
 
     purchasePrice: money(row.purchasePrice),
+    purchaseCurrency: row.purchaseCurrency,
+    supplier: row.supplier,
     minChannelPrice: money(row.minChannelPrice),
     maxChannelPrice: money(row.maxChannelPrice),
 

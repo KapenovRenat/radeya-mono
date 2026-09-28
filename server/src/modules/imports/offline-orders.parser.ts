@@ -7,6 +7,7 @@ import {
 } from '@radeya/shared';
 
 import { AppError } from '../../lib/errors';
+import { readNumber, readText, requireSheet } from '../../lib/excel';
 import { normalizeName } from '../dictionaries/dictionaries.service';
 
 /**
@@ -91,33 +92,12 @@ export interface ParsedSheet {
 /** Индекс справочников: вид → нормализованное название → идентификатор. */
 export type DictionaryIndex = Map<DictionaryKind, Map<string, string>>;
 
-export async function readWorkbook(file: Buffer): Promise<ExcelJS.Workbook> {
-  const workbook = new ExcelJS.Workbook();
-
-  try {
-    // exceljs объявляет свой Buffer из пакета `buffer`, и он не сходится
-    // с Buffer из @types/node. Расхождение чисто типовое: значение то же самое.
-    await workbook.xlsx.load(file as unknown as Parameters<typeof workbook.xlsx.load>[0]);
-  } catch {
-    throw new AppError(400, 'BAD_FILE', 'Файл не читается как книга Excel (.xlsx)');
-  }
-
-  return workbook;
-}
-
-export function listSheets(workbook: ExcelJS.Workbook): string[] {
-  return workbook.worksheets.map((sheet) => sheet.name);
-}
-
 export function parseSheet(
   workbook: ExcelJS.Workbook,
   sheetName: string,
   dictionaries: DictionaryIndex,
 ): ParsedSheet {
-  const sheet = workbook.worksheets.find((item) => item.name === sheetName);
-
-  if (!sheet) throw new AppError(404, 'SHEET_NOT_FOUND', `В книге нет листа «${sheetName}»`);
-
+  const sheet = requireSheet(workbook, sheetName);
   const header = findHeader(sheet);
 
   if (!header) {
@@ -420,46 +400,6 @@ function readMoney(value: ExcelJS.CellValue): string | null {
   const amount = readNumber(value);
 
   return amount === null ? null : amount.toFixed(2);
-}
-
-function readNumber(value: ExcelJS.CellValue): number | null {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-
-  // Формулы приезжают объектом с посчитанным результатом в `result`.
-  if (isFormula(value)) return typeof value.result === 'number' ? value.result : null;
-
-  return null;
-}
-
-function readText(value: ExcelJS.CellValue): string | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'string') return value.trim() === '' ? null : value.trim();
-  if (typeof value === 'number') return String(value);
-  if (value instanceof Date) return value.toISOString();
-
-  if (isFormula(value)) {
-    return value.result === undefined || value.result === null
-      ? null
-      : readText(value.result as ExcelJS.CellValue);
-  }
-
-  // Текст с оформлением приезжает кусками — склеиваем.
-  if (isRichText(value)) {
-    const text = value.richText.map((part) => part.text).join('').trim();
-
-    return text === '' ? null : text;
-  }
-
-  return null;
-}
-
-function isFormula(value: unknown): value is { result?: unknown } {
-  return typeof value === 'object' && value !== null && 'formula' in value;
-}
-
-function isRichText(value: unknown): value is { richText: { text: string }[] } {
-  return typeof value === 'object' && value !== null && 'richText' in value
-    && Array.isArray((value as { richText: unknown }).richText);
 }
 
 function round2(value: number): number {

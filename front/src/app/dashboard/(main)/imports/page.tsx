@@ -1,5 +1,6 @@
 "use client";
 
+import { MoyskladProductsImport } from "./_components/moysklad-products-import";
 import { OfflineOrdersImport } from "./_components/offline-orders-import";
 import { SuppliersImport } from "./_components/suppliers-import";
 
@@ -16,7 +17,10 @@ export default function ImportsPage() {
       <h1 className="text-2xl font-semibold">Импорты</h1>
 
       <OfflineOrdersImport />
+      {/* Поставщики выше товаров намеренно: у товаров поставщик ищется
+          в справочнике, и порядок блоков подсказывает порядок заливки. */}
       <SuppliersImport />
+      <MoyskladProductsImport />
     </div>
   );
 }

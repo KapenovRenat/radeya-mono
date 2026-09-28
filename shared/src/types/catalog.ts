@@ -1,4 +1,5 @@
 import type { CatalogPageSize } from '../constants/catalog';
+import type { Currency } from '../constants/currencies';
 import type { ListingStatus, SalesChannel } from '../constants/sales-channels';
 import type { PaginatedResponse } from './api';
 
@@ -153,6 +154,13 @@ export interface CatalogRowDto {
 
   /** Закупка. Внутреннее поле дашборда — см. комментарий к типу. */
   purchasePrice: string | null;
+  /**
+   * Валюта закупки. У части поставщиков она в рублях, у части в тенге,
+   * и цена без валюты — просто число. К одной валюте не приводится.
+   */
+  purchaseCurrency: Currency | null;
+  /** У кого закупаем. Заполняется импортом из МойСклада и руками. */
+  supplier: { id: string; name: string } | null;
   /** Минимум и максимум по каналам: денормализация под сортировку и фильтр. */
   minChannelPrice: string | null;
   maxChannelPrice: string | null;

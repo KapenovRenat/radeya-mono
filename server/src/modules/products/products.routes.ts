@@ -1,9 +1,10 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { USER_ROLES } from '@radeya/shared';
 
 import { requireAuth, requireRole } from '../../middlewares/require-auth';
 import { getKnownSkus, postImportKaspiProducts } from './products.controller';
 import { getCatalog, patchProductsCategory } from './catalog.controller';
+import { commitMoysklad, previewMoysklad } from './moysklad.controller';
 
 /**
  * Каталог. Пока закрыт ролью ADMIN целиком: заполнение каталога — настройка
@@ -23,3 +24,23 @@ productsRouter.patch('/category', patchProductsCategory);
 // оставлен в 1 МБ. Клиент шлёт пачками, поэтому свой лимит на маршруте не нужен:
 // он всё равно не сработал бы — express.json приложения разбирает тело раньше.
 productsRouter.post('/import-kaspi', postImportKaspiProducts);
+
+/**
+ * Импорт закупки, поставщиков и сроков предзаказа из выгрузки МойСклада.
+ *
+ * Файл приезжает двоичным телом, а не multipart: поле у запроса одно.
+ * Свой лимит вместо общего мегабайта — выгрузка номенклатуры на девяносто
+ * колонок весит несколько мегабайт.
+ */
+productsRouter.post(
+  '/moysklad/preview',
+  express.raw({ type: '*/*', limit: '25mb' }),
+  previewMoysklad,
+);
+
+/** Запись: тело JSON — строки, которые человек увидел в предпросмотре. */
+productsRouter.post(
+  '/moysklad/commit',
+  express.json({ limit: '25mb' }),
+  commitMoysklad,
+);

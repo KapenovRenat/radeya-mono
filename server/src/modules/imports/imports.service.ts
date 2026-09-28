@@ -14,8 +14,9 @@ import {
 import { Prisma } from '../../generated/prisma/client';
 import { prisma } from '../../db/client';
 import { AppError, NotFoundError, ValidationError } from '../../lib/errors';
+import { listSheets, readWorkbook } from '../../lib/excel';
 import { loadDictionaryIndex, normalizeName } from '../dictionaries/dictionaries.service';
-import { listSheets, parseSheet, readWorkbook } from './offline-orders.parser';
+import { parseSheet } from './offline-orders.parser';
 import type { CommitImportInput, PreviewImportInput } from './imports.schemas';
 
 /**
