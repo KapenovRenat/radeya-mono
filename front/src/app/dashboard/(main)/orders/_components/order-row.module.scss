@@ -11,6 +11,23 @@
   &:hover { background: var(--muted); }
 }
 
+/* Строка открывает заказ — курсор это подсказывает. */
+.rowClickable { cursor: pointer; }
+
+/* Номер заказа — кнопка для клавиатуры, но выглядит как текст ячейки:
+   мышью открывают кликом по строке, кнопка нужна тем, кто ходит Tab-ом. */
+.codeButton {
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+
+  &:hover { text-decoration: underline; }
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 2px; }
+}
+
 /* ── Статус ─────────────────────────────────────────────── */
 
 .colStatus { white-space: nowrap; }
@@ -29,11 +46,38 @@
   border-radius: 50%;
 }
 
-/* Три группы вместо тринадцати цветов: в работе, закрыт успешно, проблема.
-   Различать оттенками все стадии бесполезно — их читают подписью. */
-.dotActive { background: var(--status-active, oklch(0.65 0.16 250)); }
-.dotDone { background: var(--status-done, oklch(0.62 0.17 145)); }
-.dotFailed { background: var(--status-failed, var(--destructive)); }
+/* Свой цвет у каждой стадии. Палитра идёт по пути заказа:
+     начало — холодные (синий, фиолетовый, пурпурный),
+     сборка и передача — тёплые (янтарный, оранжевый),
+     в пути и выдача — бирюзовые и зелёные, доставлен — насыщенный зелёный,
+     отмена и возврат — красные, коричневый и серый (заказ ушёл).
+   Соседние по пути стадии разнесены по оттенку, чтобы их не путать.
+   Подпись рядом остаётся всегда: цвет помогает выхватить взглядом,
+   читают стадию по тексту.
+
+   Каждый цвет — через свой токен с запасным значением: заведёте
+   --status-packing и т.п. в styles/themes.css — подхватятся сами. */
+
+/* Начало */
+.statusNew { background: var(--status-new, oklch(0.62 0.19 255)); }
+.statusSignRequired { background: var(--status-sign-required, oklch(0.58 0.2 295)); }
+.statusPreOrder { background: var(--status-pre-order, oklch(0.64 0.2 330)); }
+
+/* Сборка и передача */
+.statusPacking { background: var(--status-packing, oklch(0.78 0.16 80)); }
+.statusTransmission { background: var(--status-transmission, oklch(0.7 0.18 50)); }
+
+/* В пути и выдача */
+.statusTransmitted { background: var(--status-transmitted, oklch(0.72 0.12 210)); }
+.statusPickup { background: var(--status-pickup, oklch(0.66 0.12 180)); }
+.statusOwnDelivery { background: var(--status-own-delivery, oklch(0.76 0.17 125)); }
+.statusDelivered { background: var(--status-delivered, oklch(0.6 0.17 145)); }
+
+/* Отмена и возврат */
+.statusCancelling { background: var(--status-cancelling, oklch(0.7 0.15 15)); }
+.statusCancelled { background: var(--status-cancelled, oklch(0.57 0.22 27)); }
+.statusReturnRequested { background: var(--status-return-requested, oklch(0.6 0.11 55)); }
+.statusReturned { background: var(--status-returned, oklch(0.6 0.02 260)); }
 
 .preOrder {
   padding: 0 0.3125rem;
@@ -88,21 +132,15 @@
   font-variant-numeric: tabular-nums;
 }
 
-.colTown { white-space: nowrap; }
+.colTown,
+.colWarehouse { white-space: nowrap; }
 
-/* ── Точка продаж и кто создал ──────────────────────────── */
+/* ── Кто создал ─────────────────────────────────────────── */
 
-/* Две колонки, а не одна: точка продаж отвечает «откуда заказ»,
-   продавец — «кто его завёл». У заказов площадки второе пусто.
-
+/* Только у офлайн-точки: заказы площадки никто не заводил руками.
    Только nowrap, без обрезки многоточием: у общего Tables
-   table-layout: auto, а в нём браузер игнорирует max-width на ячейке.
-   Длинное название точки растянет колонку — таблица прокручивается
-   по горизонтали. Понадобится клампить — оборачивать текст в span. */
-.colSalesPoint,
-.colSeller {
-  white-space: nowrap;
-}
+   table-layout: auto, а в нём браузер игнорирует max-width на ячейке. */
+.colSeller { white-space: nowrap; }
 
 /* Приглушённым: кто завёл — справочная колонка, глаз ищет в строке
    не её, а номер и статус. */
@@ -110,8 +148,8 @@
 
 /* ── Колонки офлайн-продажи ─────────────────────────────── */
 
-/* Показываются только когда в фильтре не выбрана площадка: у заказов Kaspi
-   эти поля пустые, и восемь колонок из прочерков читать невозможно. */
+/* Только в таблице офлайн-точки: у заказов площадки эти поля пустые,
+   и восемь колонок из прочерков читать невозможно. */
 .colOffline { white-space: nowrap; }
 
 .colExternal {

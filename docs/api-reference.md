@@ -322,6 +322,50 @@
 номерами площадки совпасть не могут, но затёртый офлайн-заказ восстанавливать
 нечем — поэтому проверка стоит и здесь.
 
+### GET /api/orders/:id
+Заказ целиком — для окна заказа.
+- Auth: ADMIN.
+- Параметры: `id` (path, UUID).
+- Ответ 200: `OrderDetailsDto` — все поля строки списка (`OrderRowDto`) плюс
+  `kaspiState`, `cancellationReason`, даты (`approvedByBankAt`, `completedAt`,
+  `courierTransmissionPlannedAt`, `courierTransmissionAt`), `deliveryCost`,
+  `paymentMode`, `creditTerm`, `deliveryMode`, `isKaspiDelivery`, `isExpress`,
+  `waybillNumber`, `deliveryAddress` (адрес одной строкой от Kaspi),
+  `deliveryComment`, `originCityName`, `kaspiPickupPointId`, `entries`,
+  `entriesLoaded`, `canLoadEntries`.
+- `entries[]` — `{ id, entryNumber, sku, offerName, quantity, basePrice, totalPrice,
+  categoryTitle, note, variant: { id, sku, name, imageUrl } | null }`. `variant` —
+  наш товар по артикулу; null — в каталоге его нет. Заглушка `entryNumber = -1`
+  в список не входит.
+- `entriesLoaded` — состав уже загружали (есть позиции или заглушка «пусто»).
+  `canLoadEntries` — заказ Kaspi с `kaspiId`: состав можно забрать с площадки.
+- Телефон и адрес здесь полные — эндпоинт закрыт ADMIN.
+- Чтение на площадку не ходит и в базу не пишет — это `POST …/entries/sync`.
+- Ошибки: 400 VALIDATION_ERROR — не UUID; 404 NOT_FOUND; общие 401/403.
+- Файл: `server/src/modules/orders/orders.controller.ts` (getOrder),
+  сервис `order-details.service.ts`.
+
+### POST /api/orders/:id/entries/sync
+Состав заказа Kaspi — забирается с площадки при первом открытии окна и остаётся в базе.
+- Auth: ADMIN.
+- Параметры: `id` (path, UUID). Тела нет.
+- Ответ 200: `{ created, order: OrderDetailsDto }` — сколько позиций записано
+  этим вызовом и заказ целиком, уже с составом.
+- **Состав уже есть — Kaspi не трогается**, `created: 0`, заказ отдаётся как есть.
+- Иначе `GET /orders/{kaspiId}/entries` (раздел 2.2 интеграции): `offer.code` —
+  артикул, товар ищется в каталоге без учёта регистра, как в импортах МойСклада.
+  Не нашёлся — позиция сохраняется без `variantId`, с названием с площадки.
+- Kaspi вернул пусто — пишется заглушка `entryNumber = -1`: иначе «пусто»
+  и «ещё не загружали» неотличимы, и заказ тянули бы при каждом открытии.
+- Повтор и два открытия разом безопасны: `createMany` с `skipDuplicates`
+  по `@@unique([orderId, entryNumber])`.
+- POST, а не часть GET: чтение не должно ходить на площадку и писать в базу —
+  иначе повторы браузера и кэш клиента дёргали бы Kaspi сами. В журнал не пишется.
+- Ошибки: 400 ENTRIES_NOT_AVAILABLE — заказ не из Kaspi или без `kaspiId`;
+  404 NOT_FOUND; 503 KASPI_TOKEN_MISSING; 401 KASPI_UNAUTHORIZED;
+  502 KASPI_UNAVAILABLE / KASPI_BAD_RESPONSE; общие 401/403.
+- Файл: `server/src/modules/orders/orders.controller.ts` (postSyncOrderEntries).
+
 ### GET /api/orders/:id/comments
 Лента комментариев заказа, старые сверху.
 - Auth: ADMIN (роль на весь модуль).

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   ORDER_DELIVERY_TYPE_LABELS,
   ORDER_STATUSES,
@@ -6,226 +7,215 @@ import {
   type OrderStatus,
 } from "@radeya/shared";
 
+import { customerTitle, discountTitle } from "@/features/orders/order-format";
 import { formatDateTime, formatMoney, moneyToNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import styles from "./order-row.module.scss";
 
 /**
- * Колонки с подписями. Класс задаётся здесь один раз и применяется и к шапке,
- * и к ячейке — иначе ширина и выравнивание разъезжаются.
+ * Вид таблицы — от вида выбранной точки продаж.
  *
- * Общие для всех источников: они заполнены и у заказа площадки, и у продажи
- * с витрины.
+ * `marketplace` — Kaspi (и будущие OZON, сайт): склад отгрузки, без полей
+ * офлайн-продажи — у площадки они всегда пустые.
+ * `offline` — офлайн-точка: продавец и восемь колонок офлайн-продажи.
  */
-const COMMON_COLUMNS = [
-  { title: "Дата и время", className: styles.colDate },
-  { title: "Статус", className: styles.colStatus },
-  { title: "Номер", className: styles.colCode },
-  { title: "Покупатель", className: styles.colCustomer },
-  { title: "Город", className: styles.colTown },
-  { title: "Точка продаж", className: styles.colSalesPoint },
-  { title: "Кто создал", className: styles.colSeller },
-  { title: "Доставка", className: styles.colDelivery },
-  { title: "Сумма", className: styles.colTotal },
-  { title: "Планируемая доставка", className: styles.colPlanned },
-] as const;
+export type OrderTableKind = "marketplace" | "offline";
 
-/**
- * Колонки офлайн-продажи.
- *
- * У заказов площадки они пустые: Kaspi платит целиком и сразу, скидку считает
- * сам, а наших справочников не знает. Поэтому при выбранной площадке они
- * прячутся — иначе восемь колонок таблицы состоят из прочерков.
- */
-const OFFLINE_COLUMNS = [
-  { title: "Номер заказа", className: styles.colExternal },
-  { title: "Откуда товар", className: styles.colOffline },
-  { title: "Статус доставки", className: styles.colOffline },
-  { title: "Откуда клиент", className: styles.colOffline },
-  { title: "Оплата", className: styles.colOffline },
-  { title: "Скидка", className: styles.colOffline },
-  { title: "Оплачено", className: styles.colTotal },
-  { title: "Остаток", className: styles.colTotal },
-] as const;
-
-export function orderColumnCount(showOffline: boolean): number {
-  return COMMON_COLUMNS.length + (showOffline ? OFFLINE_COLUMNS.length : 0);
+interface Column {
+  title: string;
+  className: string;
+  render: (order: OrderRowDto) => ReactNode;
 }
 
-/** Успешно закрытые и сорвавшиеся — остальное считается «в работе». */
-const DONE: OrderStatus[] = [ORDER_STATUSES.DELIVERED];
-const FAILED: OrderStatus[] = [
-  ORDER_STATUSES.CANCELLED,
-  ORDER_STATUSES.CANCELLING,
-  ORDER_STATUSES.RETURNED,
-  ORDER_STATUSES.RETURN_REQUESTED,
-];
+const dash = <span className={styles.muted}>—</span>;
 
-function statusDot(status: OrderStatus): string {
-  if (DONE.includes(status)) return styles.dotDone;
-  if (FAILED.includes(status)) return styles.dotFailed;
+/** Пусто — прочерк: видно, что поле есть, а значения нет. */
+function orDash(value: ReactNode) {
+  return value === null || value === undefined || value === "" ? dash : value;
+}
 
-  return styles.dotActive;
+function money(value: string | null) {
+  const amount = moneyToNumber(value);
+
+  return amount === null ? dash : formatMoney(amount);
 }
 
 /**
- * Покупатель целиком: «А Аскарбек».
+ * Цвет кружка — свой у каждой стадии. Сами цвета — в order-row.module.scss.
  *
- * `name` у Kaspi — это только имя, фамилия приходит отдельно и обычно одной
- * буквой. Показывать одно `name` значит терять фамилию, а по ней заказы и
- * ищут глазами. Порядок «фамилия, имя» — как в кабинете и на складе.
+ * Record по всем стадиям, а не условия: появится новая стадия в ORDER_STATUSES —
+ * TypeScript не соберёт проект, пока ей не дадут цвет, и она не станет молча
+ * серой или «как у соседа».
  */
-function customerTitle(order: OrderRowDto): string | null {
-  const parts = [order.customerLastName, order.customerFirstName].filter(Boolean);
+const STATUS_DOT: Record<OrderStatus, string> = {
+  [ORDER_STATUSES.NEW]: styles.statusNew,
+  [ORDER_STATUSES.SIGN_REQUIRED]: styles.statusSignRequired,
+  [ORDER_STATUSES.PRE_ORDER]: styles.statusPreOrder,
+  [ORDER_STATUSES.PACKING]: styles.statusPacking,
+  [ORDER_STATUSES.TRANSMISSION]: styles.statusTransmission,
+  [ORDER_STATUSES.TRANSMITTED]: styles.statusTransmitted,
+  [ORDER_STATUSES.PICKUP]: styles.statusPickup,
+  [ORDER_STATUSES.OWN_DELIVERY]: styles.statusOwnDelivery,
+  [ORDER_STATUSES.DELIVERED]: styles.statusDelivered,
+  [ORDER_STATUSES.CANCELLING]: styles.statusCancelling,
+  [ORDER_STATUSES.CANCELLED]: styles.statusCancelled,
+  [ORDER_STATUSES.RETURN_REQUESTED]: styles.statusReturnRequested,
+  [ORDER_STATUSES.RETURNED]: styles.statusReturned,
+};
 
-  if (parts.length > 0) return parts.join(" ");
-
-  return order.customerName;
+export function statusDotClass(status: OrderStatus): string {
+  return STATUS_DOT[status];
 }
 
-export function OrderTableHead({ showOffline }: { showOffline: boolean }) {
-  const columns = showOffline
-    ? [...COMMON_COLUMNS, ...OFFLINE_COLUMNS]
-    : COMMON_COLUMNS;
+/**
+ * Все колонки реестра — каждая описана один раз: заголовок, класс и что
+ * показать. Набор для вида таблицы собирается ниже по ключам. Добавить или
+ * переставить колонку — поправить список, разметка строки не меняется.
+ */
+const COLUMNS = {
+  date: { title: "Дата и время", className: styles.colDate,
+    render: (order) => formatDateTime(order.placedAt) },
 
+  status: { title: "Статус", className: styles.colStatus,
+    render: (order) => (
+      <span className={styles.status}>
+        {/* Цвет только дублирует подпись — от скринридера кружок скрыт. */}
+        <span aria-hidden="true" className={cn(styles.dot, statusDotClass(order.status))} />
+        {ORDER_STATUS_LABELS[order.status]}
+      </span>
+    ) },
+
+  code: { title: "Номер", className: styles.colCode,
+    render: (order) => order.code },
+
+  customer: { title: "Покупатель", className: styles.colCustomer,
+    render: (order) => {
+      const customer = customerTitle(order);
+
+      if (customer === null && order.customerPhone === null) return dash;
+
+      return (
+        <span className={styles.customer}>
+          <span>{customer ?? "—"}</span>
+          {/* У архивных заказов Kaspi отдаёт маску вместо телефона —
+              показываем как есть, это честнее пустой ячейки. */}
+          {order.customerPhone && <span className={styles.phone}>{order.customerPhone}</span>}
+        </span>
+      );
+    } },
+
+  town: { title: "Город", className: styles.colTown,
+    render: (order) => orDash(order.deliveryTown) },
+
+  warehouse: { title: "Склад", className: styles.colWarehouse,
+    render: (order) => order.warehouse === null
+      ? dash
+      : order.warehouse.code + (order.warehouse.name === null ? "" : " · " + order.warehouse.name) },
+
+  seller: { title: "Кто создал", className: styles.colSeller,
+    render: (order) => orDash(order.seller?.name) },
+
+  // У офлайн-предзаказа доставку ещё не выбрали — прочерк честнее
+  // подставленного наугад «своей доставки».
+  delivery: { title: "Доставка", className: styles.colDelivery,
+    render: (order) => order.deliveryType === null
+      ? dash : ORDER_DELIVERY_TYPE_LABELS[order.deliveryType] },
+
+  total: { title: "Сумма", className: styles.colTotal,
+    render: (order) => money(order.totalPrice) },
+
+  planned: { title: "Планируемая доставка", className: styles.colPlanned,
+    render: (order) => order.plannedDeliveryAt === null
+      ? dash : formatDateTime(order.plannedDeliveryAt) },
+
+  externalNumber: { title: "Номер заказа", className: styles.colExternal,
+    render: (order) => orDash(order.externalNumber) },
+
+  shipmentOrigin: { title: "Откуда товар", className: styles.colOffline,
+    render: (order) => orDash(order.shipmentOrigin) },
+
+  deliveryStatus: { title: "Статус доставки", className: styles.colOffline,
+    render: (order) => orDash(order.deliveryStatus) },
+
+  customerSource: { title: "Откуда клиент", className: styles.colOffline,
+    render: (order) => orDash(order.customerSource) },
+
+  paymentMethod: { title: "Оплата", className: styles.colOffline,
+    render: (order) => orDash(order.paymentMethod) },
+
+  discount: { title: "Скидка", className: styles.colOffline,
+    render: (order) => orDash(discountTitle(order)) },
+
+  paid: { title: "Оплачено", className: styles.colTotal,
+    render: (order) => money(order.paidAmount) },
+
+  // Ноль — это «оплачено»: так написано в рабочей таблице, и так его читает человек.
+  balance: { title: "Остаток", className: styles.colTotal,
+    render: (order) => {
+      const balance = moneyToNumber(order.balanceDue);
+
+      if (balance === null) return dash;
+
+      return balance === 0 ? <span className={styles.paid}>оплачено</span> : formatMoney(balance);
+    } },
+} satisfies Record<string, Column>;
+
+type ColumnKey = keyof typeof COLUMNS;
+
+/**
+ * Какие колонки у какого вида таблицы. «Точки продаж» нет ни в одном:
+ * точка выбрана в фильтре, и у всех строк она одна и та же.
+ */
+const TABLE_COLUMNS: Record<OrderTableKind, ColumnKey[]> = {
+  marketplace: ["date", "status", "code", "customer", "town", "warehouse", "delivery",
+    "total", "planned"],
+  offline: ["date", "status", "code", "customer", "town", "seller", "delivery", "total",
+    "planned", "externalNumber", "shipmentOrigin", "deliveryStatus", "customerSource",
+    "paymentMethod", "discount", "paid", "balance"],
+};
+
+export function orderColumnCount(kind: OrderTableKind): number {
+  return TABLE_COLUMNS[kind].length;
+}
+
+export function OrderTableHead({ kind }: { kind: OrderTableKind }) {
   return (
     <tr>
-      {columns.map((column) => (
-        <th key={column.title} scope="col" className={column.className}>{column.title}</th>
+      {TABLE_COLUMNS[kind].map((key) => (
+        <th key={key} scope="col" className={COLUMNS[key].className}>{COLUMNS[key].title}</th>
       ))}
     </tr>
   );
 }
 
 /**
- * Скидка — это пара «сколько процентов» и «почему».
- *
- * Показываем обе части: `10% · Ликвидация`. Причина без процента бывает
- * («800тг» из импорта), процент без причины тоже — но когда есть обе,
- * прятать одну нельзя: процент объясняет сумму, а причина — процент.
+ * Строка реестра. Клик по строке открывает заказ; с клавиатуры — номер
+ * заказа, он кнопка: у строки таблицы роли кнопки нет, и Tab её не находит.
  */
-function discountTitle(order: OrderRowDto): string | null {
-  const parts: string[] = [];
-
-  if (order.discountPercent !== null) parts.push(order.discountPercent + "%");
-  if (order.discountComment !== null) parts.push(order.discountComment);
-
-  return parts.length === 0 ? null : parts.join(" · ");
-}
-
-export function OrderRow({ order, showOffline }: { order: OrderRowDto; showOffline: boolean }) {
-  const total = moneyToNumber(order.totalPrice);
-  const paid = moneyToNumber(order.paidAmount);
-  const balance = moneyToNumber(order.balanceDue);
-  const customer = customerTitle(order);
-  const discount = discountTitle(order);
-
+export function OrderRow({ order, kind, onOpen }: {
+  order: OrderRowDto;
+  kind: OrderTableKind;
+  onOpen: (orderId: string) => void;
+}) {
   return (
-    <tr className={styles.row}>
-
-      <td className={styles.colDate}>{formatDateTime(order.placedAt)}</td>
-
-      <td className={styles.colStatus}>
-        <span className={styles.status}>
-          {/* Цвет только дублирует подпись, поэтому кружок скрыт
-              от скринридера: читать его отдельно нечего. */}
-          <span aria-hidden="true" className={cn(styles.dot, statusDot(order.status))} />
-          {ORDER_STATUS_LABELS[order.status]}
-          {/*{order.preOrder && <span className={styles.preOrder}>предзаказ</span>}*/}
-        </span>
-      </td>
-
-      <td className={styles.colCode}>{order.code}</td>
-
-      <td className={styles.colCustomer}>
-        {customer === null && order.customerPhone === null ? (
-          <span className={styles.muted}>—</span>
-        ) : (
-          <span className={styles.customer}>
-            <span>{customer ?? "—"}</span>
-            {/* У архивных заказов Kaspi отдаёт маску вместо телефона —
-                показываем как есть, это честнее пустой ячейки. */}
-            {order.customerPhone && <span className={styles.phone}>{order.customerPhone}</span>}
-          </span>
-        )}
-      </td>
-
-      <td className={styles.colTown}>
-        {order.deliveryTown ?? <span className={styles.muted}>—</span>}
-      </td>
-
-      <td className={styles.colSalesPoint}>{order.salesPoint.name}</td>
-
-      {/* Заказ площадки никто не заводил руками — там прочерк, а не название
-          точки: оно уже стоит в соседней колонке, и повторять его незачем. */}
-      <td className={styles.colSeller}>
-        {order.seller === null
-          ? <span className={styles.muted}>—</span>
-          : order.seller.name}
-      </td>
-
-      {/* У офлайн-предзаказа доставку ещё не выбрали — прочерк честнее
-          подставленного наугад «своей доставки». */}
-      <td className={styles.colDelivery}>
-        {order.deliveryType === null
-          ? <span className={styles.muted}>—</span>
-          : ORDER_DELIVERY_TYPE_LABELS[order.deliveryType]}
-      </td>
-
-      <td className={styles.colTotal}>
-        {total === null ? <span className={styles.muted}>—</span> : formatMoney(total)}
-      </td>
-
-      {/* У отменённых и у тех, где Kaspi ещё не назначил срок, даты нет —
-          прочерк честнее пустой ячейки: видно, что поле есть, а значения нет. */}
-      <td className={styles.colPlanned}>
-        {order.plannedDeliveryAt === null
-          ? <span className={styles.muted}>—</span>
-          : formatDateTime(order.plannedDeliveryAt)}
-      </td>
-
-      {showOffline && (
-        <>
-          <td className={styles.colExternal}>
-            {order.externalNumber ?? <span className={styles.muted}>—</span>}
-          </td>
-
-          <td className={styles.colOffline}>
-            {order.shipmentOrigin ?? <span className={styles.muted}>—</span>}
-          </td>
-
-          <td className={styles.colOffline}>
-            {order.deliveryStatus ?? <span className={styles.muted}>—</span>}
-          </td>
-
-          <td className={styles.colOffline}>
-            {order.customerSource ?? <span className={styles.muted}>—</span>}
-          </td>
-
-          <td className={styles.colOffline}>
-            {order.paymentMethod ?? <span className={styles.muted}>—</span>}
-          </td>
-
-          <td className={styles.colOffline}>
-            {discount ?? <span className={styles.muted}>—</span>}
-          </td>
-
-          <td className={styles.colTotal}>
-            {paid === null ? <span className={styles.muted}>—</span> : formatMoney(paid)}
-          </td>
-
-          {/* Ноль — это «оплачено», а не «ничего не должен»: так написано
-              в рабочей таблице, и так его читает человек. */}
-          <td className={styles.colTotal}>
-            {balance === null
-              ? <span className={styles.muted}>—</span>
-              : balance === 0
-                ? <span className={styles.paid}>оплачено</span>
-                : formatMoney(balance)}
-          </td>
-        </>
-      )}
-
+    <tr className={cn(styles.row, styles.rowClickable)} onClick={() => onOpen(order.id)}>
+      {TABLE_COLUMNS[kind].map((key) => (
+        <td key={key} className={COLUMNS[key].className}>
+          {key === "code" ? (
+            <button
+              type="button"
+              className={styles.codeButton}
+              onClick={(event) => {
+                // Клик уже поймает строка — второй раз окно не открываем.
+                event.stopPropagation();
+                onOpen(order.id);
+              }}
+            >
+              {order.code}
+            </button>
+          ) : COLUMNS[key].render(order)}
+        </td>
+      ))}
     </tr>
   );
 }

@@ -65,6 +65,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `POST /api/sales-points` | Создать офлайн-точку; код и тип ставит сервер | ADMIN | `server/src/modules/sales-points/sales-points.controller.ts` |
 | `PATCH /api/sales-points/:id` | Переименовать, закрыть или открыть точку; удаления нет | ADMIN | `server/src/modules/sales-points/sales-points.controller.ts` |
 | `GET /api/orders` | Страница заказов из нашей базы: поиск по номеру, период, точки продаж и продавцы | ADMIN | `server/src/modules/orders/orders.controller.ts` |
+| `GET /api/orders/:id` | Заказ целиком для окна: поля строки, адрес, даты, деньги, состав с нашим товаром по артикулу | ADMIN | `server/src/modules/orders/orders.controller.ts` |
+| `POST /api/orders/:id/entries/sync` | Состав заказа Kaspi с площадки при первом открытии; уже есть — Kaspi не трогает | ADMIN | `server/src/modules/orders/orders.controller.ts` |
 | `GET /api/orders/:id/comments` | Лента комментариев заказа, старые сверху | ADMIN | `server/src/modules/orders/orders.controller.ts` |
 | `POST /api/orders/:id/comments` | Новый комментарий; автор из сессии, правок и удалений нет | ADMIN | `server/src/modules/orders/orders.controller.ts` |
 | `GET /api/orders/kaspi` | Страница заказов Kaspi, разобранная в нашу модель; без записи в БД | ADMIN | `server/src/modules/orders/orders.controller.ts` |
@@ -110,6 +112,12 @@ shared/    # Общий код: типы контрактов, констант�
 | orders | `toOrderDraft(raw)` | Сырой заказ Kaspi в нашу модель; спорное помечает проблемой, поля кабинета оставляет пустыми | `server/src/modules/orders/kaspi-orders.mapper.ts` |
 | orders | `syncKaspiOrders(input)` | Шаг синхронизации: отрезки по 3 дня от свежих к старым, upsert по номеру, поля кабинета не затирает | `server/src/modules/orders/orders.service.ts` |
 | orders | `listOrders(input)` | Страница заказов из базы: поиск, период, фильтры по точке и продавцу, узкий DTO без персональных данных сверх нужного | `server/src/modules/orders/orders.service.ts` |
+| orders | `getOrderDetails(id)`, `syncOrderEntries(id)` | Заказ целиком; загрузка состава Kaspi по требованию с заглушкой `-1` и поиском товара по артикулу без учёта регистра | `server/src/modules/orders/order-details.service.ts` |
+| orders | `orderRowSelect`, `toOrderRow(row)` | Выборка и DTO строки заказа — общие для списка и окна | `server/src/modules/orders/order-row.mapper.ts` |
+| orders | `fetchKaspiOrderEntries(token, kaspiId)` | Состав заказа из Shop API (`/orders/{id}/entries`); общий `kaspiGet` с заголовками и разбором ошибок | `server/src/modules/orders/kaspi-orders.client.ts` |
+| orders | `toEntryDraft(raw)` | Позиция Kaspi в нашу модель: `offer.code` — артикул | `server/src/modules/orders/kaspi-order-entries.mapper.ts` |
+| orders | `isRecord`, `asString`, `asNumber`, `asMoney` | Разбор JSON Kaspi, общий для заказа и позиций | `server/src/modules/orders/kaspi-orders.mapper.ts` |
+| products | `previewImageUrl(images)` | Миниатюра товара из `kaspiImages` — каталог и состав заказа | `server/src/modules/products/catalog.mapper.ts` |
 | orders | `listOrderComments(orderId)`, `addOrderComment(orderId, text, author)` | Лента комментариев; автор из сессии, роль снимком, правок и удалений нет | `server/src/modules/orders/order-comments.service.ts` |
 | stats | `getOrderStats(input)` | Сводка за период: две группировки, привязанные заказы вне сумм | `server/src/modules/stats/stats.service.ts` |
 | imports | `readWorkbook(file)`, `listSheets(wb)`, `parseSheet(wb, name, dict)` | Разбор книги Excel: колонки по заголовкам, спорное — в `problems`, а не в заказ | `server/src/modules/imports/offline-orders.parser.ts` |
@@ -195,7 +203,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `/dashboard/login` | Вход сотрудника в админку | `front/src/app/dashboard/(auth)/login/page.tsx` |
 | `/dashboard/accounts` | Аккаунты и История: таблица сотрудников, создание, журнал действий | `front/src/app/dashboard/(main)/accounts/page.tsx` |
 | `/dashboard/products` | Каталог: два уровня папок с поиском и порядком, серверный поиск, фильтры складов и поставщиков (мультивыбор), сортировка стрелками в шапке, таблица с выделением и переносом в папку | `front/src/app/dashboard/(main)/products/page.tsx` |
-| `/dashboard/orders` | Заказы: две кнопки синхронизации с Kaspi, поиск по номеру, фильтр по точке продаж, выбор периода, таблица. При загрузке печатает сырьё Kaspi в консоль (отладка, убрать после сверки статусов) | `front/src/app/dashboard/(main)/orders/page.tsx` |
+| `/dashboard/orders` | Заказы: две кнопки синхронизации с Kaspi, поиск по номеру, точка продаж (по умолчанию Kaspi) задаёт вид таблицы, фильтры справочников только у офлайн-точки, выбор периода, клик по строке — окно заказа. При загрузке печатает сырьё Kaspi в консоль (отладка, убрать после сверки статусов) | `front/src/app/dashboard/(main)/orders/page.tsx` |
 | `/dashboard/imports` | Импорты: блоки «Excel продаж офлайн-точки», «Поставщики из МойСклада», «Товары из МойСклада», «Остатки из МойСклада» (склад, файл, предпросмотр, список на обнуление, запись). Только ADMIN | `front/src/app/dashboard/(main)/imports/page.tsx` |
 | `/dashboard/kaspi-sync` | Синхронизация с Kaspi: загрузка выгрузок, предпросмотр каталога | `front/src/app/dashboard/(main)/kaspi-sync/page.tsx` |
 
@@ -251,7 +259,9 @@ shared/    # Общий код: типы контрактов, констант�
 | `CatalogRow`, `CatalogTableHead`, `CATALOG_COLUMN_COUNT` | Строка и шапка таблицы каталога: галка выделения, кружок статуса, квадратное фото, два названия, цена Kaspi в две строки со скидкой, закупка с валютой, себестоимость в ₸, поставщик, склады чипами «код · название», затем колонки Остаток, Резерв, Ожидание, Доступно, Предзаказ, Дней на складе — строкой на склад в том же порядке, закреплённое меню действий. Стили — `catalog-row.module.scss` | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
 | `MoveToCategoryDialog` | Модалка переноса выбранных товаров: дерево папок с поиском, затем подтверждение | `front/src/app/dashboard/(main)/products/_components/move-to-category-dialog.tsx` |
 | `OrderDictionaryFilters` | Четыре выпадашки под кнопками синхронизации: статус доставки, оплата, откуда товар, откуда клиент. Общий `Dropdown` в режиме `select` с поиском; закрытые значения остаются в списке с пометкой | `front/src/app/dashboard/(main)/orders/_components/order-dictionary-filters.tsx` |
-| `OrderRow`, `OrderTableHead`, `orderColumnCount(showOffline)` | Строка и шапка таблицы заказов. Общие колонки: дата, статус, номер, покупатель, город, точка продаж, кто создал, доставка, сумма, планируемая доставка. При `showOffline` добавляются восемь офлайновых: номер продавца, откуда товар, статус доставки, откуда клиент, оплата, скидка, оплачено, остаток. Стили — `order-row.module.scss` | `front/src/app/dashboard/(main)/orders/_components/order-row.tsx` |
+| `OrderRow`, `OrderTableHead`, `orderColumnCount(kind)`, `OrderTableKind`, `statusDotClass()` (свой цвет у каждой из 13 стадий, словарь `STATUS_DOT`) | Строка и шапка таблицы заказов. Вид `marketplace` (Kaspi): дата, статус, номер, покупатель, город, склад, доставка, сумма, планируемая доставка. Вид `offline`: вместо склада «кто создал» и ещё восемь офлайновых. Колонки — словарь `COLUMNS`, наборы — `TABLE_COLUMNS`. Клик по строке и кнопка-номер открывают заказ. Стили — `order-row.module.scss` | `front/src/app/dashboard/(main)/orders/_components/order-row.tsx` |
+| `OrderDetailsModal` | Окно заказа: блоки Заказ, Покупатель, Оплата, Состав, Комментарии — каждый своим файлом; общий вид — `style.module.scss` | `front/src/app/dashboard/(main)/orders/_components/order-details/` |
+| `DetailsSection`, `Fields`, `Field` | Раскладка блока окна заказа: заголовок и пары «подпись — значение», пустое — прочерк | `front/src/app/dashboard/(main)/orders/_components/order-details/details-section.tsx` |
 
 ### 1.6. Общие функции, хуки, константы
 
@@ -304,6 +314,11 @@ shared/    # Общий код: типы контрактов, констант�
 | `useOfflineImport()` | Импорт продаж: файл, список листов, разбор, счётчики, запись, сброс | `front/src/features/imports/use-offline-import.ts` |
 | `useCreateSalesPointForm(onCreated)` | Форма новой офлайн-точки: одно поле, защита от двойной отправки | `front/src/features/sales-points/use-create-sales-point-form.ts` |
 | `useGetOrderCommentsQuery`, `useAddOrderCommentMutation` | Лента комментариев заказа; тег с id заказа | `front/src/features/orders/orders-api.ts` |
+| `useGetOrderQuery`, `useSyncOrderEntriesMutation` | Заказ целиком (тег `Order` с id) и загрузка состава; ответ загрузки кладётся в кэш заказа | `front/src/features/orders/orders-api.ts` |
+| `useOrderDetails(orderId)` | Окно заказа: заказ из базы, автозагрузка состава Kaspi один раз на заказ, ошибка и повтор | `front/src/features/orders/use-order-details.ts` |
+| `useOrderComments(orderId)` | Лента комментариев и поле «добавить»: лимит длины, защита от двойной отправки | `front/src/features/orders/use-order-comments.ts` |
+| `customerTitle(order)`, `discountTitle(order)` | Покупатель «фамилия имя» и скидка «10% · причина» — общие для таблицы и окна | `front/src/features/orders/order-format.ts` |
+| `OrderDetailsDto`, `OrderEntryDto`, `SyncOrderEntriesResponse` | Контракты окна заказа и загрузки состава | `shared/src/types/orders.ts` |
 | `ORDER_STATUSES`, `ORDER_STATUS_LABELS`, `ORDER_STATUS_ORDER`, `ORDER_FINAL_STATUSES` | 13 стадий заказа, подписи как в кабинете, порядок для вкладок и список закрытых | `shared/src/constants/order-statuses.ts` |
 | `ORDER_DELIVERY_TYPES`, `ORDER_DELIVERY_TYPE_LABELS` | Тип доставки: Kaspi Доставка, Самовывоз, Своя доставка | `shared/src/constants/order-statuses.ts` |
 | `ApiErrorResponse`, `PaginatedResponse` | Общие формы ответов API | `shared/src/types/api.ts` |
@@ -407,7 +422,7 @@ shared/    # Общий код: типы контрактов, констант�
 | [api-reference.md](docs/api-reference.md) | Контракты всех эндпоинтов API, включая ручное дерево категорий, серверный список артикулов и перенос товаров: параметры, ответы, коды ошибок. |
 | [roadmap.md](docs/roadmap.md) | Roadmap проекта: три планируемых этапа — пользователи; товары (добавление, импорт из МойСклад, папки и карточка, склады); заказы из Kaspi и поставщики. Этапы после 0–3 (закупки, выгрузка на Kaspi, офлайн-заказы, автоматизация, Dashboard, складской учёт, магазин) сохранены с наработками, без сроков. Риски и открытые вопросы. |
 | [app-structure.md](docs/app-structure.md) | Дерево маршрутов `front/src/app/`, как работают группы в скобках, почему сайдбар не в корневом layout админки, темы, два входа, где лежат компоненты; страница товаров с TreeFolder/Tables, инструкция добавления children-строк и ручная проверка. |
-| [deployment.md](docs/deployment.md) | Единый `.env` в корне и как его находит каждый пакет, список переменных, команды миграций и shadow-база, зависимости сборки; обновление устаревших типов маршрутов через next typegen. |
+| [deployment.md](docs/deployment.md) | Единый `.env` в корне и как его находит каждый пакет, список переменных, команды миграций и shadow-база, зависимости сборки; обновление устаревших типов маршрутов через next typegen. Боевой сервер (VPS 194.238.42.140): что на нём сейчас (старая админка `radeya-analytics` и лэндинг), вход, обслуживание Nginx/PM2, список того, что учесть при переезде на `radeya-mono`. |
 | [data-model.md](docs/data-model.md) | Модели Prisma пользователей, сессий, складов и каталога; ручные папки Category, служебный пункт «Все товары», Product/Variant, цены, остатки и ткани; список миграций. |
 | [analytics-spec.md](docs/analytics-spec.md) | Спецификация аналитического модуля: принципы визуализации (Tufte / Few / Munzner), информационная архитектура из 8 табов, состав графиков и KPI. Источник правды для имплементации дашборда. |
 | [kaspi-api-integration.md](docs/kaspi-api-integration.md) | Kaspi Shop API целиком: авторизация по `X-Auth-Token`, шифрование токена, эндпоинты заказов и позиций, стратегия синхронизации, маппинг полей, статусы заказов, схема БД, грабли. Раздел 10 — каталог товаров: разбор XML-выгрузки и JSON кабинета (`list?m=&p=&l=&a=`), маппинг всех полей, три цены и три идентификатора, картинки, штрихкод. Раздел 11 — дерево папок из `categoryPathCodes` и `familyId`. Раздел 12 — чек-лист непроверенного. Раздел 13 — обратное направление: наличие товара ведётся у нас и уходит в Kaspi через XML, поля `storeId`/`preOrder`/`stockCount`/`available` и откуда они берутся. |

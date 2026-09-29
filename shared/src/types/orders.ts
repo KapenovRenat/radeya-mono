@@ -275,6 +275,88 @@ export interface OrderRowDto {
 }
 
 /**
+ * Позиция заказа — товар в его составе.
+ *
+ * `variant` — наш товар, найденный по артикулу; null — такого артикула в каталоге
+ * нет, и тогда показывается название, пришедшее с площадки или из файла.
+ */
+export interface OrderEntryDto {
+  id: string;
+  entryNumber: number;
+  /** Артикул как пришёл: `offer.code` у Kaspi, колонка файла у офлайн-продажи. */
+  sku: string | null;
+  /** Название позиции на площадке — запасное, когда товара у нас нет. */
+  offerName: string | null;
+  quantity: number;
+  /** Цена за штуку и сумма позиции, строками с двумя знаками. */
+  basePrice: string | null;
+  totalPrice: string | null;
+  categoryTitle: string | null;
+  /** Что дописал продавец про позицию: ткань, комплектация. */
+  note: string | null;
+  variant: {
+    id: string;
+    sku: string;
+    name: string;
+    imageUrl: string | null;
+  } | null;
+}
+
+/**
+ * Заказ целиком — для окна заказа. Всё, что есть в строке списка, плюс адрес,
+ * даты, деньги и состав.
+ *
+ * Персональные данные (телефон, адрес) здесь полные: эндпоинт закрыт ролью
+ * ADMIN, а окно заказа открывают, чтобы с ним работать.
+ */
+export interface OrderDetailsDto extends OrderRowDto {
+  kaspiState: string | null;
+  cancellationReason: string | null;
+
+  approvedByBankAt: string | null;
+  completedAt: string | null;
+  /** Дедлайн «отвезите в пункт приёма». */
+  courierTransmissionPlannedAt: string | null;
+  courierTransmissionAt: string | null;
+
+  deliveryCost: string | null;
+  paymentMode: string | null;
+  creditTerm: number | null;
+
+  deliveryMode: string | null;
+  isKaspiDelivery: boolean;
+  isExpress: boolean;
+  waybillNumber: string | null;
+
+  /** Адрес одной строкой, как его собрал Kaspi. У Kaspi-доставки почти всегда пуст. */
+  deliveryAddress: string | null;
+  deliveryComment: string | null;
+  /** Откуда уехал заказ — снимком, как пришло с площадки. */
+  originCityName: string | null;
+  kaspiPickupPointId: string | null;
+
+  /** Позиции без служебной заглушки. */
+  entries: OrderEntryDto[];
+  /**
+   * Состав уже загружали: позиции лежат в базе, или площадка ответила,
+   * что их нет. false — окно само попросит загрузить.
+   */
+  entriesLoaded: boolean;
+  /**
+   * Состав можно загрузить с площадки. Только заказы Kaspi — у офлайн-продажи
+   * состав приходит из файла, и тянуть его неоткуда.
+   */
+  canLoadEntries: boolean;
+}
+
+/** Ответ загрузки состава с площадки. */
+export interface SyncOrderEntriesResponse {
+  /** Сколько позиций записано этим вызовом. Ноль — состав уже был. */
+  created: number;
+  order: OrderDetailsDto;
+}
+
+/**
  * Комментарий к заказу.
  *
  * Роль — снимком на момент написания: продавец мог стать менеджером, а «это

@@ -66,12 +66,42 @@ export async function fetchKaspiOrdersRaw(params: KaspiOrdersParams): Promise<un
   url.searchParams.set('filter[orders][creationDate][$ge]', String(params.from));
   url.searchParams.set('filter[orders][creationDate][$le]', String(params.to));
 
+  return kaspiGet(url, params.token);
+}
+
+/** Больше позиций в одном заказе Kaspi не бывает на практике; сотня — предел страницы. */
+const ENTRIES_PAGE_SIZE = 100;
+
+/**
+ * Состав заказа — `GET /orders/{id}/entries`, раздел 2.2 интеграции.
+ *
+ * `kaspiId` — ресурсный id заказа (`MTA1NTgxNTk1Nw`), а не номер, который видит
+ * покупатель: в адресе стоит именно он. Позиции возвращаются как есть —
+ * разбирает их маппер.
+ */
+export async function fetchKaspiOrderEntries(token: string, kaspiId: string): Promise<unknown[]> {
+  // encodeURIComponent: id приходит из базы, но в адрес его кладём не глядя.
+  const url = new URL(`${ORDERS_URL}/${encodeURIComponent(kaspiId)}/entries`);
+
+  url.searchParams.set('page[size]', String(ENTRIES_PAGE_SIZE));
+
+  const body = await kaspiGet(url, token);
+
+  if (!isRecord(body) || !Array.isArray(body.data)) {
+    throw new AppError(502, 'KASPI_BAD_RESPONSE', 'В ответе Kaspi нет списка позиций заказа');
+  }
+
+  return body.data;
+}
+
+/** GET к Shop API с заголовками, таймаутом и разбором ошибок — общий для всех запросов. */
+async function kaspiGet(url: URL, token: string): Promise<unknown> {
   let response: Response;
 
   try {
     response = await fetch(url, {
       headers: {
-        'X-Auth-Token': params.token,
+        'X-Auth-Token': token,
         // Формат из документации Kaspi: с обычным application/json бывает 415.
         accept: 'application/vnd.api+json;charset=UTF-8',
         // Без правдоподобного клиента Kaspi иногда отвечает 403.

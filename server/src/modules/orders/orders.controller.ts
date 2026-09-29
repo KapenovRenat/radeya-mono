@@ -11,6 +11,7 @@ import { toOrderDraft } from './kaspi-orders.mapper';
 import { addOrderComment, listOrderComments } from './order-comments.service';
 import { createOrderCommentSchema, kaspiOrdersQuerySchema, orderListSchema,
   orderParamsSchema, syncOrdersSchema } from './orders.schemas';
+import { getOrderDetails, syncOrderEntries } from './order-details.service';
 import { listOrders, syncKaspiOrders } from './orders.service';
 
 /** Страница заказов из нашей базы: поиск по номеру, свежие сверху. */
@@ -20,6 +21,31 @@ export const getOrders: RequestHandler = async (req, res) => {
   if (!parsed.success) throw new ValidationError('Проверьте параметры списка');
 
   res.json(await listOrders(parsed.data));
+};
+
+/** Заказ целиком для окна заказа: всё из строки списка, адрес, даты, состав. */
+export const getOrder: RequestHandler = async (req, res) => {
+  const params = orderParamsSchema.safeParse(req.params);
+
+  if (!params.success) throw new ValidationError('Некорректный заказ');
+
+  res.json(await getOrderDetails(params.data.id));
+};
+
+/**
+ * Загрузка состава заказа Kaspi — при первом открытии окна.
+ *
+ * POST, а не часть GET: чтение не должно ходить на площадку и писать в базу,
+ * иначе повторные запросы браузера и кэш клиента дёргали бы Kaspi сами.
+ * В журнал не пишем: это не действие человека над данными, а подгрузка
+ * того, что площадка и так знает.
+ */
+export const postSyncOrderEntries: RequestHandler = async (req, res) => {
+  const params = orderParamsSchema.safeParse(req.params);
+
+  if (!params.success) throw new ValidationError('Некорректный заказ');
+
+  res.json(await syncOrderEntries(params.data.id));
 };
 
 /** Лента комментариев заказа, старые сверху. */

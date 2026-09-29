@@ -15,6 +15,7 @@ import { getKaspiSalesPointId } from '../sales-points/sales-points.service';
 import { isKnownState, isKnownStatus } from './kaspi-order-status';
 import { fetchKaspiOrders } from './kaspi-orders.client';
 import { toOrderDraft } from './kaspi-orders.mapper';
+import { orderRowSelect, toOrderRow } from './order-row.mapper';
 import type { OrderListInput, SyncOrdersInput } from './orders.schemas';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -172,8 +173,8 @@ export async function syncKaspiOrders(input: SyncOrdersInput): Promise<SyncKaspi
  * между запросами иначе не определён, и один заказ мог бы попасть на две
  * страницы, а другой ни на одну.
  *
- * Наружу идёт узкий набор полей: телефон и адрес покупателя — персональные
- * данные, и в списке им делать нечего. Понадобятся — отдаст карточка заказа.
+ * Наружу идёт узкий набор полей: адрес покупателя — персональные данные,
+ * и в списке ему делать нечего. Полный заказ отдаёт `getOrderDetails`.
  */
 export async function listOrders(input: OrderListInput): Promise<OrderListResponse> {
   return prisma.$transaction(async (tx) => {
@@ -231,67 +232,14 @@ export async function listOrders(input: OrderListInput): Promise<OrderListRespon
 
     const rows = await tx.order.findMany({
       where,
-      select: {
-        id: true, code: true, status: true, deliveryType: true, kaspiStatus: true,
-        placedAt: true, plannedDeliveryAt: true, totalPrice: true,
-        customerName: true, customerFirstName: true, customerLastName: true,
-        customerPhone: true, deliveryTown: true, preOrder: true,
-        warehouse: { select: { code: true, name: true } },
-        salesPoint: { select: { id: true, name: true, type: true } },
-        linkedOrder: { select: { id: true, code: true } },
-        externalNumber: true, paidAmount: true, balanceDue: true,
-        discountPercent: true, discountComment: true,
-        // Из справочников нужно только название: идентификатор в таблице
-        // не показать, а фильтруют по нему отдельным параметром.
-        customerSource: { select: { name: true } },
-        deliveryStatus: { select: { name: true } },
-        shipmentOrigin: { select: { name: true } },
-        paymentMethod: { select: { name: true } },
-        // Логин и хеш пароля сюда не попадают намеренно: в таблице заказов
-        // нужно имя, а не учётная запись сотрудника.
-        seller: { select: { id: true, name: true, role: true } },
-        _count: { select: { entries: true, comments: true } },
-      },
+      select: orderRowSelect,
       orderBy: [{ placedAt: 'desc' }, { code: 'asc' }],
       skip: (page - 1) * input.pageSize,
       take: input.pageSize,
     });
 
     return {
-      items: rows.map((row) => ({
-        id: row.id,
-        code: row.code,
-        status: row.status,
-        deliveryType: row.deliveryType,
-        kaspiStatus: row.kaspiStatus,
-        placedAt: row.placedAt.toISOString(),
-        plannedDeliveryAt: row.plannedDeliveryAt?.toISOString() ?? null,
-        // Строкой, а не числом: number на цене теряет тиын.
-        totalPrice: row.totalPrice.toFixed(2),
-        customerName: row.customerName,
-        customerFirstName: row.customerFirstName,
-        customerLastName: row.customerLastName,
-        customerPhone: row.customerPhone,
-        deliveryTown: row.deliveryTown,
-        preOrder: row.preOrder,
-        warehouse: row.warehouse,
-        salesPoint: row.salesPoint,
-        seller: row.seller,
-        linkedOrder: row.linkedOrder,
-        entriesCount: row._count.entries,
-        commentsCount: row._count.comments,
-        externalNumber: row.externalNumber,
-        // Деньги строками, как и цена: number на сумме теряет тиын.
-        paidAmount: row.paidAmount?.toFixed(2) ?? null,
-        balanceDue: row.balanceDue?.toFixed(2) ?? null,
-        // Процент числом: считать по нему проще, а два знака в число влезают.
-        discountPercent: row.discountPercent === null ? null : Number(row.discountPercent),
-        discountComment: row.discountComment,
-        customerSource: row.customerSource?.name ?? null,
-        deliveryStatus: row.deliveryStatus?.name ?? null,
-        shipmentOrigin: row.shipmentOrigin?.name ?? null,
-        paymentMethod: row.paymentMethod?.name ?? null,
-      })),
+      items: rows.map(toOrderRow),
       total, page, pageSize: input.pageSize, totalPages,
     };
     // Счётчик и страница читаются в одном снимке: иначе параллельная

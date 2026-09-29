@@ -1,0 +1,218 @@
+/* Окно заказа. Цвета только через var(--токен).
+
+   Устроено блоками: каждый блок — свой компонент в этой папке, общая
+   раскладка блока (заголовок + пары «подпись — значение») — в details-section.tsx.
+   Поменять вид всех блоков разом — править .section и .fields здесь. */
+
+/* Шире стандартного окна: у заказа много полей и таблица состава.
+   Класс удвоен ради специфичности — иначе порядок подключения модулей
+   решал бы, чья ширина победит: наша или 28rem из общего Modal. */
+.dialog.dialog {
+  max-width: 64rem;
+  max-height: min(92vh, 60rem);
+}
+
+.state {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2rem 0;
+  color: var(--muted-foreground);
+}
+
+.error { color: var(--destructive); }
+
+/* Сетка блоков: на широком экране два столбца, состав и комментарии — во всю ширину. */
+.layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1rem;
+}
+
+.wide { grid-column: 1 / -1; }
+
+/* ── Блок ───────────────────────────────────────────────── */
+
+.section {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.sectionTitle {
+  margin: 0 0 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+/* Пары «подпись — значение» в две колонки: подписи ровно под подписями. */
+.fields {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) 1fr;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.label { color: var(--muted-foreground); }
+
+.value {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.muted { color: var(--muted-foreground); }
+
+.hint {
+  margin-left: 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+
+.money { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ── Состав ─────────────────────────────────────────────── */
+
+.entries {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+
+  th,
+  td {
+    padding: 0.5rem;
+    text-align: left;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    color: var(--muted-foreground);
+    font-weight: 500;
+  }
+}
+
+.num {
+  text-align: right !important;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Фото строго квадратное — те же правила, что в каталоге: preflight Tailwind
+   ставит img { max-width: 100%; height: auto } и сплющил бы картинку. */
+.image,
+.noImage {
+  display: block;
+  flex-shrink: 0;
+  width: 3rem;
+  min-width: 3rem;
+  max-width: none;
+  height: 3rem;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius);
+  background: var(--muted);
+}
+
+.image { object-fit: cover; }
+
+.noImage {
+  display: grid;
+  place-items: center;
+  color: var(--muted-foreground);
+  font-size: 0.5625rem;
+  text-align: center;
+}
+
+.product {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.productName { font-weight: 500; }
+
+.productMeta {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+
+/* Товара нет в каталоге — пометка заметная, но не тревожная. */
+.notInCatalog {
+  color: var(--price-old, var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+/* ── Комментарии ────────────────────────────────────────── */
+
+.comments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.comment {
+  padding: 0.625rem 0.75rem;
+  background: var(--muted);
+  border-radius: var(--radius);
+}
+
+.commentHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+
+.commentAuthor {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.commentText {
+  margin: 0;
+  font-size: 0.875rem;
+  /* Переносы строк, которые человек поставил, сохраняются. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.commentForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 4.5rem;
+  padding: 0.5rem 0.75rem;
+  color: inherit;
+  font: inherit;
+  font-size: 0.875rem;
+  background: var(--background);
+  border: 1px solid var(--input, var(--border));
+  border-radius: var(--radius);
+  resize: vertical;
+
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+}
+
+.formFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}

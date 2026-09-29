@@ -152,6 +152,101 @@ netstat -an | grep -i listen | grep 4000
 
 ---
 
+## Боевой сервер (VPS)
+
+> Записано 29.09.2026 со шпаргалки старого проекта
+> (`G:\Apps\niche-analytics\docs\server-guide.md`). **Сейчас на сервере стоит
+> старая админка `radeya-analytics`, а не этот репозиторий.** План — удалить её
+> и поставить `radeya-mono`. Пока переезд не сделан, раздел описывает то,
+> что есть, а не то, что будет.
+
+### Вход
+
+```bash
+ssh ubuntu@194.238.42.140
+```
+
+Ubuntu, пользователь `ubuntu`, вход по паролю. Паролей здесь нет и не будет —
+ни от SSH, ни от базы, ни от Basic Auth: они живут у пользователя и в `.env`
+на сервере, а не в git.
+
+### Что где сейчас
+
+| Что | Домен | Порт | Папка на сервере | Как отдаётся |
+|---|---|---|---|---|
+| Старая админка (аналитика) | `analytics.radeya.kz` | 3000 | `~/radeya-analytics` | PM2 `radeya-analytics` (Next.js) + Nginx proxy, Basic Auth |
+| Сайт (лэндинг) | `radeya.kz` + `www` | — | `~/radeya-analytics/radeya-landing/dist` | Nginx раздаёт статику |
+| API формы лэндинга | внутр. `/api` | 3001 | `~/radeya-analytics/radeya-landing/server` | PM2 `radeya-landing-api` (Bun) |
+| База старой админки | localhost | 5432 | PostgreSQL 16 | БД `radeya_analytics`, пользователь `radeya` |
+
+- Один VPS, один Nginx, SSL Let's Encrypt. Конфиги Nginx:
+  `/etc/nginx/sites-available/analytics` и `/etc/nginx/sites-available/radeya-landing`.
+- Железо: **1 ГБ RAM**, для сборки включён swap. Node 24, Bun 1.3.x.
+- Cron дёргает `POST /api/cron/dispatch` старой админки — авто-отправка заказов
+  поставщикам (`crontab -l`).
+- DNS у Tilda (`ns*.tildadns.com`): `radeya.kz` и `analytics.radeya.kz` — A-записи
+  на 194.238.42.140. `mail` и MX — почта, **не трогать**.
+- Старая админка обновляется `npm run deploy` в `~/radeya-analytics`
+  (`git pull` + `npm install` + `drizzle-kit push` + сборка + `pm2 restart`).
+  Лэндинг — `git pull`, затем `bun run build` в `radeya-landing`.
+
+### Команды обслуживания
+
+```bash
+pm2 status                        # процессы приложений
+pm2 logs <имя>                    # логи
+pm2 restart <имя>
+sudo systemctl status nginx       # запущен ли Nginx
+sudo nginx -t                     # проверить конфиг
+sudo systemctl reload nginx       # применить конфиг
+```
+
+**Сайт не открывается, `ERR_CONNECTION_REFUSED`** — почти всегда упал Nginx,
+чаще после перезагрузки: `sudo systemctl start nginx`. Если `nginx -t` пишет
+`host not found in upstream` — в `proxy_pass` заменить `http://localhost:PORT`
+на `http://127.0.0.1:PORT`. Чтобы Nginx поднимался сам, в `sudo systemctl edit nginx`:
+
+```ini
+[Unit]
+After=network-online.target
+Wants=network-online.target
+[Service]
+Restart=on-failure
+RestartSec=5s
+```
+
+затем `sudo systemctl daemon-reload`.
+
+### Переезд на radeya-mono — что учесть
+
+Плана деплоя ещё нет, это список того, что сломается, если просто удалить
+старую папку и положить новую.
+
+1. **Лэндинг лежит внутри папки старой админки.** Nginx раздаёт
+   `~/radeya-analytics/radeya-landing/dist`, API формы — оттуда же.
+   `rm -rf ~/radeya-analytics` уронит сайт `radeya.kz`. Лэндинг сначала
+   переносится в свою папку (и конфиг Nginx на неё), потом удаляется админка.
+2. **Cron отправки заказов поставщикам** бьёт в эндпоинт старой админки.
+   После её остановки он будет падать молча. Снять или перевести на наш
+   аналог — в `radeya-mono` его пока нет (см. `docs/telegram-bot.md`).
+3. **Два процесса вместо одного.** Старая админка — один Next.js на 3000.
+   У нас `front` (Next.js) и `server` (Express) — два процесса PM2 и два
+   `proxy_pass` (или `/api` на сервер, остальное на фронт). Порт 3001 занят
+   API лэндинга.
+4. **1 ГБ RAM.** Сборка Next.js и `tsc` сервера на таком сервере идут только
+   со swap и по очереди. Собирать локально и заливать готовое — вариант.
+5. **`shared/` отдаёт TypeScript-исходники** (см. «Известные ограничения»):
+   для продакшен-сборки сервера нужен бандлер (`tsup`) — до переезда.
+6. **База.** Наша — своя (PostgreSQL, Prisma-миграции `prisma migrate deploy`),
+   не `radeya_analytics`. Данные старой админки нужны ли — решить до удаления;
+   дамп перед удалением обязателен.
+7. **Basic Auth** на `analytics.radeya.kz` стоит в старой админке. У нас свой
+   вход с сессиями — Basic Auth в Nginx поверх него решить отдельно.
+8. **Пароль `radeya_app`** слабый (см. STATUS) — на сервере нужен длинный
+   случайный, и `.env` на сервере не в git.
+
+---
+
 ## Известные ограничения
 
 - `shared/` отдаёт TypeScript-исходники, а не собранный пакет. Для разработки этого хватает

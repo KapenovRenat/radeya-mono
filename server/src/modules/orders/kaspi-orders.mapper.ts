@@ -159,17 +159,19 @@ function countEntries(relationships: unknown): number {
   return Array.isArray(entries.data) ? entries.data.length : 0;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+// Разбор JSON Kaspi — общий для заказа и его позиций (kaspi-order-entries.mapper).
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function asString(value: unknown): string | null {
+export function asString(value: unknown): string | null {
   if (typeof value === 'number') return String(value);
 
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
 
-function asNumber(value: unknown): number | null {
+export function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
@@ -178,7 +180,7 @@ function asBoolean(value: unknown): boolean | null {
 }
 
 /** Деньги строкой: number на цене теряет тиын и складывается с ошибкой. */
-function asMoney(value: unknown): string | null {
+export function asMoney(value: unknown): string | null {
   const amount = asNumber(value);
 
   return amount === null ? null : amount.toFixed(2);

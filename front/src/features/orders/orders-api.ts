@@ -1,6 +1,7 @@
 import type { CreateOrderCommentRequest, KaspiOrdersPreview, OrderCommentDto,
-  OrderCommentsResponse, OrderListQuery, OrderListResponse, SyncKaspiOrdersRequest,
-  SyncKaspiOrdersResponse } from "@radeya/shared";
+  OrderCommentsResponse, OrderDetailsDto, OrderListQuery, OrderListResponse,
+  SyncKaspiOrdersRequest, SyncKaspiOrdersResponse,
+  SyncOrderEntriesResponse } from "@radeya/shared";
 
 import { baseApi } from "@/shared/api/base-api";
 
@@ -26,6 +27,29 @@ export const ordersApi = baseApi.injectEndpoints({
     getOrders: build.query<OrderListResponse, OrderListQuery>({
       query: (params) => ({ url: "/orders", params }),
       providesTags: ["Order"],
+    }),
+
+    /** Заказ целиком для окна заказа. Тег с id — сбрасывается загрузкой состава. */
+    getOrder: build.query<OrderDetailsDto, string>({
+      query: (orderId) => ({ url: `/orders/${orderId}` }),
+      providesTags: (_result, _error, orderId) => [{ type: "Order", id: orderId }],
+    }),
+
+    /**
+     * Загрузка состава заказа Kaspi — при первом открытии окна.
+     *
+     * Ответ сразу кладётся в кэш `getOrder`: заказ с составом уже пришёл,
+     * и перезапрашивать его вторым запросом незачем. Список сбрасывается —
+     * в строке стоит счётчик позиций.
+     */
+    syncOrderEntries: build.mutation<SyncOrderEntriesResponse, string>({
+      query: (orderId) => ({ url: `/orders/${orderId}/entries/sync`, method: "POST" }),
+      async onQueryStarted(orderId, { dispatch, queryFulfilled }): Promise<void> {
+        const { data } = await queryFulfilled.catch(() => ({ data: null }));
+
+        if (data) dispatch(ordersApi.util.upsertQueryData("getOrder", orderId, data.order));
+      },
+      invalidatesTags: (result) => (result && result.created > 0 ? ["Order"] : []),
     }),
 
     getKaspiOrders: build.query<KaspiOrdersPreview, KaspiOrdersQuery | void>({
@@ -75,4 +99,4 @@ export const ordersApi = baseApi.injectEndpoints({
 
 export const { useGetOrdersQuery, useGetKaspiOrdersQuery, useLazyGetKaspiOrdersQuery,
   useSyncKaspiOrdersMutation, useGetOrderCommentsQuery,
-  useAddOrderCommentMutation } = ordersApi;
+  useAddOrderCommentMutation, useGetOrderQuery, useSyncOrderEntriesMutation } = ordersApi;

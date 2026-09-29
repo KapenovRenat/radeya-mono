@@ -87,6 +87,14 @@ function previewUrl(images: CatalogImageDto[]): string | null {
 }
 
 /**
+ * Миниатюра товара из `Variant.kaspiImages` — та же, что в таблице каталога.
+ * Нужна и в составе заказа: одна картинка товара на весь дашборд.
+ */
+export function previewImageUrl(images: Prisma.JsonValue): string | null {
+  return previewUrl(readImages(images));
+}
+
+/**
  * Доступно = Остаток − Резерв + Ожидание — формула МойСклада, сверена на отчёте.
  * Не указанное слагаемое считается нулём, но если не указано ничего — это
  * «неизвестно», а не ноль.

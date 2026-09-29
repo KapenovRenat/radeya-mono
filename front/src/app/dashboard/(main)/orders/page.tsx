@@ -1,18 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { CATALOG_SEARCH_MAX_LENGTH, KASPI_ORDER_PERIODS,
   KASPI_ORDER_PERIOD_LABELS, SALES_POINT_TYPES } from "@radeya/shared";
 
 import { Button } from "@/components/button";
 import { DateRangePicker } from "@/components/date-range-picker";
+import { Dropdown, type DropdownOption } from "@/components/dropdown";
 import { Tables } from "@/components/tables";
 import { useGetKaspiOrdersQuery } from "@/features/orders/orders-api";
 import { useKaspiOrdersSync } from "@/features/orders/use-kaspi-orders-sync";
 import { useOrdersList } from "@/features/orders/use-orders-list";
 import { useGetSalesPointsQuery } from "@/features/sales-points/sales-points-api";
+import { OrderDetailsModal } from "./_components/order-details";
 import { OrderDictionaryFilters } from "./_components/order-dictionary-filters";
-import { orderColumnCount, OrderRow, OrderTableHead } from "./_components/order-row";
+import { orderColumnCount, OrderRow, OrderTableHead,
+  type OrderTableKind } from "./_components/order-row";
 
 /** За сколько дней тянуть сырьё в консоль. Больше — дольше ждать Kaspi при каждой загрузке. */
 const RAW_DAYS = 14;
@@ -21,17 +24,35 @@ export default function OrdersPage() {
   const sync = useKaspiOrdersSync();
   const orders = useOrdersList();
   const salesPoints = useGetSalesPointsQuery();
+  const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+
+  const points = salesPoints.data?.items ?? [];
+  const selectedPoint = points.find((point) => point.id === orders.salesPointIds[0]);
+  const { setSalesPointIds } = orders;
 
   /**
-   * Колонки офлайн-продажи прячутся, когда в фильтре выбрана площадка:
-   * у заказов Kaspi эти поля пустые, и восемь колонок из прочерков читать
-   * невозможно. Пока фильтр не выбран, показываем всё — в реестре тогда
-   * лежат заказы обоих видов.
+   * Реестр всегда про одну точку: «всех точек» нет — у площадки и офлайн-точки
+   * разные таблицы. По умолчанию Kaspi, найденный по типу, а не по названию:
+   * название точки можно переименовать, тип — нет.
    */
-  const selectedPoint = (salesPoints.data?.items ?? [])
-    .find((point) => point.id === orders.salesPointIds[0]);
-  const showOffline = selectedPoint === undefined
-    || selectedPoint.type === SALES_POINT_TYPES.OFFLINE;
+  useEffect(() => {
+    if (orders.salesPointIds.length > 0) return;
+
+    const kaspi = points.find((point) => point.type === SALES_POINT_TYPES.KASPI) ?? points[0];
+
+    if (kaspi) setSalesPointIds([kaspi.id]);
+  }, [points, orders.salesPointIds.length, setSalesPointIds]);
+
+  /** Вид таблицы — от вида точки: у офлайн-точки свои колонки и фильтры. */
+  const tableKind: OrderTableKind = selectedPoint?.type === SALES_POINT_TYPES.OFFLINE
+    ? "offline" : "marketplace";
+
+  const pointOptions: DropdownOption[] = points.map((point) => ({
+    value: point.id,
+    label: point.name,
+    // Закрытые точки в списке остаются — по ним смотрят заказы прошлых периодов.
+    ...(point.isActive ? {} : { note: "закрыта" }),
+  }));
 
   // Сырьё прямо из Kaspi — для разбора расхождений со складом. Запрос идёт
   // на площадку при каждой загрузке страницы, поэтому период короткий.
@@ -79,13 +100,15 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {/* Фильтры по спискам офлайн-точки стоят сразу под кнопками: они задают
-          разрез всего реестра, а поиск и период — уже уточнение внутри него. */}
-      <OrderDictionaryFilters
-        value={orders.dictionaryFilter}
-        onChange={orders.setDictionaryFilter}
-        disabled={sync.isRunning}
-      />
+      {/* Фильтры по спискам — только у офлайн-точки: у заказов площадки эти
+          поля всегда пустые, и любой выбор давал бы пустую таблицу. */}
+      {tableKind === "offline" && (
+        <OrderDictionaryFilters
+          value={orders.dictionaryFilter}
+          onChange={orders.setDictionaryFilter}
+          disabled={sync.isRunning}
+        />
+      )}
 
       {sync.error && <p role="alert" className="text-sm text-destructive">{sync.error}</p>}
 
@@ -111,27 +134,20 @@ export default function OrdersPage() {
             className="w-full rounded-md border border-border bg-background px-3 py-2" />
         </label>
 
-        {/* Пустое значение — «все точки», а не «ни одной»: сняв фильтр,
-            человек ждёт полный реестр, а не пустую таблицу. Закрытые точки
-            в списке остаются — по ним смотрят заказы за прошлые периоды. */}
-        <label className="min-w-56 space-y-1">
+        <div className="min-w-56 space-y-1">
           <span className="text-sm">Точка продаж</span>
-          <select
-            value={orders.salesPointIds[0] ?? ""}
-            disabled={sync.isRunning}
-            onChange={(event) => {
-              orders.setSalesPointIds(event.target.value === "" ? [] : [event.target.value]);
-            }}
-            className="h-[42px] w-full rounded-md border border-border bg-background px-3"
-          >
-            <option value="">Все точки</option>
-            {(salesPoints.data?.items ?? []).map((point) => (
-              <option key={point.id} value={point.id}>
-                {point.name}{point.isActive ? "" : " (закрыта)"}
-              </option>
-            ))}
-          </select>
-        </label>
+          <Dropdown
+            mode="select"
+            searchable
+            searchPlaceholder="Поиск точки"
+            label="Точка продаж"
+            placeholder="Выберите точку"
+            options={pointOptions}
+            value={orders.salesPointIds[0]}
+            onChange={(id) => orders.setSalesPointIds([id])}
+            disabled={sync.isRunning || pointOptions.length === 0}
+          />
+        </div>
 
         <DateRangePicker
           label="Дата заказа"
@@ -150,15 +166,17 @@ export default function OrdersPage() {
         isLoading={orders.isLoading}
         error={orders.error}
         onRetry={orders.reload}
-        head={<OrderTableHead showOffline={showOffline} />}
-        columnCount={orderColumnCount(showOffline)}
+        head={<OrderTableHead kind={tableKind} />}
+        columnCount={orderColumnCount(tableKind)}
         caption="Заказы"
         emptyLabel="Заказы не найдены"
       >
         {orders.items.map((order) => (
-          <OrderRow key={order.id} order={order} showOffline={showOffline} />
+          <OrderRow key={order.id} order={order} kind={tableKind} onOpen={setOpenOrderId} />
         ))}
       </Tables>
+
+      <OrderDetailsModal orderId={openOrderId} onClose={() => setOpenOrderId(null)} />
     </div>
   );
 }

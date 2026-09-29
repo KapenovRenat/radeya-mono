@@ -35,7 +35,10 @@ export function useOrdersList() {
   });
 
   const isSearchPending = search.trim() !== query.search;
-  const orders = useGetOrdersQuery(query, { skip: isSearchPending });
+  // Реестр всегда про одну точку: пока её не выбрали, не грузим ничего —
+  // иначе на миг приехали бы заказы всех точек под колонками площадки.
+  const noSalesPoint = !query.salesPointId || query.salesPointId.length === 0;
+  const orders = useGetOrdersQuery(query, { skip: isSearchPending || noSalesPoint });
 
   useEffect(() => {
     if (!isSearchPending) return;
@@ -63,16 +66,17 @@ export function useOrdersList() {
   }, []);
 
   /**
-   * Разрезы отчёта: точки продаж и продавцы.
-   *
-   * Пустой список означает «все», а не «ни одного»: сняв последнюю галку,
-   * человек ждёт полный реестр, а не пустую таблицу. Поэтому пустой массив
-   * в запрос не уходит вовсе.
+   * Точка продаж. Смена точки сбрасывает фильтры справочников: они есть только
+   * у офлайн-точки, и выбранный там «Наличка» на Kaspi дал бы пустую таблицу.
    */
   const setSalesPointIds = useCallback((ids: string[]) => {
     setQuery((previous) => ({
       ...previous,
       salesPointId: ids.length > 0 ? ids : undefined,
+      deliveryStatusId: undefined,
+      paymentMethodId: undefined,
+      shipmentOriginId: undefined,
+      customerSourceId: undefined,
       page: 1,
     }));
   }, []);
@@ -129,7 +133,7 @@ export function useOrdersList() {
     /** Выбранное значение списка или "" — для управляемого select. */
     dictionaryFilter: (field: DictionaryFilterField) => query[field]?.[0] ?? "",
     setDictionaryFilter,
-    isLoading: orders.isLoading || orders.isFetching || isSearchPending,
+    isLoading: orders.isLoading || orders.isFetching || isSearchPending || noSalesPoint,
     error: orders.isError ? apiErrorMessage(orders.error, "Не удалось загрузить заказы") : null,
     reload: () => { if (!isSearchPending) void orders.refetch(); },
   };
