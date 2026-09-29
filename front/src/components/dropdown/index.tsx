@@ -33,7 +33,30 @@ export interface DropdownOption {
   disabled?: boolean;
 }
 
-export interface DropdownProps
+/** Выбор одного значения — по умолчанию. */
+interface DropdownSingleProps {
+  multiple?: false;
+  value?: string;
+  onChange?: (value: string) => void;
+}
+
+/**
+ * Выбор нескольких значений: `value` — массив, список не закрывается по клику,
+ * сверху «Выбрано: N · Сбросить». Пустой массив — ничего не выбрано.
+ *
+ * Отдельной веткой типа, а не флагом рядом с `value: string`: иначе можно
+ * было бы передать массив в одиночный выбор или строку в множественный,
+ * и ошибка всплыла бы только на экране.
+ */
+interface DropdownMultipleProps {
+  multiple: true;
+  value?: string[];
+  onChange?: (value: string[]) => void;
+}
+
+export type DropdownProps = DropdownBaseProps & (DropdownSingleProps | DropdownMultipleProps);
+
+interface DropdownBaseProps
   extends Omit<ComponentPropsWithoutRef<"div">, "children" | "onChange"> {
   /**
    * Что делает компонент.
@@ -50,10 +73,8 @@ export interface DropdownProps
   /** Пункты-действия. Режим `menu`. */
   items?: DropdownItem[];
 
-  /** Варианты на выбор. Режим `select`. */
+  /** Варианты на выбор. Режим `select`; выбранное — `value`, см. DropdownSingleProps и DropdownMultipleProps. */
   options?: DropdownOption[];
-  value?: string;
-  onChange?: (value: string) => void;
   /** Что на кнопке, когда ничего не выбрано. */
   placeholder?: string;
 
@@ -90,12 +111,32 @@ export interface DropdownProps
  * тем же занят календарь выбора периода, и копия этой логики разъехалась бы
  * с оригиналом на первой же правке.
  */
-export function Dropdown({
+export function Dropdown(allProps: DropdownProps) {
+  const {
+    // Выбор разбирается ниже из allProps целиком: только так TypeScript
+    // помнит, что массив приходит вместе с multiple, а строка — без него.
+    multiple: _multiple,
+    value: _value,
+    onChange: _onChange,
+    ...rest
+  } = allProps;
+
+  return <DropdownView {...rest} selection={allProps} />;
+}
+
+/** Выбранные значения одним видом для обоих режимов. */
+function selectedValues(selection: DropdownSingleProps | DropdownMultipleProps): string[] {
+  if (selection.multiple) return selection.value ?? [];
+
+  // Пустая строка — тоже значение: у фильтров это вариант «Все», и его галочка должна гореть.
+  return selection.value === undefined ? [] : [selection.value];
+}
+
+function DropdownView({
+  selection,
   mode = "menu",
   items = [],
   options = [],
-  value,
-  onChange,
   placeholder = "Не выбрано",
   searchable = false,
   searchPlaceholder = "Поиск",
@@ -108,7 +149,7 @@ export function Dropdown({
   disabled = false,
   className,
   ...props
-}: DropdownProps) {
+}: DropdownBaseProps & { selection: DropdownSingleProps | DropdownMultipleProps }) {
   const panel = useAnchoredPanel(align);
   const listId = useId();
   const { isOpen, panelRef: list, close } = panel;
@@ -134,7 +175,29 @@ export function Dropdown({
   );
 
   const isEmpty = mode === "select" ? shownOptions.length === 0 : shownItems.length === 0;
-  const selected = options.find((option) => option.value === value);
+  const multiple = selection.multiple === true;
+  const values = selectedValues(selection);
+  const isSelected = (option: DropdownOption) => values.includes(option.value);
+  const picked = options.filter(isSelected);
+
+  // На кнопке: ничего — подсказка, одно — его название, несколько — «Склады: 3».
+  const triggerText = picked.length === 0
+    ? placeholder
+    : picked.length === 1 ? picked[0].label : `${label}: ${picked.length}`;
+
+  const choose = (option: DropdownOption) => {
+    if (!selection.multiple) {
+      close();
+      selection.onChange?.(option.value);
+
+      return;
+    }
+
+    // Список не закрываем: несколько складов отмечают подряд.
+    selection.onChange?.(isSelected(option)
+      ? values.filter((value) => value !== option.value)
+      : [...values, option.value]);
+  };
 
   // Фокус на первый доступный элемент: с клавиатуры список бесполезен без этого.
   // При включённом поиске — на поле ввода: человек открыл его, чтобы печатать.
@@ -179,14 +242,16 @@ export function Dropdown({
         aria-expanded={isOpen}
         aria-controls={isOpen ? listId : undefined}
         aria-label={label}
-        title={mode === "select" ? (selected?.label ?? placeholder) : label}
+        title={mode === "select"
+          ? (picked.length > 1 ? picked.map((option) => option.label).join(", ") : triggerText)
+          : label}
         onClick={panel.toggle}
       >
         {trigger ?? (mode === "select"
           ? (
             <>
-              <span className={cn(styles.triggerText, selected === undefined && styles.muted)}>
-                {selected?.label ?? placeholder}
+              <span className={cn(styles.triggerText, picked.length === 0 && styles.muted)}>
+                {triggerText}
               </span>
               <ChevronDown size={16} aria-hidden="true" className={styles.chevron} />
             </>
@@ -230,12 +295,28 @@ export function Dropdown({
             />
           )}
 
+          {/* Счётчик и сброс — тоже вне списка, по той же причине, что и поиск. */}
+          {multiple && (
+            <div className={styles.multiHead}>
+              <span>Выбрано: {values.length}</span>
+              <button
+                type="button"
+                className={styles.reset}
+                disabled={values.length === 0}
+                onClick={() => { if (selection.multiple) selection.onChange?.([]); }}
+              >
+                Сбросить
+              </button>
+            </div>
+          )}
+
           {/* Поле поиска стоит вне списка: внутри `role="listbox"` может лежать
               только `role="option"`, и скринридер объявил бы поле вариантом. */}
           <div
             id={listId}
             role={mode === "select" ? "listbox" : "menu"}
             aria-label={label}
+            aria-multiselectable={multiple || undefined}
             className={styles.list}
           >
             {isEmpty && <p className={styles.empty}>{emptyLabel}</p>}
@@ -245,16 +326,13 @@ export function Dropdown({
                 key={option.value}
                 type="button"
                 role="option"
-                aria-selected={option.value === value}
-                className={cn(styles.item, option.value === value && styles.selected)}
+                aria-selected={isSelected(option)}
+                className={cn(styles.item, isSelected(option) && styles.selected)}
                 disabled={option.disabled}
-                onClick={() => {
-                  close();
-                  onChange?.(option.value);
-                }}
+                onClick={() => choose(option)}
               >
-                <span className={styles.check} aria-hidden="true">
-                  {option.value === value && <Check size={14} />}
+                <span className={cn(styles.check, multiple && styles.checkBox)} aria-hidden="true">
+                  {isSelected(option) && <Check size={14} />}
                 </span>
 
                 {option.label}

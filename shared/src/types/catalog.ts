@@ -1,4 +1,4 @@
-import type { CatalogPageSize } from '../constants/catalog';
+import type { CatalogPageSize, CatalogSortKey, SortOrder } from '../constants/catalog';
 import type { Currency } from '../constants/currencies';
 import type { ListingStatus, SalesChannel } from '../constants/sales-channels';
 import type { PaginatedResponse } from './api';
@@ -46,6 +46,18 @@ export interface CatalogQuery {
   search?: string;
   /** Выбранная папка вместе с подпапками. Без поля — весь каталог. */
   categoryId?: string;
+  /**
+   * Товары, назначенные хотя бы на один из складов (есть строка склада,
+   * даже с нулевым остатком). Заодно в строках остаются только эти склады.
+   * Пусто — все. В адресе — через запятую.
+   */
+  warehouseIds?: string[];
+  /** Товары этих поставщиков; CATALOG_NO_SUPPLIER — без поставщика. Пусто — все. */
+  supplierIds?: string[];
+  /** Сортировка по одной колонке. Без поля — статус, название, артикул. */
+  sort?: CatalogSortKey;
+  /** По умолчанию `desc` — от большего к меньшему. */
+  order?: SortOrder;
 }
 export interface CatalogListingDto {
   id: string;

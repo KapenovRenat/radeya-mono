@@ -45,7 +45,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `PATCH /api/categories/order` | Порядок папок одного уровня: полный список id, пишет `sortOrder` | ADMIN | `server/src/modules/categories/categories.controller.ts` |
 | `PATCH /api/categories/:id` | Переименовать папку, сохраняя родителя | ADMIN | `server/src/modules/categories/categories.controller.ts` |
 | `DELETE /api/categories/:id` | Удалить только пустую папку | ADMIN | `server/src/modules/categories/categories.controller.ts` |
-| `GET /api/products/variants` | Серверный поиск, поддерево категории, страницы 10/20/50; в строке все поля товара, включая закупку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
+| `GET /api/products/variants` | Серверный поиск, поддерево категории, фильтры по складам и поставщикам, сортировка по одной колонке, страницы 10/20/50; в строке все поля товара, включая закупку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
 | `PATCH /api/products/category` | Перенести товары со всеми модификациями в папку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
 | `POST /api/products/moysklad/preview` | Разбор выгрузки МойСклада: закупка, поставщик, сроки предзаказа по складам; без записи | ADMIN | `server/src/modules/products/moysklad.controller.ts` |
 | `POST /api/products/moysklad/commit` | Запись закупки, поставщика и сроков предзаказа в найденные артикулы; новых товаров не заводит; история по каждому товару | ADMIN | `server/src/modules/products/moysklad.controller.ts` |
@@ -138,7 +138,8 @@ shared/    # Общий код: типы контрактов, констант�
 | categories | `renameCategory(id, name)` | Переименовать с проверкой дублей; before/after для аудита | `server/src/modules/categories/categories.service.ts` |
 | categories | `reorderCategories(input)` | Порядок уровня: сверяет полный состав, пишет `sortOrder` только изменившимся | `server/src/modules/categories/categories.service.ts` |
 | categories | `deleteCategory(id)` | Заблокировать запись и удалить только без товаров/подпапок | `server/src/modules/categories/categories.service.ts` |
-| products | `listCatalog(input)` | Страница артикулов с поиском и фильтром по поддереву | `server/src/modules/products/catalog.service.ts` |
+| products | `listCatalog(input)` | Страница артикулов: id и порядок из SQL, строки из Prisma; при фильтре складов в строке только выбранные склады | `server/src/modules/products/catalog.service.ts` |
+| products | `selectCatalogPage(tx, input, category)` | Параметризованный SQL: поиск, папка, склады, поставщики, сортировка по сумме складов / цене Kaspi / закупке, пустые в конце; счётчик и страница | `server/src/modules/products/catalog.query.ts` |
 | products | `moveProductsToCategory(input, meta)` | Атомарный перенос Product, старые категории для аудита, история папки по каждому товару | `server/src/modules/products/catalog.service.ts` |
 | products | `toCatalogRow(row, now)` | Полный DTO строки каталога: все поля артикула, точные цены, галерея, закупка и себестоимость (только дашборд); по складу — доступно и дни на складе, посчитанные при выдаче | `server/src/modules/products/catalog.mapper.ts` |
 | products | `parseMoyskladSheet(wb, sheet, warehouses)` | Разбор выгрузки МойСклада: колонки по заголовкам, отбор по типу строки, цена-строка с запятой, сроки предзаказа по складам | `server/src/modules/products/moysklad.parser.ts` |
@@ -193,7 +194,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `/dashboard` | Админка — сводка (в меню «Статистика»); проверяет связь с API, кнопка «Создать офлайн точку продажи» с модалкой | `front/src/app/dashboard/(main)/page.tsx` |
 | `/dashboard/login` | Вход сотрудника в админку | `front/src/app/dashboard/(auth)/login/page.tsx` |
 | `/dashboard/accounts` | Аккаунты и История: таблица сотрудников, создание, журнал действий | `front/src/app/dashboard/(main)/accounts/page.tsx` |
-| `/dashboard/products` | Каталог: два уровня папок с поиском и порядком, серверный поиск, таблица с выделением и переносом в папку | `front/src/app/dashboard/(main)/products/page.tsx` |
+| `/dashboard/products` | Каталог: два уровня папок с поиском и порядком, серверный поиск, фильтры складов и поставщиков (мультивыбор), сортировка стрелками в шапке, таблица с выделением и переносом в папку | `front/src/app/dashboard/(main)/products/page.tsx` |
 | `/dashboard/orders` | Заказы: две кнопки синхронизации с Kaspi, поиск по номеру, фильтр по точке продаж, выбор периода, таблица. При загрузке печатает сырьё Kaspi в консоль (отладка, убрать после сверки статусов) | `front/src/app/dashboard/(main)/orders/page.tsx` |
 | `/dashboard/imports` | Импорты: блоки «Excel продаж офлайн-точки», «Поставщики из МойСклада», «Товары из МойСклада», «Остатки из МойСклада» (склад, файл, предпросмотр, список на обнуление, запись). Только ADMIN | `front/src/app/dashboard/(main)/imports/page.tsx` |
 | `/dashboard/kaspi-sync` | Синхронизация с Kaspi: загрузка выгрузок, предпросмотр каталога | `front/src/app/dashboard/(main)/kaspi-sync/page.tsx` |
@@ -218,7 +219,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `Tables` | Таблица с children-строками, head и серверной пагинацией 10/20/50 | `front/src/components/tables/page.tsx`, `front/src/components/tables/style.module.scss` |
 | `ProductsLayout` | Защита раздела товаров ролью ADMIN | `front/src/app/dashboard/(main)/products/layout.tsx` |
 | `Loader` | Сегментное кольцо #f23428; size задаёт диаметр, hideLabel скрывает текст; label по умолчанию «Загрузка ...», подсветка букв каждые 160 мс | `front/src/components/loader/tree-list.tsx`, `front/src/components/loader/style.module.scss` |
-| `Dropdown` | Два режима через проп `mode`: `menu` — меню на три точки (пункты в `items`), `select` — выбор значения (варианты в `options`, `value`/`onChange`, галочка у выбранного, пометка «закрыто»). Проп `searchable` включает поиск по списку. Клик вне, Escape, стрелки; из поля поиска стрелки уводят в список. Список в портале с `position: fixed`, закрывается при прокрутке | `front/src/components/dropdown/index.tsx`, `front/src/components/dropdown/style.module.scss` |
+| `Dropdown` | Два режима через проп `mode`: `menu` — меню на три точки (пункты в `items`), `select` — выбор значения (варианты в `options`, `value`/`onChange`, галочка у выбранного, пометка «закрыто»). `multiple` — мультивыбор: `value: string[]`, список не закрывается, «Выбрано: N · Сбросить». Проп `searchable` включает поиск по списку. Клик вне, Escape, стрелки; из поля поиска стрелки уводят в список. Список в портале с `position: fixed`, закрывается при прокрутке | `front/src/components/dropdown/index.tsx`, `front/src/components/dropdown/style.module.scss` |
 | `Checkbox` | Чекбокс поверх нативного input, с частичным состоянием (`indeterminate`) | `front/src/components/checkbox/` |
 | `Modal` | Модальное окно на нативном `<dialog>`: шапка с заголовком и крестиком, тело из children, необязательный подвал. Закрытие крестиком, Escape и кликом по подложке; выделение текста мимо окна не закрывает | `front/src/components/modal/` |
 | `DateRangePicker` | Календарь выбора периода: месяц листается отдельно от выбора, подсветка диапазона по курсору, «Сбросить» и «Применить» | `front/src/components/date-range-picker/` |
@@ -347,7 +348,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `useGetWarehousesQuery`, `useImportKaspiWarehousesMutation` | Справочник складов; тег `Warehouse` | `front/src/features/warehouses/warehouses-api.ts` |
 | `useSaveWarehouses()` | Сохранение складов из выгрузки или кабинета: итог и ошибка | `front/src/features/warehouses/use-save-warehouses.ts` |
 | `TreeFolderProps` | Контракт управляемого дерева категорий: выбор, раскрытие, действия, `onMove`, поиск | `front/src/components/tree-folder/page.tsx` |
-| `DropdownProps`, `DropdownItem`, `DropdownOption` | Контракт меню и выбора: `mode`, пункты (`label`, `onSelect`, `icon`, `disabled`, `danger`), варианты (`value`, `label`, `note`, `disabled`), `searchable`, `placeholder`, `emptyLabel`, свой триггер, выравнивание | `front/src/components/dropdown/index.tsx` |
+| `DropdownProps`, `DropdownItem`, `DropdownOption` | Контракт меню и выбора: `mode`, `multiple` (две ветки типа — строка или массив), пункты (`label`, `onSelect`, `icon`, `disabled`, `danger`), варианты (`value`, `label`, `note`, `disabled`), `searchable`, `placeholder`, `emptyLabel`, свой триггер, выравнивание | `front/src/components/dropdown/index.tsx` |
 | `CheckboxProps` | Контракт чекбокса: `label`, `indeterminate` и нативные атрибуты input | `front/src/components/checkbox/page.tsx` |
 | `ModalProps` | Контракт модалки: `open`, `onClose`, `title`, `children`, `footer`, `className` для ширины | `front/src/components/modal/index.tsx` |
 | `filterTree(items, search)` | Отбор папок по названию с родителями найденных подпапок; общий для панели и модалки | `front/src/features/categories/filter-tree.ts` |
@@ -359,6 +360,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `LoaderProps` | label, size, hideLabel, className и нативные атрибуты span для Loader | `front/src/components/loader/tree-list.tsx` |
 | `cn()` | Склейка Tailwind-классов | `front/src/lib/utils.ts` |
 | `CATALOG_PAGE_SIZES`, `CATALOG_DEFAULT_PAGE_SIZE` | Серверные размеры страниц 10/20/50, по умолчанию 20 | `shared/src/constants/catalog.ts` |
+| `CATALOG_SORT_KEYS`, `CatalogSortKey`, `SORT_ORDERS`, `SortOrder` | Колонки сортировки каталога (закрытый список) и направление | `shared/src/constants/catalog.ts` |
+| `CATALOG_NO_SUPPLIER`, `CATALOG_FILTER_MAX_VALUES` | Значение «без поставщика» в фильтре и предел значений одного фильтра | `shared/src/constants/catalog.ts` |
 | `CATALOG_SEARCH_MAX_LENGTH`, `CATEGORY_NAME_MAX_LENGTH`, `CATALOG_MOVE_MAX_PRODUCTS` | Общие лимиты поиска, имени папки и переноса | `shared/src/constants/catalog.ts` |
 | `ALL_PRODUCTS_LABEL` | Название служебного пункта «Все товары» | `shared/src/constants/catalog.ts` |
 | `CatalogPageSize` | Тип разрешённого размера страницы | `shared/src/constants/catalog.ts` |
@@ -386,7 +389,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `useOrdersList()` | Список заказов: серверный поиск по номеру с задержкой 300 мс, период, фильтры по точкам, продавцам и четырём справочникам, страницы | `front/src/features/orders/use-orders-list.ts` |
 | `DictionaryFilterField` | Поля запроса заказов, соответствующие пополняемым спискам | `front/src/features/orders/use-orders-list.ts` |
 | `OrderListQuery`, `OrderRowDto`, `OrderListResponse` | Контракт списка заказов | `shared/src/types/orders.ts` |
-| `useProductCatalog()` | Текущий ответ API, выбор/раскрытие папок, onCategoryCreated/onCategoryDeleted, поиск по товарам и по папкам, страницы и перенос | `front/src/features/products/use-product-catalog.ts` |
+| `useProductCatalog()` | Текущий ответ API, выбор/раскрытие папок, onCategoryCreated/onCategoryDeleted, поиск по товарам и по папкам, фильтры складов и поставщиков, сортировка по кругу (`toggleSort`), страницы и перенос | `front/src/features/products/use-product-catalog.ts` |
 
 ### 1.7. Фоновые задачи и воркеры
 

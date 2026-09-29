@@ -1,12 +1,16 @@
 import type { ReactNode } from "react";
-import { Pencil } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Pencil } from "lucide-react";
 import {
+  CATALOG_SORT_KEYS,
   CURRENCY_LABELS,
   LISTING_STATUSES,
   LISTING_STATUS_LABELS,
   SALES_CHANNELS,
   SALES_CHANNEL_LABELS,
+  SORT_ORDERS,
   type CatalogRowDto,
+  type CatalogSortKey,
+  type SortOrder,
 } from "@radeya/shared";
 
 import { Checkbox } from "@/components/checkbox";
@@ -22,29 +26,31 @@ import styles from "./catalog-row.module.scss";
  * Галка выделения и меню действий в этот список не входят: подписей у них нет,
  * и разметка у них своя.
  */
-const COLUMNS = [
+const COLUMNS: { title: string; className: string; sort?: CatalogSortKey }[] = [
   { title: "Статус", className: styles.colStatus },
   { title: "Фото", className: styles.colImage },
   { title: "Товар", className: styles.colName },
   { title: "Артикул", className: styles.colSku },
   // Цена принадлежит каналу, а не товару: на сайте она будет своя.
-  { title: "Цена " + SALES_CHANNEL_LABELS[SALES_CHANNELS.KASPI], className: styles.colPrice },
+  { title: "Цена " + SALES_CHANNEL_LABELS[SALES_CHANNELS.KASPI], className: styles.colPrice,
+    sort: CATALOG_SORT_KEYS.PRICE },
   // Закупка и поставщик приезжают из МойСклада. Валюта у закупки своя
   // и в подпись колонки не выносится: у соседних строк она разная.
-  { title: "Закупка", className: styles.colPurchase },
+  { title: "Закупка", className: styles.colPurchase, sort: CATALOG_SORT_KEYS.PURCHASE_PRICE },
   // Себестоимость всегда в тенге — символ стоит у суммы, как у закупки.
   { title: "Себестоимость", className: styles.colPurchase },
   { title: "Поставщик", className: styles.colSupplier },
   // Склад и его цифры — отдельными колонками, но строки внутри ячеек идут
   // в одном порядке: первая строка каждой колонки — первый склад.
+  // Сортировка по ним — по сумме складов (при фильтре — выбранных).
   { title: "Склады", className: styles.colStock },
-  { title: "Остаток", className: styles.colStockNum },
-  { title: "Резерв", className: styles.colStockNum },
-  { title: "Ожидание", className: styles.colStockNum },
-  { title: "Доступно", className: styles.colStockNum },
-  { title: "Предзаказ", className: styles.colStockNum },
-  { title: "Дней на складе", className: styles.colStockNum },
-] as const;
+  { title: "Остаток", className: styles.colStockNum, sort: CATALOG_SORT_KEYS.QUANTITY },
+  { title: "Резерв", className: styles.colStockNum, sort: CATALOG_SORT_KEYS.RESERVED },
+  { title: "Ожидание", className: styles.colStockNum, sort: CATALOG_SORT_KEYS.EXPECTED },
+  { title: "Доступно", className: styles.colStockNum, sort: CATALOG_SORT_KEYS.AVAILABLE },
+  { title: "Предзаказ", className: styles.colStockNum, sort: CATALOG_SORT_KEYS.PRE_ORDER_DAYS },
+  { title: "Дней на складе", className: styles.colStockNum, sort: CATALOG_SORT_KEYS.DAYS_ON_STOCK },
+];
 
 type Stock = CatalogRowDto["stocks"][number];
 
@@ -84,10 +90,20 @@ interface CatalogTableHeadProps {
   someSelected: boolean;
   onSelectAll: (selected: boolean) => void;
   disabled?: boolean;
+  /** Текущая сортировка; null — порядок по умолчанию. */
+  sort: CatalogSortKey | null;
+  order: SortOrder;
+  onSort: (key: CatalogSortKey) => void;
+}
+
+/** Подпись для скринридера и подсказки: что сделает следующий клик. */
+function nextSortHint(active: boolean, order: SortOrder): string {
+  if (!active) return "Сортировать от большего к меньшему";
+  return order === SORT_ORDERS.DESC ? "Сортировать от меньшего к большему" : "Убрать сортировку";
 }
 
 export function CatalogTableHead({ allSelected, someSelected, onSelectAll,
-  disabled = false }: CatalogTableHeadProps) {
+  disabled = false, sort, order, onSort }: CatalogTableHeadProps) {
   return (
     <tr>
       <th scope="col" className={styles.colSelect}>
@@ -100,9 +116,36 @@ export function CatalogTableHead({ allSelected, someSelected, onSelectAll,
         />
       </th>
 
-      {COLUMNS.map((column) => (
-        <th key={column.title} scope="col" className={column.className}>{column.title}</th>
-      ))}
+      {COLUMNS.map((column) => {
+        if (column.sort === undefined) {
+          return <th key={column.title} scope="col" className={column.className}>{column.title}</th>;
+        }
+
+        const key = column.sort;
+        const active = sort === key;
+        const Arrow = !active ? ArrowUpDown : order === SORT_ORDERS.DESC ? ArrowDown : ArrowUp;
+
+        return (
+          <th
+            key={column.title}
+            scope="col"
+            className={column.className}
+            aria-sort={!active ? "none" : order === SORT_ORDERS.DESC ? "descending" : "ascending"}
+          >
+            {/* Кнопка на всю подпись, а не только на стрелку: в стрелку
+                шириной в 14 пикселей попасть мышью трудно. */}
+            <button
+              type="button"
+              className={cn(styles.sortButton, active && styles.sortActive)}
+              title={nextSortHint(active, order)}
+              onClick={() => onSort(key)}
+            >
+              {column.title}
+              <Arrow size={14} aria-hidden="true" className={styles.sortIcon} />
+            </button>
+          </th>
+        );
+      })}
 
       {/* Подписи у колонки действий нет, но ячейка в шапке нужна: без неё
           съедет выравнивание и закреплённое меню встанет не под своей колонкой. */}

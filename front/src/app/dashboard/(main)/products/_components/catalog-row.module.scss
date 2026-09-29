@@ -77,14 +77,58 @@ th.colActions { background: var(--muted); }
 .dotOn { background: var(--status-on-sale, oklch(0.62 0.17 145)); }
 .dotOff { background: var(--status-off-sale, var(--destructive)); }
 
+/* ── Сортировка в шапке ─────────────────────────────────── */
+
+/* Кнопка выглядит как подпись колонки: сортировка — свойство заголовка,
+   а не отдельный элемент управления рядом с ним. */
+.sortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+
+  &:hover { color: var(--foreground); }
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 2px; }
+}
+
+.sortIcon {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+/* Активная сортировка заметна и без стрелки: колонка, по которой отсортирован
+   список, должна находиться взглядом сразу. */
+.sortActive {
+  color: var(--foreground);
+  font-weight: 600;
+
+  .sortIcon { color: var(--foreground); }
+}
+
 /* ── Фото ───────────────────────────────────────────────── */
 
-.colImage { width: 5rem; }
+/* Ширина ячейки держится min-width: широкая таблица ужимает колонки,
+   и простой width здесь только пожелание. */
+.colImage {
+  width: 5rem;
+  min-width: 5rem;
+}
 
 .image,
 .noImage {
   display: block;
+  flex-shrink: 0;
   width: 4rem;
+  min-width: 4rem;
+  /* preflight Tailwind ставит img { max-width: 100% }: ужатая ячейка
+     сжимала ширину картинки, высота оставалась — квадрат становился полосой. */
+  max-width: none;
   height: 4rem;
   /* Квадрат держится на aspect-ratio, а не только на height: preflight
      Tailwind ставит img { height: auto } и в этой сборке перебивает модуль.

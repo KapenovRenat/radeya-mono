@@ -4,46 +4,43 @@ import { prisma } from '../../db/client';
 import { NotFoundError } from '../../lib/errors';
 import { diffFields, recordHistory, type HistoryMeta } from '../../lib/history';
 import { catalogRowSelect, toCatalogRow } from './catalog.mapper';
+import { selectCatalogPage } from './catalog.query';
 import type { CatalogInput, MoveProductsInput } from './catalog.schemas';
 
+/**
+ * Страница каталога: поиск, папка, фильтры по складам и поставщикам, сортировка.
+ * Порядок и id строк считает SQL (см. catalog.query.ts), строки — Prisma.
+ */
 export async function listCatalog(input: CatalogInput): Promise<CatalogResponse> {
   // Страница и счётчик относятся к одному снимку, даже если параллельно идёт импорт.
   return prisma.$transaction(async (tx) => {
-    const conditions: Prisma.VariantWhereInput[] = [];
+    let category: { id: string; path: string } | null = null;
     if (input.categoryId) {
-      const category = await tx.category.findUnique({ where: { id: input.categoryId },
+      category = await tx.category.findUnique({ where: { id: input.categoryId },
         select: { id: true, path: true } });
       if (!category) throw new NotFoundError('Категория не найдена');
-      conditions.push({ product: { category: { OR: [
-        { id: category.id }, { path: { startsWith: category.path + category.id + '/' } },
-      ] } } });
     }
-    if (input.search) {
-      // contains использует LIKE: пользовательские % и _ должны остаться символами.
-      const contains = input.search.replace(/[\\%_]/g, (char) => '\\' + char);
-      const text = { contains, mode: 'insensitive' as const };
-      conditions.push({ OR: [ { sku: text }, { product: { name: text } },
-        { kaspiMasterTitle: text }, { kaspiTitle: text } ] });
-    }
-    const where: Prisma.VariantWhereInput = { AND: conditions };
-    const total = await tx.variant.count({ where });
-    const totalPages = Math.ceil(total / input.pageSize);
-    // После переноса последней строки из папки возвращаем последнюю непустую страницу.
-    const page = Math.min(input.page, Math.max(1, totalPages));
-    // Сначала то, что продаётся, внутри — по алфавиту. `status: 'asc'` даёт
-    // ON_SALE первыми потому, что Postgres сортирует enum по порядку
-    // объявления, а ON_SALE в schema.prisma объявлен раньше OFF_SALE.
-    // Переставите значения в enum — сортировка поедет молча.
-    //
-    // `sku` третьим ключом обязателен: у товаров с одинаковым названием без
-    // него порядок между запросами не определён, и один артикул может попасть
-    // сразу на две страницы, а другой — ни на одну.
-    const rows = await tx.variant.findMany({ where, select: catalogRowSelect,
-      orderBy: [{ status: 'asc' }, { product: { name: 'asc' } }, { sku: 'asc' }],
-      skip: (page - 1) * input.pageSize, take: input.pageSize });
+
+    const { ids, total, page } = await selectCatalogPage(tx, input, category);
+
+    // При фильтре по складам в строке остаются только выбранные склады:
+    // иначе колонка «Остаток» показывала бы склад, которого человек не просил.
+    const stockWhere: Prisma.VariantStockWhereInput | undefined = input.warehouseIds.length === 0
+      ? undefined : { warehouseId: { in: input.warehouseIds } };
+    const select = { ...catalogRowSelect,
+      stocks: { ...catalogRowSelect.stocks, where: stockWhere } };
+    const rows = await tx.variant.findMany({ where: { id: { in: ids } }, select });
+
+    // findMany порядок не сохраняет — раскладываем по порядку из SQL.
+    const byId = new Map(rows.map((row) => [row.id, row]));
     const now = new Date();
-    return { items: rows.map((row) => toCatalogRow(row, now)), total, page,
-      pageSize: input.pageSize, totalPages };
+    const items = ids.flatMap((id) => {
+      const row = byId.get(id);
+      return row === undefined ? [] : [toCatalogRow(row, now)];
+    });
+
+    return { items, total, page, pageSize: input.pageSize,
+      totalPages: Math.ceil(total / input.pageSize) };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
 

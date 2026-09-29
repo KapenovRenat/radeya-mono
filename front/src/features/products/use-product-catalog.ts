@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ALL_PRODUCTS_LABEL, CATALOG_DEFAULT_PAGE_SIZE, CATALOG_PAGE_SIZES,
-  CATALOG_SEARCH_MAX_LENGTH, CATEGORY_NAME_MAX_LENGTH, type CatalogPageSize, type CatalogQuery,
-  type CategoryDto } from "@radeya/shared";
+  CATALOG_SEARCH_MAX_LENGTH, CATEGORY_NAME_MAX_LENGTH, SORT_ORDERS, type CatalogPageSize,
+  type CatalogQuery, type CatalogSortKey, type CategoryDto } from "@radeya/shared";
 import { useGetCategoryTreeQuery } from "@/features/categories/categories-api";
 import { filterTree } from "@/features/categories/filter-tree";
 import { apiErrorMessage } from "@/shared/api/error-message";
@@ -80,6 +80,31 @@ export function useProductCatalog() {
     resetSelection();
   }, [resetSelection]);
 
+  // Фильтр и сортировка возвращают на первую страницу: третья страница
+  // другого списка — случайный набор строк.
+  const setWarehouseIds = useCallback((warehouseIds: string[]) => {
+    setQuery((previous) => ({ ...previous, warehouseIds, page: 1 }));
+    resetSelection();
+  }, [resetSelection]);
+  const setSupplierIds = useCallback((supplierIds: string[]) => {
+    setQuery((previous) => ({ ...previous, supplierIds, page: 1 }));
+    resetSelection();
+  }, [resetSelection]);
+
+  /**
+   * Клик по стрелке колонки: по кругу «от большего к меньшему» → «от меньшего
+   * к большему» → без сортировки. Сортировка одна: другая колонка заменяет прежнюю.
+   */
+  const toggleSort = useCallback((key: CatalogSortKey) => {
+    setQuery((previous) => {
+      const { sort: _sort, order: _order, ...rest } = previous;
+      if (previous.sort !== key) return { ...rest, sort: key, order: SORT_ORDERS.DESC, page: 1 };
+      if (previous.order === SORT_ORDERS.DESC) return { ...rest, sort: key, order: SORT_ORDERS.ASC, page: 1 };
+      return { ...rest, page: 1 };
+    });
+    resetSelection();
+  }, [resetSelection]);
+
   // currentData исключает показ строк старой папки/поиска под новым заголовком.
   const current = isSearchPending || catalog.isError ? undefined : catalog.currentData;
   const items = current?.items ?? [];
@@ -139,6 +164,9 @@ export function useProductCatalog() {
     expandedCategoryIds: [...new Set([...expandedCategoryIds, ...filtered.expand])],
     toggleCategory, onCategoryCreated, onCategoryDeleted,
     search, setSearch, pageSizes: CATALOG_PAGE_SIZES,
+    warehouseIds: query.warehouseIds ?? [], setWarehouseIds,
+    supplierIds: query.supplierIds ?? [], setSupplierIds,
+    sort: query.sort ?? null, order: query.order ?? SORT_ORDERS.DESC, toggleSort,
     page: current?.page ?? query.page ?? 1,
     pageSize: query.pageSize ?? CATALOG_DEFAULT_PAGE_SIZE, setPage, setPageSize,
     response: current,

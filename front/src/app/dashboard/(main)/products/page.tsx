@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CATEGORY_NAME_MAX_LENGTH, CATALOG_SEARCH_MAX_LENGTH, type CatalogResponse } from "@radeya/shared";
+import { CATALOG_NO_SUPPLIER, CATEGORY_NAME_MAX_LENGTH, CATALOG_SEARCH_MAX_LENGTH,
+  type CatalogResponse } from "@radeya/shared";
 import { Button } from "@/components/button";
+import { Dropdown, type DropdownOption } from "@/components/dropdown";
 import { Loader } from "@/components/loader";
 import { Tables } from "@/components/tables";
 import { TreeFolder } from "@/components/tree-folder";
 import { useCreateCategoryForm } from "@/features/categories/use-create-category-form";
 import { useCategoryActions } from "@/features/categories/use-category-actions";
 import { useProductCatalog } from "@/features/products/use-product-catalog";
+import { useGetSuppliersQuery } from "@/features/suppliers/suppliers-api";
+import { useGetWarehousesQuery } from "@/features/warehouses/warehouses-api";
 import { CATALOG_COLUMN_COUNT, CatalogRow, CatalogTableHead } from "./_components/catalog-row";
 import { MoveToCategoryDialog } from "./_components/move-to-category-dialog";
 
@@ -19,6 +23,26 @@ export default function ProductsPage() {
   const categoryActions = useCategoryActions(catalog.onCategoryDeleted);
   const lastLogged = useRef<CatalogResponse | undefined>(undefined);
   const { response, isLoading } = catalog;
+
+  const warehouses = useGetWarehousesQuery();
+  const suppliers = useGetSuppliersQuery();
+
+  // Закрытые склады и поставщики остаются в списке с пометкой: по ним ищут
+  // товары, которые на них ещё числятся.
+  const warehouseOptions: DropdownOption[] = (warehouses.data?.items ?? []).map((warehouse) => ({
+    value: warehouse.id,
+    label: warehouse.code + (warehouse.name === null ? "" : " · " + warehouse.name),
+    ...(warehouse.isActive ? {} : { note: "закрыт" }),
+  }));
+  const supplierOptions: DropdownOption[] = [
+    // «Без поставщика» первым: у многих товаров его нет, и это отдельный вопрос.
+    { value: CATALOG_NO_SUPPLIER, label: "Без поставщика" },
+    ...(suppliers.data?.items ?? []).map((supplier) => ({
+      value: supplier.id,
+      label: supplier.name,
+      ...(supplier.isActive ? {} : { note: "закрыт" }),
+    })),
+  ];
 
   useEffect(() => {
     if (isLoading || !response || lastLogged.current === response) return;
@@ -137,6 +161,38 @@ export default function ProductsPage() {
               className="w-full rounded-md border border-border bg-background px-3 py-2" />
           </label>
 
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <span className="text-sm">Склады</span>
+              <Dropdown
+                mode="select"
+                multiple
+                searchable
+                searchPlaceholder="Поиск склада"
+                label="Склады"
+                placeholder="Все склады"
+                options={warehouseOptions}
+                value={catalog.warehouseIds}
+                onChange={catalog.setWarehouseIds}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-sm">Поставщики</span>
+              <Dropdown
+                mode="select"
+                multiple
+                searchable
+                searchPlaceholder="Поиск поставщика"
+                label="Поставщики"
+                placeholder="Все поставщики"
+                options={supplierOptions}
+                value={catalog.supplierIds}
+                onChange={catalog.setSupplierIds}
+              />
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
             <Button className="" type="button"
               disabled={catalog.selectedProductIds.length === 0 || catalog.isMoving}
@@ -178,6 +234,9 @@ export default function ProductsPage() {
                 someSelected={catalog.selectedProductIds.length > 0}
                 onSelectAll={catalog.selectPage}
                 disabled={catalog.isMoving || catalog.items.length === 0}
+                sort={catalog.sort}
+                order={catalog.order}
+                onSort={catalog.toggleSort}
               />
             }
             columnCount={CATALOG_COLUMN_COUNT}
