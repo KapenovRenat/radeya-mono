@@ -15,7 +15,25 @@ import { AppError } from './errors';
  * файл, который в одном разделе разбирается, в другом молча окажется пустым.
  */
 
+/**
+ * Подпись старого двоичного формата Excel (.xls, контейнер OLE2).
+ *
+ * МойСклад выгружает отчёты именно в нём, а exceljs читает только .xlsx.
+ * Библиотеку под .xls не подключаем: `xlsx` в npm заброшен на версии
+ * с известными уязвимостями. Файл пересохраняется в Excel как .xlsx —
+ * и об этом надо сказать прямо, а не «файл не читается».
+ */
+const XLS_SIGNATURE = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+
 export async function readWorkbook(file: Buffer): Promise<ExcelJS.Workbook> {
+  if (file.subarray(0, XLS_SIGNATURE.length).equals(XLS_SIGNATURE)) {
+    throw new AppError(
+      400,
+      'XLS_NOT_SUPPORTED',
+      'Это старый формат .xls. Откройте файл в Excel и сохраните как «Книга Excel (.xlsx)»',
+    );
+  }
+
   const workbook = new ExcelJS.Workbook();
 
   try {

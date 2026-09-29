@@ -35,6 +35,7 @@ export const AUDIT_ACTIONS = {
   SUPPLIERS_IMPORTED: 'SUPPLIERS_IMPORTED',
   SUPPLIER_UPDATED: 'SUPPLIER_UPDATED',
   MOYSKLAD_PRODUCTS_IMPORTED: 'MOYSKLAD_PRODUCTS_IMPORTED',
+  MOYSKLAD_STOCK_IMPORTED: 'MOYSKLAD_STOCK_IMPORTED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -70,4 +71,5 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   SUPPLIERS_IMPORTED: 'Импорт поставщиков из МойСклада',
   SUPPLIER_UPDATED: 'Карточка поставщика изменена',
   MOYSKLAD_PRODUCTS_IMPORTED: 'Импорт закупки и складов из МойСклада',
+  MOYSKLAD_STOCK_IMPORTED: 'Импорт остатков из МойСклада',
 };

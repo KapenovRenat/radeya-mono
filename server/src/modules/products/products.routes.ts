@@ -4,7 +4,7 @@ import { USER_ROLES } from '@radeya/shared';
 import { requireAuth, requireRole } from '../../middlewares/require-auth';
 import { getKnownSkus, postImportKaspiProducts } from './products.controller';
 import { getCatalog, patchProductsCategory } from './catalog.controller';
-import { commitMoysklad, previewMoysklad } from './moysklad.controller';
+import { commitMoysklad, commitStock, previewMoysklad, previewStock } from './moysklad.controller';
 
 /**
  * Каталог. Пока закрыт ролью ADMIN целиком: заполнение каталога — настройка
@@ -43,4 +43,21 @@ productsRouter.post(
   '/moysklad/commit',
   express.json({ limit: '25mb' }),
   commitMoysklad,
+);
+
+/**
+ * Импорт остатков из отчёта «Остатки» — один склад за раз, склад в `?warehouseId=`.
+ * Отчёт весит сотни килобайт, но лимит тот же, что у выгрузки товаров:
+ * склад с тысячей позиций вырастет в разы.
+ */
+productsRouter.post(
+  '/moysklad/stock/preview',
+  express.raw({ type: '*/*', limit: '25mb' }),
+  previewStock,
+);
+
+productsRouter.post(
+  '/moysklad/stock/commit',
+  express.json({ limit: '25mb' }),
+  commitStock,
 );

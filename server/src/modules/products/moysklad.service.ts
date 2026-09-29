@@ -1,14 +1,19 @@
 import {
+  AUDIT_ACTIONS,
+  HISTORY_ENTITY_TYPES,
   MOYSKLAD_WAREHOUSE_COLUMNS,
   type CommitMoyskladImportResponse,
   type MoyskladImportPreview,
   type MoyskladProductDraft,
 } from '@radeya/shared';
 
+import type { Prisma } from '../../generated/prisma/client';
 import { prisma } from '../../db/client';
 import { ValidationError } from '../../lib/errors';
 import { listSheets, readWorkbook } from '../../lib/excel';
+import { diffFields, recordHistory, type HistoryEntry, type HistoryMeta } from '../../lib/history';
 import { normalizeName } from '../dictionaries/dictionaries.service';
+import { loadSkuIndex, markDuplicateCodes } from './moysklad.common';
 import { parseMoyskladSheet, type WarehouseIndex } from './moysklad.parser';
 import type { CommitMoyskladInput, PreviewMoyskladInput } from './moysklad.schemas';
 
@@ -54,7 +59,7 @@ export async function previewMoyskladImport(
   }
 
   const parsed = parseMoyskladSheet(workbook, input.sheet, await loadWarehouses());
-  const rows = await matchCatalog(markDuplicates(parsed.rows));
+  const rows = await matchCatalog(markDuplicateCodes(parsed.rows));
 
   return {
     sheets,
@@ -96,52 +101,17 @@ function moyskladWarehouseName(code: string): string | null {
 }
 
 /**
- * Пометка строк, чей код встречается в файле дважды.
- *
- * В проверенной выгрузке таких 23 пары: картина и постер с одним кодом, причём
- * у одной строки есть цена и поставщик, у второй нули. Записать обе подряд —
- * вторая затрёт цену первой. Выбирать «ту, что с ценой» не будем: это правило
- * работает на сегодняшнем файле и сломается на первом же дубле с двумя ценами.
- */
-function markDuplicates(rows: MoyskladProductDraft[]): MoyskladProductDraft[] {
-  const counts = new Map<string, number>();
-
-  for (const row of rows) {
-    if (row.code === null) continue;
-
-    const key = normalizeName(row.code);
-
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-
-  return rows.map((row) => {
-    if (row.code === null || (counts.get(normalizeName(row.code)) ?? 0) < 2) return row;
-
-    return {
-      ...row,
-      duplicate: true,
-      problems: [
-        ...row.problems,
-        { column: 'Код', message: `Код «${row.code}» встречается в файле дважды — строка пропущена` },
-      ],
-    };
-  });
-}
-
-/**
  * Сверка с каталогом и справочником поставщиков.
  *
- * Артикулы и названия поставщиков читаются целиком и сравниваются в памяти:
- * `in` в Prisma регистр не игнорирует, а в файле код записан как `zkz090`,
- * у нас — как `ZKZ090`. Объёмы позволяют: артикулов тысячи, поставщиков десятки.
+ * Названия поставщиков сравниваются в памяти по той же причине, что и артикулы
+ * (см. loadSkuIndex): регистр. Поставщиков десятки.
  */
 async function matchCatalog(rows: MoyskladProductDraft[]): Promise<MoyskladProductDraft[]> {
-  const [variants, suppliers] = await Promise.all([
-    prisma.variant.findMany({ select: { id: true, sku: true } }),
+  const [bySku, suppliers] = await Promise.all([
+    loadSkuIndex(),
     prisma.supplier.findMany({ select: { id: true, name: true } }),
   ]);
 
-  const bySku = new Map(variants.map((variant) => [normalizeName(variant.sku), variant]));
   const bySupplier = new Map(suppliers.map((supplier) => [normalizeName(supplier.name), supplier.id]));
 
   return rows.map((row) => {
@@ -241,9 +211,13 @@ function canWrite(row: MoyskladProductDraft): boolean {
  * Строки складов дозаписываются, а не пересобираются: склад, которого в файле
  * нет, у нас мог появиться руками, и удалять его из-за молчания чужой выгрузки
  * нельзя. Трогаем только `preOrderDays` — `quantity` ведётся отдельно.
+ *
+ * История пишется в транзакции каждой пачки, по записи на товар и отдельно
+ * на каждый склад — склад идёт в контекст записи, а не в имя поля.
  */
 export async function commitMoyskladImport(
   input: CommitMoyskladInput,
+  meta: HistoryMeta,
 ): Promise<CommitMoyskladImportResponse> {
   const failed: { row: number; message: string }[] = [];
   const writable: MoyskladProductDraft[] = [];
@@ -257,7 +231,13 @@ export async function commitMoyskladImport(
     throw new ValidationError('Ни одна строка не готова к записи');
   }
 
-  const warehouses = await loadWarehouses();
+  const [warehouses, supplierNames] = await Promise.all([
+    loadWarehouses(),
+    // В историю пишется название поставщика, а не UUID: «a1b2-… → c3d4-…»
+    // человеку ничего не скажет.
+    prisma.supplier.findMany({ select: { id: true, name: true } })
+      .then((rows) => new Map(rows.map((row) => [row.id, row.name]))),
+  ]);
 
   await fillWarehouseNames();
 
@@ -270,7 +250,11 @@ export async function commitMoyskladImport(
     const batch = writable.slice(from, from + WRITE_BATCH);
 
     await prisma.$transaction(async (tx) => {
+      const current = await loadCurrentValues(tx, batch.map((row) => row.variantId!));
+      const history: HistoryEntry[] = [];
+
       for (const row of batch) {
+        const before = current.get(row.variantId!);
         const fields = {
           ...(row.purchasePrice !== null
             ? { purchasePrice: row.purchasePrice, purchaseCurrency: row.currency }
@@ -282,6 +266,20 @@ export async function commitMoyskladImport(
           await tx.variant.update({ where: { id: row.variantId! }, data: fields });
         }
 
+        history.push({
+          type: AUDIT_ACTIONS.MOYSKLAD_PRODUCTS_IMPORTED,
+          entityType: HISTORY_ENTITY_TYPES.VARIANT,
+          entityId: row.variantId!,
+          changes: diffFields(HISTORY_ENTITY_TYPES.VARIANT, before ?? null, {
+            purchasePrice: fields.purchasePrice,
+            purchaseCurrency: fields.purchaseCurrency,
+            supplier: fields.supplierId === undefined
+              ? undefined
+              : supplierNames.get(fields.supplierId) ?? null,
+          }),
+          context: { sheet: input.sheet },
+        });
+
         if (row.purchasePrice !== null) pricesSet += 1;
         if (row.supplierId !== null) suppliersSet += 1;
 
@@ -291,6 +289,18 @@ export async function commitMoyskladImport(
           // Склад мог исчезнуть между предпросмотром и записью — тогда строка
           // остатка просто не пишется, а не роняет весь импорт.
           if (warehouse === undefined) continue;
+
+          history.push({
+            type: AUDIT_ACTIONS.MOYSKLAD_PRODUCTS_IMPORTED,
+            entityType: HISTORY_ENTITY_TYPES.VARIANT,
+            entityId: row.variantId!,
+            changes: diffFields(
+              HISTORY_ENTITY_TYPES.VARIANT,
+              before?.stocks.get(warehouse.id) ?? null,
+              { preOrderDays: stock.preOrderDays },
+            ),
+            context: { warehouse: stock.warehouseCode, sheet: input.sheet },
+          });
 
           await tx.variantStock.upsert({
             where: {
@@ -311,8 +321,31 @@ export async function commitMoyskladImport(
 
         updated += 1;
       }
+
+      await recordHistory(tx, meta, history);
     }, { timeout: TRANSACTION_TIMEOUT_MS, maxWait: TRANSACTION_MAX_WAIT_MS });
   }
 
   return { updated, pricesSet, suppliersSet, stocksSet, failed };
+}
+
+/** Прежние значения пачки — «было» для истории. Одним запросом на пачку, а не на товар. */
+async function loadCurrentValues(tx: Prisma.TransactionClient, variantIds: string[]) {
+  const rows = await tx.variant.findMany({
+    where: { id: { in: variantIds } },
+    select: {
+      id: true, purchasePrice: true, purchaseCurrency: true,
+      supplier: { select: { name: true } },
+      stocks: { select: { warehouseId: true, preOrderDays: true } },
+    },
+  });
+
+  return new Map(rows.map((row) => [row.id, {
+    purchasePrice: row.purchasePrice,
+    purchaseCurrency: row.purchaseCurrency,
+    supplier: row.supplier?.name ?? null,
+    stocks: new Map(row.stocks.map((stock) => [
+      stock.warehouseId, { preOrderDays: stock.preOrderDays },
+    ])),
+  }]));
 }

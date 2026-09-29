@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import { AUDIT_ACTIONS } from '@radeya/shared';
+import { AUDIT_ACTIONS, HISTORY_SOURCES } from '@radeya/shared';
 
 import { clientIp, logAction } from '../../lib/audit';
 import { ValidationError } from '../../lib/errors';
@@ -46,7 +46,9 @@ export const commitSuppliers: RequestHandler = async (req, res) => {
   if (!parsed.success) throw new ValidationError('Проверьте лист и строки');
 
   const author = req.user!;
-  const result = await commitSupplierImport(parsed.data);
+  const result = await commitSupplierImport(parsed.data, {
+    author, source: HISTORY_SOURCES.IMPORT, ip: clientIp(req),
+  });
 
   // В журнал — счётчики и лист, без самих строк: журнал не хранилище.
   await logAction({
@@ -75,7 +77,9 @@ export const patchSupplier: RequestHandler = async (req, res) => {
   if (!parsed.success) throw new ValidationError('Проверьте поля карточки');
 
   const author = req.user!;
-  const { before, after } = await updateSupplier(params.data.id, parsed.data);
+  const { before, after } = await updateSupplier(params.data.id, parsed.data, {
+    author, source: HISTORY_SOURCES.MANUAL, ip: clientIp(req),
+  });
 
   await logAction({
     userId: author.id, userLogin: author.login, userRole: author.role,

@@ -2,10 +2,11 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { argv, stdout } from 'node:process';
 
-import { AUDIT_ACTIONS } from '@radeya/shared';
+import { AUDIT_ACTIONS, HISTORY_ENTITY_TYPES, HISTORY_SOURCES } from '@radeya/shared';
 
 import { prisma, disconnectDatabase } from '../db/client';
 import { logAction } from '../lib/audit';
+import { diffFields, recordHistory } from '../lib/history';
 import { readModelName } from '../modules/kaspi-catalog/kaspi-model-name';
 
 /**
@@ -272,12 +273,22 @@ async function main() {
   for (let from = 0; from < plans.length; from += CHUNK_SIZE) {
     const chunk = plans.slice(from, from + CHUNK_SIZE);
     // Пачка целиком или никак: половина переименованных товаров хуже,
-    // чем ни один — по отчёту не понять, где остановились.
-    await prisma.$transaction(
-      chunk.map((item) =>
-        prisma.product.update({ where: { id: item.productId }, data: { name: item.to } }),
-      ),
-    );
+    // чем ни один — по отчёту не понять, где остановились. История —
+    // в той же транзакции, запись на каждый товар.
+    await prisma.$transaction(async (tx) => {
+      for (const item of chunk) {
+        await tx.product.update({ where: { id: item.productId }, data: { name: item.to } });
+      }
+      await recordHistory(tx, { author: null, source: HISTORY_SOURCES.MANUAL },
+        chunk.map((item) => ({
+          type: AUDIT_ACTIONS.PRODUCTS_RENAMED,
+          entityType: HISTORY_ENTITY_TYPES.PRODUCT,
+          entityId: item.productId,
+          changes: diffFields(HISTORY_ENTITY_TYPES.PRODUCT, { name: item.from }, { name: item.to }),
+          context: { note: 'скрипт rename-products' },
+        })));
+    // Сто обновлений по одному в стандартные 5 секунд укладываются не всегда.
+    }, { timeout: 60_000, maxWait: 15_000 });
     done += chunk.length;
     stdout.write(`  записано ${done} из ${plans.length}\n`);
   }

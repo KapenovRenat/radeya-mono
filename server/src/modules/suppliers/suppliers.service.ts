@@ -1,16 +1,19 @@
-import type {
-  CommitSupplierImportResponse,
-  SupplierDiff,
-  SupplierDraft,
-  SupplierDto,
-  SupplierImportPreview,
-  SuppliersResponse,
+import {
+  AUDIT_ACTIONS,
+  HISTORY_ENTITY_TYPES,
+  type CommitSupplierImportResponse,
+  type SupplierDiff,
+  type SupplierDraft,
+  type SupplierDto,
+  type SupplierImportPreview,
+  type SuppliersResponse,
 } from '@radeya/shared';
 
 import { Prisma } from '../../generated/prisma/client';
 import { prisma } from '../../db/client';
 import { ConflictError, NotFoundError, ValidationError } from '../../lib/errors';
 import { listSheets, readWorkbook } from '../../lib/excel';
+import { diffFields, recordHistory, type HistoryEntry, type HistoryMeta } from '../../lib/history';
 import { normalizeName } from '../dictionaries/dictionaries.service';
 import { parseContractors } from './suppliers.parser';
 import type { CommitSuppliersInput, PreviewSuppliersInput, UpdateSupplierInput } from './suppliers.schemas';
@@ -185,6 +188,7 @@ function collectDiffs(row: SupplierDraft, ours: SupplierRow): SupplierDiff[] {
  */
 export async function commitSupplierImport(
   input: CommitSuppliersInput,
+  meta: HistoryMeta,
 ): Promise<CommitSupplierImportResponse> {
   const failed: { row: number; message: string }[] = [];
   const writable: SupplierDraft[] = [];
@@ -215,6 +219,15 @@ export async function commitSupplierImport(
     let created = 0;
     let updated = 0;
     let skipped = 0;
+    const history: HistoryEntry[] = [];
+    const record = (supplierId: string, before: Record<string, unknown> | null,
+      after: Record<string, unknown>) => history.push({
+      type: AUDIT_ACTIONS.SUPPLIERS_IMPORTED,
+      entityType: HISTORY_ENTITY_TYPES.SUPPLIER,
+      entityId: supplierId,
+      changes: diffFields(HISTORY_ENTITY_TYPES.SUPPLIER, before, after),
+      context: { sheet: input.sheet },
+    });
 
     for (const row of writable) {
       const existing = await tx.supplier.findUnique({
@@ -223,15 +236,13 @@ export async function commitSupplierImport(
       });
 
       if (!existing) {
-        await tx.supplier.create({
-          data: {
-            externalId: row.externalId,
-            name: row.name!,
-            address: row.address,
-            phone: row.phone,
-          },
+        const data = { name: row.name!, address: row.address, phone: row.phone };
+        const { id } = await tx.supplier.create({
+          data: { externalId: row.externalId, ...data },
+          select: { id: true },
         });
 
+        record(id, null, data);
         created += 1;
         continue;
       }
@@ -249,8 +260,11 @@ export async function commitSupplierImport(
       }
 
       await tx.supplier.update({ where: { id: existing.id }, data: fill });
+      record(existing.id, existing, fill);
       updated += 1;
     }
+
+    await recordHistory(tx, meta, history);
 
     return { created, updated, skipped, failed };
   }, { timeout: TRANSACTION_TIMEOUT_MS, maxWait: TRANSACTION_MAX_WAIT_MS });
@@ -266,20 +280,29 @@ function canWrite(row: SupplierDraft): boolean {
   return row.name !== null && row.externalId !== null;
 }
 
-/** Правка карточки руками — прежде всего Telegram, которого в выгрузке нет. */
-export async function updateSupplier(id: string, input: UpdateSupplierInput) {
-  const before = await prisma.supplier.findUnique({ where: { id }, select: supplierSelect });
-
-  if (!before) throw new NotFoundError('Поставщик не найден');
-
+/**
+ * Правка карточки руками — прежде всего Telegram, которого в выгрузке нет.
+ * «Было» читается в той же транзакции, что и запись: иначе параллельная правка
+ * между чтением и записью дала бы в истории неверное «было».
+ */
+export async function updateSupplier(id: string, input: UpdateSupplierInput, meta: HistoryMeta) {
   try {
-    const row = await prisma.supplier.update({
-      where: { id },
-      data: input,
-      select: supplierSelect,
-    });
+    return await prisma.$transaction(async (tx) => {
+      const before = await tx.supplier.findUnique({ where: { id }, select: supplierSelect });
 
-    return { before: toDto(before), after: toDto(row) };
+      if (!before) throw new NotFoundError('Поставщик не найден');
+
+      const row = await tx.supplier.update({ where: { id }, data: input, select: supplierSelect });
+
+      await recordHistory(tx, meta, [{
+        type: AUDIT_ACTIONS.SUPPLIER_UPDATED,
+        entityType: HISTORY_ENTITY_TYPES.SUPPLIER,
+        entityId: id,
+        changes: diffFields(HISTORY_ENTITY_TYPES.SUPPLIER, before, input),
+      }]);
+
+      return { before: toDto(before), after: toDto(row) };
+    });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       throw new ConflictError('Поставщик изменился. Повторите действие');

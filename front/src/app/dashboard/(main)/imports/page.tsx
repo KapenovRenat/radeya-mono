@@ -1,6 +1,7 @@
 "use client";
 
 import { MoyskladProductsImport } from "./_components/moysklad-products-import";
+import { MoyskladStockImport } from "./_components/moysklad-stock-import";
 import { OfflineOrdersImport } from "./_components/offline-orders-import";
 import { SuppliersImport } from "./_components/suppliers-import";
 
@@ -21,6 +22,8 @@ export default function ImportsPage() {
           в справочнике, и порядок блоков подсказывает порядок заливки. */}
       <SuppliersImport />
       <MoyskladProductsImport />
+      {/* Остатки после товаров: пишутся только в уже найденные артикулы. */}
+      <MoyskladStockImport />
     </div>
   );
 }

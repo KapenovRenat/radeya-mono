@@ -84,6 +84,109 @@ export interface CommitMoyskladImportRequest {
   rows: MoyskladProductDraft[];
 }
 
+/**
+ * Строка отчёта «Остатки».
+ *
+ * Пустая ячейка количества — это 0 (решение пользователя), отрицательное
+ * хранится как есть: продали то, что не посадили.
+ */
+export interface StockReportRow {
+  /** Номер строки в листе. */
+  row: number;
+  /** Колонка «Код» — по ней ищем артикул, как и в выгрузке товаров. */
+  code: string | null;
+  /** Наименование из файла, только для показа. */
+  name: string | null;
+
+  /** Код встречается в файле дважды — строка не записывается. */
+  duplicate: boolean;
+  /** В строке есть значение, которое не удалось разобрать, — строка не записывается. */
+  invalid: boolean;
+
+  variantId: string | null;
+  variantSku: string | null;
+
+  quantity: number;
+  reserved: number;
+  expected: number;
+
+  /**
+   * Себестоимость единицы в тенге, строкой с двумя знаками.
+   * null — в файле ноль или пусто: так МойСклад пишет, когда на складе ничего нет,
+   * и затирать нулём прежнюю себестоимость нельзя.
+   */
+  costPrice: string | null;
+
+  /** «Дней на складе» из отчёта. null — пусто. */
+  daysOnStock: number | null;
+
+  problems: ImportRowProblem[];
+}
+
+/** Товар, который у нас на складе есть, а в отчёте его нет: его остаток обнулится. */
+export interface StockZeroCandidate {
+  variantId: string;
+  sku: string;
+  name: string;
+  quantity: number | null;
+  reserved: number | null;
+  expected: number | null;
+}
+
+/** Ответ предпросмотра. В базу на этом шаге ничего не записано. */
+export interface StockImportPreview {
+  sheets: string[];
+  sheet: string | null;
+
+  /** Склад, в который пойдёт запись. Показывается крупно: файл другого склада импорт не распознает. */
+  warehouse: { id: string; code: string; name: string | null };
+
+  /**
+   * Момент отчёта из шапки «на момент:», ISO.
+   * null — в шапке не нашёлся: при записи возьмётся время записи.
+   */
+  stockAt: string | null;
+
+  rows: StockReportRow[];
+
+  /** Товарных строк в отчёте. */
+  total: number;
+  /** Строк-папок («Диваны/Мадрид 310») — пропущены. */
+  groups: number;
+  duplicated: number;
+  invalid: number;
+  /** Товара с таким кодом нет в каталоге. */
+  notFound: number;
+  /** Готовы к записи. */
+  ready: number;
+
+  /** Обнулятся при записи: есть у нас на этом складе, в отчёте нет. */
+  toZero: StockZeroCandidate[];
+}
+
+export interface CommitStockImportRequest {
+  sheet: string;
+  warehouseId: string;
+  stockAt: string | null;
+  rows: StockReportRow[];
+  /**
+   * Что обнулить — ровно список из предпросмотра, который видел человек.
+   * Сервер не вычисляет его заново: разрушающее действие должно совпадать
+   * с тем, что показали. Но проверяет, что товара нет в отчёте.
+   */
+  zeroVariantIds: string[];
+}
+
+export interface CommitStockImportResponse {
+  /** Товаров, у которых записан остаток. */
+  updated: number;
+  /** Товаров, чей остаток обнулён. */
+  zeroed: number;
+  /** Записано себестоимостей. */
+  costsSet: number;
+  failed: { row: number; message: string }[];
+}
+
 export interface CommitMoyskladImportResponse {
   /** Артикулов, у которых что-то изменилось. */
   updated: number;

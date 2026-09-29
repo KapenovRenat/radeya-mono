@@ -4,8 +4,8 @@ import type { Prisma } from '../../generated/prisma/client';
 /**
  * Выборка строки каталога — всё, что есть на артикуле.
  *
- * `changes` (история VariantChange) не берём: отдельная таблица, в списке
- * она дала бы запрос на каждую строку. Её отдаст карточка товара.
+ * Историю изменений не берём: она в `AuditLog`, и в списке дала бы запрос
+ * на каждую строку. Её отдаёт `GET /api/audit` с фильтром по товару.
  *
  * Закупка здесь есть намеренно: эндпоинт закрыт ролью ADMIN, и в дашборде
  * закупка нужна. На витрину этот DTO не отдаётся — см. CatalogRowDto.
@@ -29,7 +29,9 @@ export const catalogRowSelect = {
     discountPrice: true, discountPercent: true, externalId: true, externalSku: true,
     externalUrl: true, publishedAt: true, lastSyncedAt: true, syncError: true },
     orderBy: { channel: 'asc' } },
-  stocks: { select: { quantity: true, preOrderDays: true,
+  costPrice: true,
+  stocks: { select: { quantity: true, reserved: true, expected: true, receivedAt: true,
+    stockAt: true, preOrderDays: true,
     warehouse: { select: { id: true, code: true, name: true, kaspiStoreId: true,
       kaspiCityId: true, isActive: true } } },
     orderBy: { warehouseId: 'asc' } },
@@ -84,7 +86,27 @@ function previewUrl(images: CatalogImageDto[]): string | null {
   return null;
 }
 
-export function toCatalogRow(row: CatalogRecord): CatalogRowDto {
+/**
+ * Доступно = Остаток − Резерв + Ожидание — формула МойСклада, сверена на отчёте.
+ * Не указанное слагаемое считается нулём, но если не указано ничего — это
+ * «неизвестно», а не ноль.
+ */
+function availableStock(quantity: number | null, reserved: number | null,
+  expected: number | null): number | null {
+  if (quantity === null && reserved === null && expected === null) return null;
+  return (quantity ?? 0) - (reserved ?? 0) + (expected ?? 0);
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Дней с даты до `now`, два знака — как в отчёте МойСклада. */
+function daysSince(from: Date | null, now: Date): number | null {
+  if (from === null) return null;
+  return Math.max(0, Math.round(((now.getTime() - from.getTime()) / DAY_MS) * 100) / 100);
+}
+
+/** `now` один на страницу: у соседних строк «дней на складе» не должны разъехаться на миллисекунды. */
+export function toCatalogRow(row: CatalogRecord, now: Date = new Date()): CatalogRowDto {
   const images = readImages(row.kaspiImages);
   return {
     variantId: row.id, productId: row.productId, name: row.product.name,
@@ -101,7 +123,10 @@ export function toCatalogRow(row: CatalogRecord): CatalogRowDto {
       lastSyncedAt: iso(listing.lastSyncedAt), syncError: listing.syncError,
     })),
     stocks: row.stocks.map((stock) => ({ warehouse: stock.warehouse,
-      quantity: stock.quantity, preOrderDays: stock.preOrderDays })),
+      quantity: stock.quantity, reserved: stock.reserved, expected: stock.expected,
+      available: availableStock(stock.quantity, stock.reserved, stock.expected),
+      daysOnStock: daysSince(stock.receivedAt, now),
+      stockAt: iso(stock.stockAt), preOrderDays: stock.preOrderDays })),
 
     // Пустой остаток — «не указано», но в сумме считать его нечем, кроме нуля.
     totalStock: row.stocks.reduce((sum, stock) => sum + (stock.quantity ?? 0), 0),
@@ -109,6 +134,7 @@ export function toCatalogRow(row: CatalogRecord): CatalogRowDto {
 
     purchasePrice: money(row.purchasePrice),
     purchaseCurrency: row.purchaseCurrency,
+    costPrice: money(row.costPrice),
     supplier: row.supplier,
     minChannelPrice: money(row.minChannelPrice),
     maxChannelPrice: money(row.maxChannelPrice),

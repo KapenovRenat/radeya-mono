@@ -33,7 +33,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `GET /api/auth/me` | Текущий пользователь | да | `server/src/modules/auth/auth.routes.ts` |
 | `GET /api/users` | Список сотрудников | ADMIN | `server/src/modules/users/users.routes.ts` |
 | `POST /api/users` | Создание сотрудника | ADMIN | `server/src/modules/users/users.routes.ts` |
-| `GET /api/audit` | Журнал действий, постранично | ADMIN | `server/src/modules/audit/audit.routes.ts` |
+| `GET /api/audit` | Журнал действий и история изменений, постранично; фильтры по сущности (`entityType` + `entityId`) и типу (`action`) | ADMIN | `server/src/modules/audit/audit.controller.ts` |
 | `POST /api/kaspi-catalog/preview` | Разбор выгрузок ACTIVE/ARCHIVE, без записи в БД | ADMIN | `server/src/modules/kaspi-catalog/kaspi-catalog.routes.ts` |
 | `POST /api/kaspi-catalog/fetch` | Обход каталога в кабинете Kaspi: товары и сводка складов, без записи в БД | ADMIN | `server/src/modules/kaspi-catalog/kaspi-catalog.routes.ts` |
 | `GET /api/warehouses` | Справочник складов | ADMIN | `server/src/modules/warehouses/warehouses.routes.ts` |
@@ -48,7 +48,9 @@ shared/    # Общий код: типы контрактов, констант�
 | `GET /api/products/variants` | Серверный поиск, поддерево категории, страницы 10/20/50; в строке все поля товара, включая закупку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
 | `PATCH /api/products/category` | Перенести товары со всеми модификациями в папку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
 | `POST /api/products/moysklad/preview` | Разбор выгрузки МойСклада: закупка, поставщик, сроки предзаказа по складам; без записи | ADMIN | `server/src/modules/products/moysklad.controller.ts` |
-| `POST /api/products/moysklad/commit` | Запись закупки, поставщика и сроков предзаказа в найденные артикулы; новых товаров не заводит | ADMIN | `server/src/modules/products/moysklad.controller.ts` |
+| `POST /api/products/moysklad/commit` | Запись закупки, поставщика и сроков предзаказа в найденные артикулы; новых товаров не заводит; история по каждому товару | ADMIN | `server/src/modules/products/moysklad.controller.ts` |
+| `POST /api/products/moysklad/stock/preview` | Разбор отчёта «Остатки» для склада из `?warehouseId=`: остаток, резерв, ожидание, себестоимость, дни; список на обнуление; без записи | ADMIN | `server/src/modules/products/moysklad.controller.ts` |
+| `POST /api/products/moysklad/stock/commit` | Запись остатков в выбранный склад, себестоимости в товар, обнуление того, чего нет в отчёте; история по каждому товару | ADMIN | `server/src/modules/products/moysklad.controller.ts` |
 | `GET /api/stats/orders` | Сводка по заказам за период в разрезе точек: заказы, возвраты, выручка | ADMIN | `server/src/modules/stats/stats.controller.ts` |
 | `POST /api/imports/offline-orders/preview` | Разбор листа книги Excel, без записи; без `?sheet=` — только список листов | ADMIN | `server/src/modules/imports/imports.controller.ts` |
 | `POST /api/imports/offline-orders/commit` | Запись разобранных строк в заказы офлайн-точки | ADMIN | `server/src/modules/imports/imports.controller.ts` |
@@ -81,11 +83,13 @@ shared/    # Общий код: типы контрактов, констант�
 | auth | `createSession(userId, ua, ip)` | Создание сессии на 7 дней | `server/src/modules/auth/auth.service.ts` |
 | auth | `findActiveSession(id)` | Действующая сессия + пользователь, с проверкой срока и `isActive` | `server/src/modules/auth/auth.service.ts` |
 | auth | `destroySession(id)`, `destroyUserSessions(userId)` | Гашение сессий | `server/src/modules/auth/auth.service.ts` |
-| audit | `logAction(input)` | Запись в журнал; сбой не роняет операцию | `server/src/lib/audit.ts` |
+| audit | `logAction(input)` | Запись в журнал действий; после операции, сбой не роняет операцию | `server/src/lib/audit.ts` |
+| history | `recordHistory(tx, meta, entries)` | История изменений: в транзакции изменения, запись на сущность, пустые не пишет | `server/src/lib/history.ts` |
+| history | `diffFields(entityType, before, after)`, `historyValue(value)` | Список изменившихся полей «было → стало»; значение строкой, Decimal с двумя знаками | `server/src/lib/history.ts` |
 | users | `listUsers()` | Сотрудники, свежие сверху | `server/src/modules/users/users.service.ts` |
 | users | `createUser(input, createdById)` | Создание; дубль логина → 409 | `server/src/modules/users/users.service.ts` |
 | users | `toUserListItem(user)` | DTO наружу без `passwordHash` | `server/src/modules/users/users.service.ts` |
-| audit | `listAuditLog(page)` | Страница журнала по 50 записей | `server/src/modules/audit/audit.service.ts` |
+| audit | `listAuditLog(input)` | Страница журнала по 50 записей, фильтры по сущности и типу; `changes` и `context` из Json с проверкой формы | `server/src/modules/audit/audit.service.ts` |
 | kaspi-catalog | `parseKaspiCatalog(xml, status)` | Разбор выгрузки Kaspi в список товаров; явные типы массивов складов и цен | `server/src/modules/kaspi-catalog/kaspi-catalog.parser.ts` |
 | kaspi-catalog | `buildCatalogPreview(input)` | Сводка по двум файлам, поиск дублей артикулов | `server/src/modules/kaspi-catalog/kaspi-catalog.service.ts` |
 | kaspi-catalog | `fetchCabinetCatalog(input)` | Обход всех страниц кабинета, частичный результат при обрыве | `server/src/modules/kaspi-catalog/kaspi-cabinet.service.ts` |
@@ -111,12 +115,12 @@ shared/    # Общий код: типы контрактов, констант�
 | imports | `readWorkbook(file)`, `listSheets(wb)`, `parseSheet(wb, name, dict)` | Разбор книги Excel: колонки по заголовкам, спорное — в `problems`, а не в заказ | `server/src/modules/imports/offline-orders.parser.ts` |
 | imports | `previewOfflineImport(file, input)` | Предпросмотр листа: строки, пропуски, значения не из справочников | `server/src/modules/imports/imports.service.ts` |
 | imports | `commitOfflineImport(input, author)` | Запись строк в заказы точки: номера `OFF-1-000001`, всё одной транзакцией | `server/src/modules/imports/imports.service.ts` |
-| — | `readWorkbook(file)`, `listSheets(wb)`, `requireSheet(wb, name)`, `readText(cell)`, `readNumber(cell)` | Чтение книги `.xlsx` и её ячеек, общее для всех импортов | `server/src/lib/excel.ts` |
+| — | `readWorkbook(file)`, `listSheets(wb)`, `requireSheet(wb, name)`, `readText(cell)`, `readNumber(cell)` | Чтение книги `.xlsx` и её ячеек, общее для всех импортов; старый `.xls` узнаётся по подписи — ошибка с подсказкой пересохранить | `server/src/lib/excel.ts` |
 | suppliers | `parseContractors(wb, sheet)` | Разбор выгрузки контрагентов: колонки по заголовкам, отбор по группе «поставщики», заглушка телефона отбрасывается | `server/src/modules/suppliers/suppliers.parser.ts` |
 | suppliers | `listSuppliers()` | Справочник целиком, вместе с закрытыми | `server/src/modules/suppliers/suppliers.service.ts` |
 | suppliers | `previewSupplierImport(file, input)` | Предпросмотр: строки группы, счётчики отброшенных, сверка с базой по `externalId` | `server/src/modules/suppliers/suppliers.service.ts` |
-| suppliers | `commitSupplierImport(input)` | Запись: новые заводит, существующим дозаполняет только пустые поля, `telegramId` не трогает | `server/src/modules/suppliers/suppliers.service.ts` |
-| suppliers | `updateSupplier(id, input)` | Правка карточки руками; `externalId` сменить нельзя | `server/src/modules/suppliers/suppliers.service.ts` |
+| suppliers | `commitSupplierImport(input, meta)` | Запись: новые заводит, существующим дозаполняет только пустые поля, `telegramId` не трогает; история | `server/src/modules/suppliers/suppliers.service.ts` |
+| suppliers | `updateSupplier(id, input, meta)` | Правка карточки руками в транзакции с историей; `externalId` сменить нельзя | `server/src/modules/suppliers/suppliers.service.ts` |
 | dictionaries | `listDictionaries(input)` | Значения списков: все либо один вид, с счётчиком заказов | `server/src/modules/dictionaries/dictionaries.service.ts` |
 | dictionaries | `createDictionaryItem(input)`, `updateDictionaryItem(id, input)` | Добавление, переименование и закрытие значения; вид не меняется | `server/src/modules/dictionaries/dictionaries.service.ts` |
 | dictionaries | `loadDictionaryIndex()`, `normalizeName(name)` | Индекс «вид → название → id» для импорта; приведение названия к сравнимому виду | `server/src/modules/dictionaries/dictionaries.service.ts` |
@@ -135,11 +139,15 @@ shared/    # Общий код: типы контрактов, констант�
 | categories | `reorderCategories(input)` | Порядок уровня: сверяет полный состав, пишет `sortOrder` только изменившимся | `server/src/modules/categories/categories.service.ts` |
 | categories | `deleteCategory(id)` | Заблокировать запись и удалить только без товаров/подпапок | `server/src/modules/categories/categories.service.ts` |
 | products | `listCatalog(input)` | Страница артикулов с поиском и фильтром по поддереву | `server/src/modules/products/catalog.service.ts` |
-| products | `moveProductsToCategory(input)` | Атомарный перенос Product, старые категории для аудита | `server/src/modules/products/catalog.service.ts` |
-| products | `toCatalogRow(row)` | Полный DTO строки каталога: все поля артикула, точные цены, галерея, закупка (только дашборд) | `server/src/modules/products/catalog.mapper.ts` |
+| products | `moveProductsToCategory(input, meta)` | Атомарный перенос Product, старые категории для аудита, история папки по каждому товару | `server/src/modules/products/catalog.service.ts` |
+| products | `toCatalogRow(row, now)` | Полный DTO строки каталога: все поля артикула, точные цены, галерея, закупка и себестоимость (только дашборд); по складу — доступно и дни на складе, посчитанные при выдаче | `server/src/modules/products/catalog.mapper.ts` |
 | products | `parseMoyskladSheet(wb, sheet, warehouses)` | Разбор выгрузки МойСклада: колонки по заголовкам, отбор по типу строки, цена-строка с запятой, сроки предзаказа по складам | `server/src/modules/products/moysklad.parser.ts` |
 | products | `previewMoyskladImport(file, input)` | Предпросмотр: пометка задвоенных кодов, сверка с каталогом и поставщиками, счётчики | `server/src/modules/products/moysklad.service.ts` |
-| products | `commitMoyskladImport(input)` | Запись пачками по 100: закупка с валютой, поставщик, `preOrderDays` по складам. Пустое в файле не затирает | `server/src/modules/products/moysklad.service.ts` |
+| products | `commitMoyskladImport(input, meta)` | Запись пачками по 100: закупка с валютой, поставщик, `preOrderDays` по складам, история. Пустое в файле не затирает | `server/src/modules/products/moysklad.service.ts` |
+| products | `markDuplicateCodes(rows)`, `loadSkuIndex()` | Общее двух импортов МойСклада: пометка задвоенных кодов, артикулы каталога по нормализованному коду | `server/src/modules/products/moysklad.common.ts` |
+| products | `parseStockReport(wb, sheet)` | Разбор отчёта «Остатки»: заголовок под шапкой, папки и «Итого» пропускаются, пусто → 0, момент отчёта по Астане | `server/src/modules/products/moysklad-stock.parser.ts` |
+| products | `previewStockImport(file, input)` | Предпросмотр по складу: сверка с каталогом, счётчики, список на обнуление | `server/src/modules/products/moysklad-stock.service.ts` |
+| products | `commitStockImport(input, meta)` | Запись пачками по 100: остаток, резерв, ожидание, `receivedAt`, себестоимость; обнуление по списку предпросмотра; история | `server/src/modules/products/moysklad-stock.service.ts` |
 
 ### 1.3. Модели БД
 
@@ -148,16 +156,15 @@ shared/    # Общий код: типы контрактов, констант�
 | `User` | Сотрудник: вход в дашборд по логину, роль, должность | `createdBy` / `createdUsers` — self-relation «кто завёл» |
 | `Customer` | Клиент магазина: свой вход, телефон обязателен, email нет | — |
 | `Session` | Сессия сотрудника; в куке только id, состояние в таблице | `user` → `User`, `onDelete: Cascade` |
-| `AuditLog` | Журнал действий, только вставка и чтение | связей нет: логин и роль снимком |
+| `AuditLog` | Журнал действий и история изменений полей (`source`, `changes`, `context`), только вставка и чтение | связей нет: логин и роль снимком |
 | `Warehouse` | Склад Kaspi: код `PP3`, `kaspiStoreId`, КАТО, наше название, снимок товаров и остатка | `stocks` → `VariantStock` |
 | `Category` | Папка каталога, наше дерево с `path` | self-relation `parent` / `children`, `products` |
 | `Product` | Карточка модели: название, категория, бренд, `kaspiFamilyId` | `category`, `variants` |
-| `Variant` | Артикул: поля кабинета, статус продажи, флаги доставки, закупка с валютой, поставщик, ткань | `product`, `listings`, `stocks`, `changes`, `fabric`, `fabricShade`, `supplier` |
+| `Variant` | Артикул: поля кабинета, статус продажи, флаги доставки, закупка с валютой, себестоимость в тенге, поставщик, ткань | `product`, `listings`, `stocks`, `fabric`, `fabricShade`, `supplier` |
 | `Listing` | Размещение на канале: цена, статус, ID площадки | `variant`; `@@unique([variantId, channel])` |
-| `VariantStock` | Остаток артикула на складе и срок предзаказа | `variant`, `warehouse` |
+| `VariantStock` | Артикул на складе: остаток (бывает отрицательным), резерв, ожидание, средняя дата поступления, момент снимка, срок предзаказа | `variant`, `warehouse` |
 | `Fabric` | Ткань обивки: наш справочник, Kaspi её не знает | `shades`, `variants` |
 | `FabricShade` | Оттенок ткани, принадлежит своей ткани | `fabric`, `variants` |
-| `VariantChange` | История изменений артикула: поле, было, стало, источник | `variant` |
 | `SalesPoint` | Точка продаж: площадки (`KASPI`, `OZON`, `SITE`) и офлайн-точки в одном справочнике. Удаления нет, только закрытие | `orders` → `Order` |
 | `DictionaryItem` | Пополняемые списки офлайн-точки: откуда клиент, статус доставки, откуда поехал товар, способ оплаты. Различаются полем `kind` | четыре связи с `Order` |
 | `OrderComment` | Комментарий к заказу: автор связью, роль снимком. Только добавление | `order`, `author` → `User` |
@@ -170,7 +177,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `UserRole` (enum) | Роли сотрудников: ADMIN, MANAGER, SELLER | — |
 | `SalesChannel` (enum) | Каналы продаж: SITE, KASPI, OZON | — |
 | `ListingStatus` (enum) | Статус размещения: ON_SALE, OFF_SALE | — |
-| `ChangeSource` (enum) | Источник изменения: KASPI_SYNC, MANUAL | — |
+| `ChangeSource` (enum) | Источник записи истории: KASPI_SYNC, MANUAL, IMPORT | — |
 | `SalesPointType` (enum) | Вид точки продаж: KASPI, OZON, SITE, OFFLINE. Не путать с `SalesChannel` | — |
 | `DictionaryKind` (enum) | Вид пополняемого списка: CUSTOMER_SOURCE, DELIVERY_STATUS, SHIPMENT_ORIGIN, PAYMENT_METHOD | — |
 | `OrderDeliveryType` (enum) | Тип доставки: KASPI, PICKUP, OWN | — |
@@ -188,7 +195,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `/dashboard/accounts` | Аккаунты и История: таблица сотрудников, создание, журнал действий | `front/src/app/dashboard/(main)/accounts/page.tsx` |
 | `/dashboard/products` | Каталог: два уровня папок с поиском и порядком, серверный поиск, таблица с выделением и переносом в папку | `front/src/app/dashboard/(main)/products/page.tsx` |
 | `/dashboard/orders` | Заказы: две кнопки синхронизации с Kaspi, поиск по номеру, фильтр по точке продаж, выбор периода, таблица. При загрузке печатает сырьё Kaspi в консоль (отладка, убрать после сверки статусов) | `front/src/app/dashboard/(main)/orders/page.tsx` |
-| `/dashboard/imports` | Импорты: блок «Excel продаж офлайн-точки» (выбор точки, файл, лист, предпросмотр, запись) и блок «Поставщики из МойСклада» (файл, счётчики, предпросмотр, запись без дублей). Только ADMIN | `front/src/app/dashboard/(main)/imports/page.tsx` |
+| `/dashboard/imports` | Импорты: блоки «Excel продаж офлайн-точки», «Поставщики из МойСклада», «Товары из МойСклада», «Остатки из МойСклада» (склад, файл, предпросмотр, список на обнуление, запись). Только ADMIN | `front/src/app/dashboard/(main)/imports/page.tsx` |
 | `/dashboard/kaspi-sync` | Синхронизация с Kaspi: загрузка выгрузок, предпросмотр каталога | `front/src/app/dashboard/(main)/kaspi-sync/page.tsx` |
 
 **Каталог с деревом папок:** `/dashboard/products` подключён к API; дерево, создание папок, поиск и пагинация готовы. Строки товаров через children добавляет пользователь. Ответ API выводится в консоль браузера. См. [docs/app-structure.md](docs/app-structure.md).
@@ -228,6 +235,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `ImportPreviewTable` | Таблица разобранных строк файла: непригодные подсвечены, замечания отдельной строкой под записью | `front/src/app/dashboard/(main)/imports/_components/import-preview-table.tsx` |
 | `MoyskladProductsImport` | Блок импорта товаров из МойСклада: файл, счётчики (в файле / не товары / готовы / нет в каталоге / задвоенный код), сводка ненайденных поставщиков, таблица, запись | `front/src/app/dashboard/(main)/imports/_components/moysklad-products-import.tsx` |
 | `MoyskladPreviewTable` | Таблица разобранных товаров: код, закупка с валютой, поставщик, предзаказ по складам, найден ли артикул; замечания строкой под записью | `front/src/app/dashboard/(main)/imports/_components/moysklad-preview-table.tsx` |
+| `MoyskladStockImport` | Блок импорта остатков: выбор склада (`Dropdown` select), файл, счётчики, момент отчёта, список на обнуление, склад в подписи кнопки записи | `front/src/app/dashboard/(main)/imports/_components/moysklad-stock-import.tsx` |
+| `MoyskladStockPreviewTable`, `StockZeroTable` | Таблица строк отчёта остатков (пропущенные подсвечены, замечания строкой) и таблица того, что обнулится | `front/src/app/dashboard/(main)/imports/_components/moysklad-stock-preview-table.tsx` |
 | `SuppliersImport` | Блок импорта поставщиков: файл, счётчики (в файле / не поставщики / новых / уже в базе), таблица, запись. Лист выбирается только когда их в книге несколько | `front/src/app/dashboard/(main)/imports/_components/suppliers-import.tsx` |
 | `SupplierPreviewTable` | Таблица разобранных контрагентов: непригодные подсвечены, расхождения с нашими данными и замечания — строками под записью | `front/src/app/dashboard/(main)/imports/_components/supplier-preview-table.tsx` |
 | `ImportsLayout` | Защита раздела импортов ролью ADMIN | `front/src/app/dashboard/(main)/imports/layout.tsx` |
@@ -238,7 +247,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `CatalogPagination` | Панель пагинации под таблицей: размер страницы, номера, диапазон | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-pagination.tsx` |
 | `CabinetFetch` | Кука, запуск загрузки из кабинета, счётчики, склады, фильтр и таблица | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-fetch.tsx` |
 | `CabinetTable` | Таблица товаров из кабинета: картинка, штрихкод, цены со скидкой, размер | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-table.tsx` |
-| `CatalogRow`, `CatalogTableHead`, `CATALOG_COLUMN_COUNT` | Строка и шапка таблицы каталога: галка выделения, кружок статуса, квадратное фото, два названия, цена Kaspi в две строки со скидкой, закупка с валютой, поставщик, предзаказ, склады чипами «код · название · остаток · срок», закреплённое меню действий. Стили — `catalog-row.module.scss` | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
+| `CatalogRow`, `CatalogTableHead`, `CATALOG_COLUMN_COUNT` | Строка и шапка таблицы каталога: галка выделения, кружок статуса, квадратное фото, два названия, цена Kaspi в две строки со скидкой, закупка с валютой, себестоимость в ₸, поставщик, склады чипами «код · название», затем колонки Остаток, Резерв, Ожидание, Доступно, Предзаказ, Дней на складе — строкой на склад в том же порядке, закреплённое меню действий. Стили — `catalog-row.module.scss` | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
 | `MoveToCategoryDialog` | Модалка переноса выбранных товаров: дерево папок с поиском, затем подтверждение | `front/src/app/dashboard/(main)/products/_components/move-to-category-dialog.tsx` |
 | `OrderDictionaryFilters` | Четыре выпадашки под кнопками синхронизации: статус доставки, оплата, откуда товар, откуда клиент. Общий `Dropdown` в режиме `select` с поиском; закрытые значения остаются в списке с пометкой | `front/src/app/dashboard/(main)/orders/_components/order-dictionary-filters.tsx` |
 | `OrderRow`, `OrderTableHead`, `orderColumnCount(showOffline)` | Строка и шапка таблицы заказов. Общие колонки: дата, статус, номер, покупатель, город, точка продаж, кто создал, доставка, сумма, планируемая доставка. При `showOffline` добавляются восемь офлайновых: номер продавца, откуда товар, статус доставки, откуда клиент, оплата, скидка, оплачено, остаток. Стили — `order-row.module.scss` | `front/src/app/dashboard/(main)/orders/_components/order-row.tsx` |
@@ -250,6 +259,12 @@ shared/    # Общий код: типы контрактов, констант�
 | `USER_ROLES`, `UserRole` | Роли сотрудников: ADMIN, MANAGER, SELLER | `shared/src/constants/roles.ts` |
 | `USER_ROLE_LABELS` | Подписи ролей для интерфейса | `shared/src/constants/roles.ts` |
 | `AUDIT_ACTIONS`, `AUDIT_ACTION_LABELS` | Действия для журнала и их подписи | `shared/src/constants/audit-actions.ts` |
+| `HISTORY_ENTITY_TYPES`, `HISTORY_FIELD_LABELS`, `HistoryField<E>`, `historyFieldLabel()` | Словарь истории: сущности с историей и подписи их полей. В базе ключ поля, подпись — отсюда при показе | `shared/src/constants/history-fields.ts` |
+| `HISTORY_SOURCES`, `HistorySource`, `HISTORY_SOURCE_LABELS` | Источник изменения: вручную, импорт, синхронизация Kaspi | `shared/src/constants/history-fields.ts` |
+| `HistoryChange`, `HistoryContext` | Изменённое поле `{ field, from, to }` и обстоятельства: склад, документ, лист, пояснение | `shared/src/types/history.ts` |
+| `AuditLogEntry`, `AuditLogQuery` | Запись журнала/истории наружу и фильтры `GET /api/audit` | `shared/src/types/audit.ts` |
+| `HistoryAuthor`, `HistoryEntry`, `HistoryMeta` | Контракт `recordHistory()`: автор, источник, записи | `server/src/lib/history.ts` |
+| `auditQuerySchema` | Проверка фильтров журнала: сущность только парой, тип из `AUDIT_ACTIONS` | `server/src/modules/audit/audit.schemas.ts` |
 | `LOGIN_PATTERN`, `PASSWORD_PATTERN`, `normalizeLogin()` | Правила логина и пароля, общие для сервера и формы | `shared/src/constants/credentials.ts` |
 | `LoginRequest`, `AuthUser`, `AuthResponse` | Контракты входа | `shared/src/types/auth.ts` |
 | `requireAuth`, `requireRole(...roles)` | Проверка сессии и ролей | `server/src/middlewares/require-auth.ts` |
@@ -272,8 +287,12 @@ shared/    # Общий код: типы контрактов, констант�
 | `MOYSKLAD_WAREHOUSE_COLUMNS`, `MOYSKLAD_IGNORED_WAREHOUSE_COLUMNS` | Раскладка «колонка выгрузки → код склада»: PP3, PP6, PP27, PP4; Алматы не используется | `shared/src/constants/moysklad.ts` |
 | `MOYSKLAD_GOODS_TYPES`, `MOYSKLAD_CURRENCIES`, `MOYSKLAD_MAX_PREORDER_DAYS`, `MOYSKLAD_IMPORT_MAX_ROWS` | Типы строк, идущих в каталог, сопоставление валют и пределы импорта | `shared/src/constants/moysklad.ts` |
 | `MoyskladProductDraft`, `MoyskladStockDraft`, `MoyskladImportPreview`, `CommitMoyskladImportRequest`, `CommitMoyskladImportResponse` | Контракты импорта товаров из МойСклада | `shared/src/types/moysklad.ts` |
+| `StockReportRow`, `StockZeroCandidate`, `StockImportPreview`, `CommitStockImportRequest`, `CommitStockImportResponse` | Контракты импорта остатков из отчёта «Остатки» | `shared/src/types/moysklad.ts` |
+| `MOYSKLAD_REPORT_UTC_OFFSET_HOURS`, `MOYSKLAD_MAX_STOCK_QUANTITY`, `MOYSKLAD_MAX_DAYS_ON_STOCK` | Пояс времени отчёта (Астана, +5) и пределы правдоподобного остатка и дней | `shared/src/constants/moysklad.ts` |
 | `usePreviewMoyskladImportMutation`, `useCommitMoyskladImportMutation` | Разбор выгрузки МойСклада и запись; тег `Product` | `front/src/features/products/moysklad-api.ts` |
+| `usePreviewStockImportMutation`, `useCommitStockImportMutation` | Разбор отчёта остатков по складу и запись; теги `Product`, `Audit` | `front/src/features/products/moysklad-api.ts` |
 | `useMoyskladImport()` | Импорт товаров: файл, листы, разбор, счётчики, запись, сброс | `front/src/features/products/use-moysklad-import.ts` |
+| `useMoyskladStockImport()` | Импорт остатков: склад, файл, листы, разбор (заново при смене склада), запись ровно того, что показано | `front/src/features/products/use-moysklad-stock-import.ts` |
 | `SUPPLIER_IMPORT_GROUP`, `SUPPLIER_GROUP_SEPARATORS`, `SUPPLIER_IMPORT_MAX_ROWS` | Группа контрагентов, считаемая поставщиками, разделители вложенных групп и лимит строк записи | `shared/src/constants/suppliers.ts` |
 | `SUPPLIER_NAME_MAX_LENGTH`, `SUPPLIER_ADDRESS_MAX_LENGTH`, `SUPPLIER_PHONE_MAX_LENGTH`, `SUPPLIER_TELEGRAM_ID_MAX_LENGTH` | Лимиты полей карточки поставщика | `shared/src/constants/suppliers.ts` |
 | `SupplierDto`, `SuppliersResponse`, `UpdateSupplierRequest` | Контракты справочника поставщиков | `shared/src/types/suppliers.ts` |

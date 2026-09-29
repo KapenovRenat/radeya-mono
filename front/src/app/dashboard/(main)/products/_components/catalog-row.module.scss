@@ -26,13 +26,18 @@
 /* ── Меню действий ──────────────────────────────────────── */
 
 /* Закреплено у правого края: при горизонтальной прокрутке точки остаются
-   на виду. Фон обязателен — иначе сквозь ячейку видно уезжающие колонки. */
+   на виду. Фон обязателен — иначе сквозь ячейку видно уезжающие колонки.
+
+   Разделитель — тенью, а не border-left: у таблицы border-collapse: collapse,
+   и граница там принадлежит таблице, а не ячейке. У sticky-ячейки браузер
+   рисует её через раз — линии нет, пока hover не заставит перерисовать строку.
+   Тень — часть самой ячейки и рисуется вместе с её фоном. */
 .colActions {
   position: sticky;
   right: 0;
   width: 1px;
   text-align: center;
-  border-left: 1px solid var(--border);
+  box-shadow: inset 1px 0 0 var(--border);
 }
 
 td.colActions { background: var(--background); }
@@ -130,8 +135,7 @@ th.colActions { background: var(--muted); }
   font-size: 0.875rem;
 }
 
-.colPrice,
-.colPreOrder {
+.colPrice {
   white-space: nowrap;
   text-align: center;
 }
@@ -196,32 +200,50 @@ th.colActions { background: var(--muted); }
   font-size: 0.8125rem;
 }
 
-/* ── Склады ─────────────────────────────────────────────── */
+/* ── Склады и их цифры ──────────────────────────────────── */
 
-.colStock { white-space: nowrap; }
+/* Строка на склад в каждой колонке. Высота строки и зазор общие для чипа
+   склада и для чисел: иначе у товара на двух складах вторая строка «Остатка»
+   встанет не напротив второго склада. */
+.colStock,
+.colStockNum {
+  --stock-line: 1.5rem;
+  --stock-gap: 0.25rem;
 
-.warehouses {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
+.colStockNum {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.stockLines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stock-gap);
+}
+
+.stockLine {
+  display: flex;
+  align-items: center;
+  height: var(--stock-line);
+}
+
+/* В числовых колонках число прижато вправо — разряды встают друг под другом. */
+.colStockNum .stockLine { justify-content: flex-end; }
+
 .chip {
-  padding: 0.125rem 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: var(--stock-line);
+  padding: 0 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-size: 0.75rem;
   white-space: nowrap;
 }
 
-.chipCount {
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Срок предзаказа по складу — не то же, что остаток: он выделен цветом,
-   чтобы две цифры в одном чипе не читались как одна пара. */
-.chipDays {
-  color: var(--price-old, var(--muted-foreground));
-  font-variant-numeric: tabular-nums;
-}
+.negative { color: var(--destructive); }

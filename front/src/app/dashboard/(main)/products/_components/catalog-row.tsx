@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Pencil } from "lucide-react";
 import {
   CURRENCY_LABELS,
@@ -31,10 +32,47 @@ const COLUMNS = [
   // Закупка и поставщик приезжают из МойСклада. Валюта у закупки своя
   // и в подпись колонки не выносится: у соседних строк она разная.
   { title: "Закупка", className: styles.colPurchase },
+  // Себестоимость всегда в тенге — символ стоит у суммы, как у закупки.
+  { title: "Себестоимость", className: styles.colPurchase },
   { title: "Поставщик", className: styles.colSupplier },
-  { title: "Предзаказ", className: styles.colPreOrder },
+  // Склад и его цифры — отдельными колонками, но строки внутри ячеек идут
+  // в одном порядке: первая строка каждой колонки — первый склад.
   { title: "Склады", className: styles.colStock },
+  { title: "Остаток", className: styles.colStockNum },
+  { title: "Резерв", className: styles.colStockNum },
+  { title: "Ожидание", className: styles.colStockNum },
+  { title: "Доступно", className: styles.colStockNum },
+  { title: "Предзаказ", className: styles.colStockNum },
+  { title: "Дней на складе", className: styles.colStockNum },
 ] as const;
+
+type Stock = CatalogRowDto["stocks"][number];
+
+/**
+ * Значение по каждому складу — строкой на склад.
+ *
+ * Высота строки у всех колонок складов одна (`--stock-line` в стилях):
+ * иначе вторая строка «Остатка» съедет относительно второго склада.
+ */
+function StockLines({ stocks, render }: {
+  stocks: Stock[];
+  render: (stock: Stock) => ReactNode;
+}) {
+  if (stocks.length === 0) return <span className={styles.muted}>—</span>;
+
+  return (
+    <span className={styles.stockLines}>
+      {stocks.map((stock) => (
+        <span key={stock.warehouse.id} className={styles.stockLine}>{render(stock)}</span>
+      ))}
+    </span>
+  );
+}
+
+/** Пусто — «не указано», а не ноль: прочерк, а не 0. */
+function count(value: number | null) {
+  return value === null ? <span className={styles.muted}>—</span> : value;
+}
 
 /** Подписанные колонки плюс галка и меню. Tables считает этим colSpan пустого состояния. */
 export const CATALOG_COLUMN_COUNT = COLUMNS.length + 2;
@@ -183,39 +221,62 @@ export function CatalogRow({ item, selected, onSelectedChange, disabled = false 
         )}
       </td>
 
+      <td className={styles.colPurchase}>
+        {item.costPrice === null
+          ? <span className={styles.muted}>—</span>
+          : formatMoney(moneyToNumber(item.costPrice) ?? 0)}
+      </td>
+
       <td className={styles.colSupplier} title={item.supplier?.name ?? undefined}>
         {item.supplier === null
           ? <span className={styles.muted}>—</span>
           : item.supplier.name}
       </td>
 
-      <td className={styles.colPreOrder}>
-        {item.preOrderDays === 0
-          ? <span className={styles.muted}>-</span>
-          : item.preOrderDays + " дн."}
+      <td className={styles.colStock}>
+        {/* Код и название вместе: код — то, чем склад зовётся в Kaspi
+            и в заказах, название — то, что понимает человек. */}
+        <StockLines stocks={item.stocks} render={(stock) => (
+          <span className={styles.chip}>
+            {stock.warehouse.code}
+            {stock.warehouse.name !== null && " · " + stock.warehouse.name}
+          </span>
+        )} />
       </td>
 
-      <td className={styles.colStock}>
-        {item.stocks.length === 0 ? (
-          <span className={styles.muted}>—</span>
-        ) : (
-          <span className={styles.warehouses}>
-            {item.stocks.map((stock) => (
-              // Код и название вместе: код — то, чем склад зовётся в Kaspi
-              // и в заказах, название — то, что понимает человек.
-              <span key={stock.warehouse.id} className={styles.chip}>
-                {stock.warehouse.code}
-                {stock.warehouse.name !== null && " · " + stock.warehouse.name}
-                {stock.quantity !== null && (
-                  <span className={styles.chipCount}> · {stock.quantity} шт.</span>
-                )}
-                {stock.preOrderDays > 0 && (
-                  <span className={styles.chipDays}> · {stock.preOrderDays} дн.</span>
-                )}
-              </span>
-            ))}
+      <td className={styles.colStockNum}>
+        <StockLines stocks={item.stocks} render={(stock) => count(stock.quantity)} />
+      </td>
+
+      <td className={styles.colStockNum}>
+        <StockLines stocks={item.stocks} render={(stock) => count(stock.reserved)} />
+      </td>
+
+      <td className={styles.colStockNum}>
+        <StockLines stocks={item.stocks} render={(stock) => count(stock.expected)} />
+      </td>
+
+      <td className={styles.colStockNum}>
+        {/* Отрицательное «Доступно» — продано больше, чем есть и едет:
+            выделено, потому что это требует действия. */}
+        <StockLines stocks={item.stocks} render={(stock) => (
+          <span className={cn(stock.available !== null && stock.available < 0 && styles.negative)}>
+            {count(stock.available)}
           </span>
-        )}
+        )} />
+      </td>
+
+      <td className={styles.colStockNum}>
+        {/* 0 — товар в наличии, срока нет. */}
+        <StockLines stocks={item.stocks} render={(stock) => (
+          stock.preOrderDays === 0
+            ? <span className={styles.muted}>—</span>
+            : stock.preOrderDays + " дн."
+        )} />
+      </td>
+
+      <td className={styles.colStockNum}>
+        <StockLines stocks={item.stocks} render={(stock) => count(stock.daysOnStock)} />
       </td>
 
       {/*

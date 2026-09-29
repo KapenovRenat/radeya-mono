@@ -1,7 +1,8 @@
-import type { CatalogResponse } from '@radeya/shared';
+import { AUDIT_ACTIONS, HISTORY_ENTITY_TYPES, type CatalogResponse } from '@radeya/shared';
 import { Prisma } from '../../generated/prisma/client';
 import { prisma } from '../../db/client';
 import { NotFoundError } from '../../lib/errors';
+import { diffFields, recordHistory, type HistoryMeta } from '../../lib/history';
 import { catalogRowSelect, toCatalogRow } from './catalog.mapper';
 import type { CatalogInput, MoveProductsInput } from './catalog.schemas';
 
@@ -40,20 +41,27 @@ export async function listCatalog(input: CatalogInput): Promise<CatalogResponse>
     const rows = await tx.variant.findMany({ where, select: catalogRowSelect,
       orderBy: [{ status: 'asc' }, { product: { name: 'asc' } }, { sku: 'asc' }],
       skip: (page - 1) * input.pageSize, take: input.pageSize });
-    return { items: rows.map(toCatalogRow), total, page, pageSize: input.pageSize, totalPages };
+    const now = new Date();
+    return { items: rows.map((row) => toCatalogRow(row, now)), total, page,
+      pageSize: input.pageSize, totalPages };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
 
-/** Переносится Product со всеми модификациями, а не только видимый артикул. */
-export async function moveProductsToCategory(input: MoveProductsInput) {
+/**
+ * Переносится Product со всеми модификациями, а не только видимый артикул.
+ * В историю каждого товара — папка названием, «было → стало», в той же транзакции.
+ */
+export async function moveProductsToCategory(input: MoveProductsInput, meta: HistoryMeta) {
   return prisma.$transaction(async (tx) => {
+    let targetName: string | null = null;
     if (input.categoryId) {
       const category = await tx.category.findUnique({ where: { id: input.categoryId },
-        select: { id: true } });
+        select: { id: true, name: true } });
       if (!category) throw new NotFoundError('Категория не найдена');
+      targetName = category.name;
     }
     const before = await tx.product.findMany({ where: { id: { in: input.productIds } },
-      select: { id: true, categoryId: true } });
+      select: { id: true, categoryId: true, category: { select: { name: true } } } });
     if (before.length !== input.productIds.length) {
       throw new NotFoundError('Часть выбранных товаров не найдена. Обновите таблицу');
     }
@@ -62,6 +70,16 @@ export async function moveProductsToCategory(input: MoveProductsInput) {
       where: { id: { in: changed.map((product) => product.id) } },
       data: { categoryId: input.categoryId },
     });
-    return { updated: changed.length, before: changed };
+    await recordHistory(tx, meta, changed.map((product) => ({
+      type: AUDIT_ACTIONS.PRODUCTS_CATEGORY_CHANGED,
+      entityType: HISTORY_ENTITY_TYPES.PRODUCT,
+      entityId: product.id,
+      changes: diffFields(HISTORY_ENTITY_TYPES.PRODUCT,
+        { category: product.category?.name ?? null }, { category: targetName }),
+    })));
+    return {
+      updated: changed.length,
+      before: changed.map((product) => ({ id: product.id, categoryId: product.categoryId })),
+    };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }

@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import { AUDIT_ACTIONS } from '@radeya/shared';
+import { AUDIT_ACTIONS, HISTORY_SOURCES } from '@radeya/shared';
 import { Prisma } from '../../generated/prisma/client';
 import { clientIp, logAction } from '../../lib/audit';
 import { ConflictError, ValidationError } from '../../lib/errors';
@@ -14,9 +14,12 @@ export const getCatalog: RequestHandler = async (req, res) => {
 export const patchProductsCategory: RequestHandler = async (req, res) => {
   const parsed = moveProductsSchema.safeParse(req.body);
   if (!parsed.success) throw new ValidationError('Выберите от 1 до 100 товаров и целевую папку');
+  const author = req.user!;
   let result;
   try {
-    result = await moveProductsToCategory(parsed.data);
+    result = await moveProductsToCategory(parsed.data, {
+      author, source: HISTORY_SOURCES.MANUAL, ip: clientIp(req),
+    });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
       throw new ConflictError('Товары изменились. Повторите перенос');
@@ -24,7 +27,6 @@ export const patchProductsCategory: RequestHandler = async (req, res) => {
     throw error;
   }
   if (result.updated) {
-    const author = req.user!;
     await logAction({ userId: author.id, userLogin: author.login, userRole: author.role,
       action: AUDIT_ACTIONS.PRODUCTS_CATEGORY_CHANGED, entityType: 'Product',
       before: result.before, after: { categoryId: parsed.data.categoryId,
