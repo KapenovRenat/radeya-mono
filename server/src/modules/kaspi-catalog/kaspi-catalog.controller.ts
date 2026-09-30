@@ -57,6 +57,7 @@ export const fetchCatalog: RequestHandler = async (req, res) => {
     action: AUDIT_ACTIONS.KASPI_CABINET_FETCH,
     // Куку в журнал не кладём ни при каких условиях — это доступ в кабинет.
     after: {
+      source: parsed.data.useSession ? 'session' : 'cookie',
       total: result.total,
       pages: result.pages,
       stoppedAtPage: result.stoppedAtPage,

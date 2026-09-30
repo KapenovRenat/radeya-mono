@@ -548,14 +548,48 @@ POST https://idmc.shop.kaspi.kz/api/p/login
 Банка хранится целиком (с «запомненным устройством» `idmc`) — повторный вход
 реже упирается в код на почту. Сохранение новых данных банку стирает.
 
-**Потребителей пока нет.** Обход каталога (`fetchCabinetCatalog`) ходит
-по ручной куке; перевод на `withCabinetSession()` и поля заказа из GraphQL —
-следующими задачами. Потребитель обязан бросать `AppError` с кодом
-`KASPI_UNAUTHORIZED` на 401/403, редирект на вход или HTML вместо JSON —
-иначе повторного входа не будет.
+**Потребители:** обход каталога (`fetchCabinetCatalog` с `useSession: true`,
+кнопка «Загрузить все товары» на `/dashboard/kaspi-sync`, когда вход работает).
+Ручная кука осталась запасным путём. Следом — поля заказа из GraphQL.
 
 Проверка из интерфейса — `/dashboard/settings`, ответы Kaspi по шагам печатаются
 в консоль браузера.
+
+### Как отправить свой запрос в кабинет
+
+Нужно что-то из кабинета — одна строка в сервисе на сервере:
+
+```ts
+import { cabinetGetJson } from '../kaspi-cabinet/cabinet-http';
+import { withCabinetSession } from '../kaspi-cabinet/cabinet-session.service';
+
+const data = await withCabinetSession((cookie) =>
+  cabinetGetJson('https://mc.shop.kaspi.kz/bff/…', cookie),
+);
+```
+
+Что происходит внутри:
+- есть сохранённая сессия — запрос сразу, без входа;
+- кабинет не пустил (401/403 или редирект на вход) — `cabinetGetJson` бросает
+  `KASPI_UNAUTHORIZED`, `withCabinetSession` входит по данным из «Настроек»
+  и повторяет запрос **один раз**;
+- вход не удался — ошибка `KASPI_LOGIN_*` с понятным текстом уходит наружу.
+
+Нужен не GET (например, POST в GraphQL заказов) — пишите свой `run(cookie)`,
+но на 401/403 и редирект бросайте `AppError(401, CABINET_UNAUTHORIZED_CODE, …)`
+из `cabinet-http.ts`: без этой ошибки повторного входа не будет. Образец —
+`cabinetGetJson` в том же файле.
+
+Где что лежит — `server/src/modules/kaspi-cabinet/`:
+
+| Файл | Когда туда смотреть |
+|---|---|
+| `cabinet-session.service.ts` | **Точка входа.** `withCabinetSession()`, проверка подключения, правила «когда входить» |
+| `cabinet-http.ts` | `cabinetGetJson()` для своих запросов; запросы входа с банкой кук и трассой |
+| `cabinet-login.client.ts` | Сам вход: шаги, поля, коды ошибок Kaspi. Kaspi поменял вход — править здесь |
+| `cabinet-account.service.ts` | Хранение email, пароля и сессии в базе |
+| `cabinet-trace.ts` | Что прячется звёздочками в трассе для консоли |
+| `kaspi-cabinet.routes/controller/schemas.ts` | Эндпоинты настроек и проверки |
 
 ### Зачем оставляем XML, если JSON отдаёт всё
 

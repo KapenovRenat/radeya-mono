@@ -854,16 +854,28 @@ ADMIN и MANAGER: список пополняется по ходу работы
 как их отдал кабинет, — состав нашего DTO ещё не определён. **В базу не пишет.**
 
 - Auth: требуется, роль `ADMIN`
-- Тело: `{ "cookie": "...", "remember": false }` (тип `KaspiCabinetFetchRequest`),
-  оба поля необязательные; пустая `cookie` — берётся запомненная
+- Тело: `{ "cookie": "...", "remember": false }` либо `{ "useSession": true }`
+  (тип `KaspiCabinetFetchRequest`), все поля необязательные; пустая `cookie` —
+  берётся запомненная. `useSession: true` — сессия входа по email и паролю через
+  `withCabinetSession()`: жива — сразу, нет — вход и обход заново, один раз.
+  Вместе с `cookie` или `remember` — 400
+- Кабинет не пустил на первой странице — ошибка 401, а не пустой результат:
+  по ней `withCabinetSession()` входит заново. Обрыв дальше первой страницы —
+  частичный результат со `stoppedAtPage`, как раньше
+- Редиректы не проходятся (`cabinetGetJson`): редирект на вход — это 401
 - Ответ 200: `{ "total", "onSale", "offSale", "expected", "withProblems", "pages", "stoppedAtPage", "stoppedReason", "hasStoredCookie", "warehouses", "sample", "offers" }`
   (тип `KaspiCabinetFetchResponse`). В `offers` — разобранные товары (`CabinetOffer`),
   не сырой ответ площадки; в `warehouses` — сводка складов за обход
   (`CabinetWarehouse`: `code`, `storeId`, `cityId`, `offersCount`, `totalStock`);
   в `sample` — три первых товара парами `{ raw, parsed }` (`CabinetSample`)
 - Ошибки:
-  - `400 VALIDATION_ERROR` — нет ни присланной, ни запомненной куки; не задан `KASPI_MERCHANT_ID`
-  - `401 KASPI_UNAUTHORIZED` — Kaspi не принял куку: протухла или скопирована не целиком
+  - `400 VALIDATION_ERROR` — нет ни присланной, ни запомненной куки; не задан `KASPI_MERCHANT_ID`;
+    `useSession` вместе с кукой
+  - `401 KASPI_UNAUTHORIZED` — кабинет не пустил: кука протухла или скопирована не целиком
+    (в режиме сессии — не пустил и после повторного входа)
+  - режим сессии: `409 KASPI_CABINET_NOT_CONFIGURED`, `409 KASPI_LOGIN_*`,
+    `429 KASPI_LOGIN_BLOCKED`, `502 KASPI_LOGIN_ERROR` — см. раздел Kaspi Cabinet
+- Журнал: KASPI_CABINET_FETCH, в `after.source` — `cookie` или `session`
   - `502 KASPI_UNAVAILABLE` — кабинет не ответил или вернул ошибку
   - `502 KASPI_BAD_RESPONSE` — пришёл не JSON или не список: формат изменился
   - `403 FORBIDDEN` — роль ниже `ADMIN`

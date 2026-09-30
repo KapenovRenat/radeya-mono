@@ -3,6 +3,7 @@ import type { CabinetSample, KaspiCabinetFetchResponse } from '@radeya/shared';
 import { env } from '../../config/env';
 import { AppError, ValidationError } from '../../lib/errors';
 import { logger } from '../../lib/logger';
+import { isCabinetUnauthorized, withCabinetSession } from '../kaspi-cabinet/cabinet-session.service';
 import { fetchOffersPage, type RawCabinetOffer } from './kaspi-cabinet.client';
 import { toCabinetOffer } from './kaspi-cabinet.mapper';
 import { getStoredCookie, hasStoredCookie, rememberCookie } from './kaspi-cabinet.session';
@@ -37,6 +38,8 @@ const SAMPLE_SIZE = 3;
 export interface FetchCatalogInput {
   cookie?: string;
   remember?: boolean;
+  /** Сессия входа по email и паролю вместо ручной куки. */
+  useSession?: boolean;
 }
 
 export async function fetchCabinetCatalog(
@@ -50,10 +53,22 @@ export async function fetchCabinetCatalog(
     );
   }
 
+  if (input.useSession) {
+    // Не пустил на первой странице — вход и весь обход заново, один раз.
+    return withCabinetSession((cookie) => crawlCatalog(merchantId, cookie));
+  }
+
   const cookie = resolveCookie(input);
 
   if (input.remember) rememberCookie(cookie);
 
+  return crawlCatalog(merchantId, cookie);
+}
+
+async function crawlCatalog(
+  merchantId: string,
+  cookie: string,
+): Promise<KaspiCabinetFetchResponse> {
   // Два режима: в продаже и архив. Статус товара определяется тем, в каком
   // обходе он пришёл, — как и с файлами ACTIVE.xml / ARCHIVE.xml.
   const onSale = await crawl({ merchantId, cookie, onSale: true });
@@ -133,8 +148,13 @@ async function crawl(params: CrawlParams): Promise<CrawlResult> {
         onSale: params.onSale,
       });
     } catch (error) {
+      // Не пустили на самой первой странице — это не обрыв, а мёртвая сессия.
+      // Ошибкой, а не пустым результатом: по ней withCabinetSession() войдёт
+      // заново, а ручная кука получит внятное «протухла».
+      if (params.onSale && page === 0 && isCabinetUnauthorized(error)) throw error;
+
       // Обрыв на середине — не повод терять уже полученное. Отдаём частичный
-      // результат и говорим, с какой страницы продолжать со свежей кукой.
+      // результат и говорим, с какой страницы продолжать.
       stoppedAtPage = page;
       stoppedReason = error instanceof AppError ? error.message : 'неизвестная ошибка';
 

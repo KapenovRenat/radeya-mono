@@ -683,6 +683,32 @@ table или tbody. Проверка загрузки, ошибки, пусто�
 
 ---
 
+## /dashboard/kaspi-sync — синхронизация товаров с Kaspi
+
+Загрузка каталога из кабинета Kaspi. Вид зависит от того, работает ли вход
+по email и паролю (`useKaspiCabinetSignedIn()`: данные сохранены и последний
+вход — `OK`):
+
+| Вход работает | Не работает или данных нет |
+|---|---|
+| Только кнопка «Загрузить все товары» — сервер берёт свою сессию (`useSession: true`), при нужде входит сам | Поле ручной куки, «Запомнить», подсказка про DevTools |
+| Блока XML-выгрузок (ACTIVE / ARCHIVE) нет | Блок XML-выгрузок и его разбор |
+
+Общее для обоих: счётчики обхода, склады, сохранение новых товаров, таблица
+с фильтрами. Пока статус входа грузится, переключаемые блоки не показываются —
+иначе форма куки мелькнёт и исчезнет. Загрузка сбрасывает тег `KaspiCabinet`:
+вход не удался — статус обновится, и страница сама вернётся к ручному виду.
+
+- Тип: раздел dashboard, только ADMIN
+- Данные: `GET /api/kaspi-cabinet/account`, `POST /api/kaspi-catalog/fetch`,
+  `POST /api/kaspi-catalog/preview`
+- Компоненты: `CabinetFetch`, `WarehousesPanel`, `ProductsImportPanel`,
+  `CabinetTable`, `CatalogTable` — `front/src/app/dashboard/(main)/kaspi-sync/_components/`
+- Хуки: `useKaspiCabinet()`, `useKaspiCabinetSignedIn()`, `useKaspiCatalogSync()`
+- Файл: `front/src/app/dashboard/(main)/kaspi-sync/page.tsx`
+
+---
+
 ## /dashboard/settings — настройки
 
 Ключи от внешних систем, блоками — по одному на систему. Только ADMIN

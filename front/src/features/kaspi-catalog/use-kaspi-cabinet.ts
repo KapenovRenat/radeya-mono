@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import type { CabinetSample, KaspiCabinetFetchResponse } from "@radeya/shared";
 
+import { useKaspiCabinetSignedIn } from "@/features/kaspi-cabinet/use-kaspi-cabinet-signed-in";
 import { apiErrorMessage } from "@/shared/api/error-message";
 import { useFetchKaspiCabinetMutation } from "./kaspi-catalog-api";
 
@@ -20,16 +21,23 @@ export function useKaspiCabinet() {
   const [error, setError] = useState<string | null>(null);
   const [fetchCabinet, { isLoading }] = useFetchKaspiCabinetMutation();
 
+  // Вход по email работает — кука не нужна: сервер возьмёт свою сессию.
+  const { signedIn, isLoading: isAccountLoading } = useKaspiCabinetSignedIn();
+
   const load = useCallback(async () => {
     setError(null);
     setResult(null);
 
     try {
-      const response = await fetchCabinet({
-        // Пустое поле — на сервере возьмётся запомненная кука.
-        cookie: cookie.trim() || undefined,
-        remember,
-      }).unwrap();
+      const response = await fetchCabinet(
+        signedIn
+          ? { useSession: true }
+          : {
+              // Пустое поле — на сервере возьмётся запомненная кука.
+              cookie: cookie.trim() || undefined,
+              remember,
+            },
+      ).unwrap();
 
       logCabinetResponse(response);
 
@@ -42,7 +50,7 @@ export function useKaspiCabinet() {
         apiErrorMessage(requestError, "Не удалось загрузить каталог из кабинета"),
       );
     }
-  }, [cookie, remember, fetchCabinet]);
+  }, [cookie, remember, signedIn, fetchCabinet]);
 
   return {
     cookie,
@@ -53,6 +61,8 @@ export function useKaspiCabinet() {
     isLoading,
     result,
     error,
+    signedIn,
+    isAccountLoading,
   };
 }
 

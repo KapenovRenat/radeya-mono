@@ -25,6 +25,67 @@ export const CABINET_REQUEST_TIMEOUT_MS = 30_000;
 /** Вход — три-четыре перехода. Десять — уже зацикливание, а не длинная цепочка. */
 const MAX_REDIRECTS = 10;
 
+/**
+ * Код ошибки «кабинет не пустил». По нему withCabinetSession() понимает,
+ * что сессия умерла, — входит заново и повторяет запрос.
+ */
+export const CABINET_UNAUTHORIZED_CODE = 'KASPI_UNAUTHORIZED';
+
+/**
+ * GET к данным кабинета с готовой кукой — для запросов через withCabinetSession():
+ *
+ *   withCabinetSession((cookie) => cabinetGetJson(url, cookie))
+ *
+ * Редиректы не проходит: без сессии кабинет уводит на вход, и это ответ
+ * «не пустил» (KASPI_UNAUTHORIZED), а не данные. Возвращает JSON как есть.
+ */
+export async function cabinetGetJson(url: string, cookie: string): Promise<unknown> {
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      headers: {
+        // Кука уходит заголовком, а не в адресе: адреса оседают в логах и в Referer.
+        cookie,
+        accept: 'application/json, text/plain, */*',
+        'accept-language': 'ru-RU,ru;q=0.9',
+        'user-agent': CABINET_USER_AGENT,
+        referer: `${CABINET_ORIGIN}/`,
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CABINET_REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'неизвестная причина';
+
+    throw new AppError(502, 'KASPI_UNAVAILABLE', `Не удалось обратиться к кабинету Kaspi: ${reason}`);
+  }
+
+  if (response.status === 401 || response.status === 403 || isRedirect(response.status)) {
+    throw new AppError(
+      401,
+      CABINET_UNAUTHORIZED_CODE,
+      'Кабинет Kaspi не пустил — сессия истекла или кука скопирована не полностью',
+    );
+  }
+
+  if (!response.ok) {
+    throw new AppError(502, 'KASPI_UNAVAILABLE', `Кабинет Kaspi ответил ${response.status}`);
+  }
+
+  try {
+    return await response.json();
+  } catch {
+    // При протухшей сессии кабинет может ответить и страницей входа с кодом 200 —
+    // без этой проверки она выглядела бы как пустые данные.
+    throw new AppError(
+      502,
+      'KASPI_BAD_RESPONSE',
+      'Кабинет вернул не JSON — вероятно, вместо данных пришла страница входа',
+    );
+  }
+}
+
 export interface CabinetStepRequest {
   /** Подпись шага в трассе. */
   label: string;

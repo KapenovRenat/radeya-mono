@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/button";
+import { useKaspiCabinetSignedIn } from "@/features/kaspi-cabinet/use-kaspi-cabinet-signed-in";
 import { useKaspiCatalogSync } from "@/features/kaspi-catalog/use-kaspi-catalog-sync";
 import { formatDateTime } from "@/lib/format";
 import { usePagination } from "@/lib/use-pagination";
@@ -27,56 +28,65 @@ export default function KaspiSyncPage() {
 
   const pagination = usePagination(offers);
 
+  // Вход по email работает — ручной путь через XML-выгрузки не нужен.
+  // Пока статус не пришёл, не показываем и его: иначе блок мелькнёт и исчезнет.
+  const cabinet = useKaspiCabinetSignedIn();
+  const showManualUpload = !cabinet.signedIn && !cabinet.isLoading;
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Синхронизация с Kaspi</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Выгрузки из кабинета продавца: «Действия с файлами» → ACTIVE и ARCHIVE.
-          Данные только показываются, в базу пока ничего не сохраняется.
-        </p>
+        {showManualUpload && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Выгрузки из кабинета продавца: «Действия с файлами» → ACTIVE и ARCHIVE.
+            Данные только показываются, в базу пока ничего не сохраняется.
+          </p>
+        )}
       </div>
 
       <CabinetFetch />
 
-      <div className="flex flex-col gap-3 rounded-lg border p-4">
-        <label className="flex flex-col gap-1 text-sm">
-          ACTIVE.xml — в продаже
-          <input type="file" accept=".xml" onChange={selectFile("active")} />
-        </label>
+      {showManualUpload && (
+        <div className="flex flex-col gap-3 rounded-lg border p-4">
+          <label className="flex flex-col gap-1 text-sm">
+            ACTIVE.xml — в продаже
+            <input type="file" accept=".xml" onChange={selectFile("active")} />
+          </label>
 
-        <label className="flex flex-col gap-1 text-sm">
-          ARCHIVE.xml — снятые с продажи
-          <input type="file" accept=".xml" onChange={selectFile("archive")} />
-        </label>
+          <label className="flex flex-col gap-1 text-sm">
+            ARCHIVE.xml — снятые с продажи
+            <input type="file" accept=".xml" onChange={selectFile("archive")} />
+          </label>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" onClick={sync} disabled={!canSync}>
-            {isLoading ? "Разбираю…" : "Синхронизировать"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" onClick={sync} disabled={!canSync}>
+              {isLoading ? "Разбираю…" : "Синхронизировать"}
+            </Button>
 
-          <Button
-            type="button"
-            onClick={() => {
-              reset();
-              setOnlyProblems(false);
-              pagination.setPage(1);
-            }}
-          >
-            Сбросить
-          </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                reset();
+                setOnlyProblems(false);
+                pagination.setPage(1);
+              }}
+            >
+              Сбросить
+            </Button>
 
-          {!files.active && !files.archive && (
-            <span className="text-sm text-muted-foreground">
-              Выберите хотя бы один файл
-            </span>
-          )}
+            {!files.active && !files.archive && (
+              <span className="text-sm text-muted-foreground">
+                Выберите хотя бы один файл
+              </span>
+            )}
+          </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
+      )}
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
-      </div>
-
-      {preview && (
+      {showManualUpload && preview && (
         <>
           <CatalogSummary summary={preview.summary} />
 

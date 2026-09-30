@@ -15,7 +15,7 @@ import {
   saveSession,
   type StoredCabinetAccount,
 } from './cabinet-account.service';
-import { CABINET_ORIGIN, sendStep } from './cabinet-http';
+import { CABINET_ORIGIN, CABINET_UNAUTHORIZED_CODE, sendStep } from './cabinet-http';
 import { loginToCabinet, type LoginOutcome } from './cabinet-login.client';
 
 /**
@@ -26,9 +26,6 @@ import { loginToCabinet, type LoginOutcome } from './cabinet-login.client';
  * умерла — один вход и один повтор. Каждый лишний вход — шаг к блокировке
  * учётной записи, поэтому входим только когда без этого никак.
  */
-
-/** Код ошибки, по которому потребитель сообщает «кабинет меня не пустил». */
-export const CABINET_UNAUTHORIZED_CODE = 'KASPI_UNAUTHORIZED';
 
 /**
  * После этих итогов сервер сам больше не входит: повтор с тем же паролем
@@ -68,6 +65,9 @@ export class CabinetLoginError extends AppError {
  * Запрос к кабинету с сессией. `run` получает заголовок Cookie для
  * `mc.shop.kaspi.kz` и должен бросить AppError с кодом KASPI_UNAUTHORIZED,
  * если кабинет не пустил: тогда будет один вход и один повтор, не больше.
+ * cabinetGetJson() из cabinet-http.ts делает это сам:
+ *
+ *   const data = await withCabinetSession((cookie) => cabinetGetJson(url, cookie));
  */
 export async function withCabinetSession<T>(run: (cookie: string) => Promise<T>): Promise<T> {
   const account = await loadStoredAccount();

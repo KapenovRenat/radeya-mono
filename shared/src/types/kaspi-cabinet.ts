@@ -161,6 +161,12 @@ export interface KaspiCabinetFetchRequest {
 
   /** Держать куку в памяти процесса до перезапуска сервера. */
   remember?: boolean;
+
+  /**
+   * Сессия входа по email и паролю из «Настроек» вместо ручной куки.
+   * Вместе с `cookie` или `remember` не принимается.
+   */
+  useSession?: boolean;
 }
 
 export interface KaspiCabinetFetchResponse {

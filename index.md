@@ -35,7 +35,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `POST /api/users` | Создание сотрудника | ADMIN | `server/src/modules/users/users.routes.ts` |
 | `GET /api/audit` | Журнал действий и история изменений, постранично; фильтры по сущности (`entityType` + `entityId`) и типу (`action`) | ADMIN | `server/src/modules/audit/audit.controller.ts` |
 | `POST /api/kaspi-catalog/preview` | Разбор выгрузок ACTIVE/ARCHIVE, без записи в БД | ADMIN | `server/src/modules/kaspi-catalog/kaspi-catalog.routes.ts` |
-| `POST /api/kaspi-catalog/fetch` | Обход каталога в кабинете Kaspi: товары и сводка складов, без записи в БД | ADMIN | `server/src/modules/kaspi-catalog/kaspi-catalog.routes.ts` |
+| `POST /api/kaspi-catalog/fetch` | Обход каталога в кабинете Kaspi: товары и сводка складов, без записи в БД. По ручной куке или `useSession: true` — сессия входа по email | ADMIN | `server/src/modules/kaspi-catalog/kaspi-catalog.routes.ts` |
 | `GET /api/kaspi-cabinet/account` | Email и состояние входа в кабинет Kaspi, без пароля | ADMIN | `server/src/modules/kaspi-cabinet/kaspi-cabinet.controller.ts` |
 | `PUT /api/kaspi-cabinet/account` | Сохранить email и пароль кабинета (шифруются); входа нет, сессия сбрасывается | ADMIN | `server/src/modules/kaspi-cabinet/kaspi-cabinet.controller.ts` |
 | `POST /api/kaspi-cabinet/check` | Проверка подключения: жива сессия — без входа, иначе вход; трасса ответов Kaspi для консоли | ADMIN | `server/src/modules/kaspi-cabinet/kaspi-cabinet.controller.ts` |
@@ -97,8 +97,8 @@ shared/    # Общий код: типы контрактов, констант�
 | audit | `listAuditLog(input)` | Страница журнала по 50 записей, фильтры по сущности и типу; `changes` и `context` из Json с проверкой формы | `server/src/modules/audit/audit.service.ts` |
 | kaspi-catalog | `parseKaspiCatalog(xml, status)` | Разбор выгрузки Kaspi в список товаров; явные типы массивов складов и цен | `server/src/modules/kaspi-catalog/kaspi-catalog.parser.ts` |
 | kaspi-catalog | `buildCatalogPreview(input)` | Сводка по двум файлам, поиск дублей артикулов | `server/src/modules/kaspi-catalog/kaspi-catalog.service.ts` |
-| kaspi-catalog | `fetchCabinetCatalog(input)` | Обход всех страниц кабинета, частичный результат при обрыве | `server/src/modules/kaspi-catalog/kaspi-cabinet.service.ts` |
-| kaspi-catalog | `fetchOffersPage(params)` | Одна страница JSON кабинета, проверка формата ответа | `server/src/modules/kaspi-catalog/kaspi-cabinet.client.ts` |
+| kaspi-catalog | `fetchCabinetCatalog(input)` | Обход всех страниц кабинета по ручной куке или через `withCabinetSession()`; частичный результат при обрыве, «не пустил» на первой странице — ошибка | `server/src/modules/kaspi-catalog/kaspi-cabinet.service.ts` |
+| kaspi-catalog | `fetchOffersPage(params)` | Одна страница JSON кабинета через `cabinetGetJson`, проверка формата ответа | `server/src/modules/kaspi-catalog/kaspi-cabinet.client.ts` |
 | kaspi-catalog | `toCabinetOffer(raw)` | Сырой товар кабинета в наш DTO, спорное помечает проблемой | `server/src/modules/kaspi-catalog/kaspi-cabinet.mapper.ts` |
 | kaspi-catalog | `readAvailabilities(raw)` | Наличие товара по складам: `storeId`, код, остаток, предзаказ | `server/src/modules/kaspi-catalog/kaspi-cabinet.mapper.ts` |
 | kaspi-catalog | `collectCabinetWarehouses(offers)` | Сводка складов за обход из `availabilities`; `cityId` кабинет не отдаёт | `server/src/modules/kaspi-catalog/kaspi-cabinet.warehouses.ts` |
@@ -106,7 +106,8 @@ shared/    # Общий код: типы контрактов, констант�
 | kaspi-catalog | `rememberCookie()`, `getStoredCookie()`, `forgetCookie()` | Кука кабинета в памяти процесса, не на диске | `server/src/modules/kaspi-catalog/kaspi-cabinet.session.ts` |
 | kaspi-cabinet | `withCabinetSession(run)` | Запрос к кабинету с сессией по требованию: жива — сразу, `KASPI_UNAUTHORIZED` или сессии нет — один вход и один повтор | `server/src/modules/kaspi-cabinet/cabinet-session.service.ts` |
 | kaspi-cabinet | `checkCabinetConnection()` | Проверка подключения тем же путём, итог и трасса ответом, а не ошибкой | `server/src/modules/kaspi-cabinet/cabinet-session.service.ts` |
-| kaspi-cabinet | `isCabinetUnauthorized(error)`, `CABINET_UNAUTHORIZED_CODE`, `CabinetLoginError` | Признак «кабинет не пустил» для потребителей; ошибка входа с итогом | `server/src/modules/kaspi-cabinet/cabinet-session.service.ts` |
+| kaspi-cabinet | `isCabinetUnauthorized(error)`, `CabinetLoginError` | Признак «кабинет не пустил» для потребителей; ошибка входа с итогом | `server/src/modules/kaspi-cabinet/cabinet-session.service.ts` |
+| kaspi-cabinet | `cabinetGetJson(url, cookie)`, `CABINET_UNAUTHORIZED_CODE` | **Свой запрос в кабинет:** `withCabinetSession((cookie) => cabinetGetJson(url, cookie))`. Редиректы не проходит; 401/403/редирект → `KASPI_UNAUTHORIZED` для повторного входа. Инструкция — «Как отправить свой запрос в кабинет» в kaspi-api-integration.md | `server/src/modules/kaspi-cabinet/cabinet-http.ts` |
 | kaspi-cabinet | `loginToCabinet(jar, credentials, trace)` | Вход без браузера: OAuth2-старт → `idmc/api/p/login` → `redirectUrl`; ответы Kaspi в итог | `server/src/modules/kaspi-cabinet/cabinet-login.client.ts` |
 | kaspi-cabinet | `sendStep()`, `followRedirects()`, `CABINET_ORIGIN`, `IDMC_ORIGIN`, `CABINET_USER_AGENT` | Запрос к кабинету с банкой кук `tough-cookie`, ручные редиректы, запись трассы | `server/src/modules/kaspi-cabinet/cabinet-http.ts` |
 | kaspi-cabinet | `maskUrl()`, `maskBody()`, `cookieName()`, `describePage()` | Маскировка трассы: ключи входа и пароль — `***`, у кук только имена | `server/src/modules/kaspi-cabinet/cabinet-trace.ts` |
@@ -218,7 +219,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `/dashboard/products` | Каталог: два уровня папок с поиском и порядком, серверный поиск, фильтры складов и поставщиков (мультивыбор), сортировка стрелками в шапке, таблица с выделением и переносом в папку | `front/src/app/dashboard/(main)/products/page.tsx` |
 | `/dashboard/orders` | Заказы: две кнопки синхронизации с Kaspi, поиск по номеру, точка продаж (по умолчанию Kaspi) задаёт вид таблицы, фильтры справочников только у офлайн-точки, выбор периода, клик по строке — окно заказа. При загрузке печатает сырьё Kaspi в консоль (отладка, убрать после сверки статусов) | `front/src/app/dashboard/(main)/orders/page.tsx` |
 | `/dashboard/imports` | Импорты: блоки «Excel продаж офлайн-точки», «Поставщики из МойСклада», «Товары из МойСклада», «Остатки из МойСклада» (склад, файл, предпросмотр, список на обнуление, запись). Только ADMIN | `front/src/app/dashboard/(main)/imports/page.tsx` |
-| `/dashboard/kaspi-sync` | Синхронизация с Kaspi: загрузка выгрузок, предпросмотр каталога | `front/src/app/dashboard/(main)/kaspi-sync/page.tsx` |
+| `/dashboard/kaspi-sync` | Синхронизация с Kaspi. Вход по email работает — только «Загрузить все товары» по сессии; нет — ручная кука и XML-выгрузки | `front/src/app/dashboard/(main)/kaspi-sync/page.tsx` |
 | `/dashboard/settings` | Настройки: блок «Кабинет Kaspi» — email, пароль, «Проверить подключение» с трассой в консоль. Только ADMIN. Ссылки в меню пока нет | `front/src/app/dashboard/(main)/settings/page.tsx` |
 
 **Каталог с деревом папок:** `/dashboard/products` подключён к API; дерево, создание папок, поиск и пагинация готовы. Строки товаров через children добавляет пользователь. Ответ API выводится в консоль браузера. См. [docs/app-structure.md](docs/app-structure.md).
@@ -270,7 +271,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `ProductsImportPanel` | Счётчик новых товаров и сохранение их в каталог | `front/src/app/dashboard/(main)/kaspi-sync/_components/products-import-panel.tsx` |
 | `CatalogTable` | Таблица разобранных товаров Kaspi | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-table.tsx` |
 | `CatalogPagination` | Панель пагинации под таблицей: размер страницы, номера, диапазон | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-pagination.tsx` |
-| `CabinetFetch` | Кука, запуск загрузки из кабинета, счётчики, склады, фильтр и таблица | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-fetch.tsx` |
+| `CabinetFetch` | Запуск загрузки из кабинета (поле куки — только если вход по email не работает), счётчики, склады, фильтр и таблица | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-fetch.tsx` |
 | `CabinetTable` | Таблица товаров из кабинета: картинка, штрихкод, цены со скидкой, размер | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-table.tsx` |
 | `CatalogRow`, `CatalogTableHead`, `CATALOG_COLUMN_COUNT` | Строка и шапка таблицы каталога: галка выделения, кружок статуса, квадратное фото, два названия, цена Kaspi в две строки со скидкой, закупка с валютой, себестоимость в ₸, поставщик, склады чипами «код · название», затем колонки Остаток, Резерв, Ожидание, Доступно, Предзаказ, Дней на складе — строкой на склад в том же порядке, закреплённое меню действий. Стили — `catalog-row.module.scss` | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
 | `MoveToCategoryDialog` | Модалка переноса выбранных товаров: дерево папок с поиском, затем подтверждение | `front/src/app/dashboard/(main)/products/_components/move-to-category-dialog.tsx` |
@@ -368,7 +369,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `KaspiCatalogOffer`, `KaspiCatalogPreview` | Контракты разбора выгрузки Kaspi | `shared/src/types/kaspi-catalog.ts` |
 | `usePreviewKaspiCatalogMutation` | Отправка выгрузок на разбор | `front/src/features/kaspi-catalog/kaspi-catalog-api.ts` |
 | `useFetchKaspiCabinetMutation` | Запуск обхода кабинета Kaspi | `front/src/features/kaspi-catalog/kaspi-catalog-api.ts` |
-| `useKaspiCabinet()` | Кука, «запомнить», запуск обхода, счётчики и ошибка; печатает разбор в консоль браузера | `front/src/features/kaspi-catalog/use-kaspi-cabinet.ts` |
+| `useKaspiCabinet()` | Кука, «запомнить», запуск обхода (по сессии, если вход по email работает), счётчики и ошибка; печатает разбор в консоль браузера | `front/src/features/kaspi-catalog/use-kaspi-cabinet.ts` |
+| `useKaspiCabinetSignedIn()` | Работает ли вход в кабинет: данные сохранены и последний вход `OK`; отдельно `isLoading` | `front/src/features/kaspi-cabinet/use-kaspi-cabinet-signed-in.ts` |
 | `KASPI_LOGIN_STATUSES`, `KaspiLoginStatus`, `KASPI_LOGIN_STATUS_LABELS`, `KASPI_CABINET_EMAIL_MAX_LENGTH`, `KASPI_CABINET_PASSWORD_MAX_LENGTH` | Итоги входа в кабинет Kaspi и их подписи, лимиты полей | `shared/src/constants/kaspi-cabinet.ts` |
 | `KaspiCabinetAccountDto`, `SaveKaspiCabinetAccountRequest`, `KaspiCabinetTraceStep`, `KaspiCabinetCheckResponse` | Контракты настроек и проверки входа в кабинет | `shared/src/types/kaspi-cabinet-account.ts` |
 | `useGetKaspiCabinetAccountQuery`, `useSaveKaspiCabinetAccountMutation`, `useCheckKaspiCabinetMutation` | Доступ в кабинет Kaspi; тег `KaspiCabinet` | `front/src/features/kaspi-cabinet/kaspi-cabinet-api.ts` |

@@ -1,6 +1,6 @@
 import { AppError } from '../../lib/errors';
 import { logger } from '../../lib/logger';
-import { CABINET_USER_AGENT } from '../kaspi-cabinet/cabinet-http';
+import { cabinetGetJson } from '../kaspi-cabinet/cabinet-http';
 
 /**
  * Клиент к внутреннему JSON кабинета Kaspi.
@@ -11,9 +11,6 @@ import { CABINET_USER_AGENT } from '../kaspi-cabinet/cabinet-http';
  */
 
 const CABINET_LIST_URL = 'https://mc.shop.kaspi.kz/bff/offer-view/list';
-
-/** Кабинет отвечает за доли секунды; тридцать секунд — это уже «он не отвечает». */
-const REQUEST_TIMEOUT_MS = 30_000;
 
 export interface FetchPageParams {
   merchantId: string;
@@ -80,49 +77,9 @@ export async function fetchRawPage(params: FetchPageParams): Promise<unknown> {
   url.searchParams.set('l', String(params.pageSize));
   url.searchParams.set('a', String(params.onSale));
 
-  const response = await request(url, params.cookie);
-
-  if (response.status === 401 || response.status === 403) {
-    throw new AppError(
-      401,
-      'KASPI_UNAUTHORIZED',
-      'Kaspi не принял куку — она протухла или скопирована не полностью',
-    );
-  }
-
-  if (!response.ok) {
-    throw new AppError(
-      502,
-      'KASPI_UNAVAILABLE',
-      `Кабинет Kaspi ответил ${response.status}`,
-    );
-  }
-
-  return readBody(response);
-}
-
-async function request(url: URL, cookie: string): Promise<Response> {
-  try {
-    return await fetch(url, {
-      headers: {
-        // Кука уходит заголовком, а не в адресе: адреса оседают в логах и в Referer.
-        cookie,
-        accept: 'application/json, text/plain, */*',
-        'accept-language': 'ru-RU,ru;q=0.9',
-        'user-agent': CABINET_USER_AGENT,
-        referer: 'https://mc.shop.kaspi.kz/',
-      },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : 'неизвестная причина';
-
-    throw new AppError(
-      502,
-      'KASPI_UNAVAILABLE',
-      `Не удалось обратиться к кабинету Kaspi: ${reason}`,
-    );
-  }
+  // Кабинет не пустил — KASPI_UNAUTHORIZED: по нему withCabinetSession()
+  // входит заново, а при ручной куке человек видит, что она протухла.
+  return cabinetGetJson(url.toString(), params.cookie);
 }
 
 /**
@@ -130,24 +87,6 @@ async function request(url: URL, cookie: string): Promise<Response> {
  * Порядок важен: первое совпадение и берём.
  */
 const OFFER_LIST_KEYS = ['data', 'offers', 'items', 'content', 'list', 'results', 'records'];
-
-/**
- * Тело ответа разобранным JSON.
- *
- * Проверка — не педантизм: при протухшей сессии кабинет отвечает страницей
- * входа с кодом 200, и без неё это выглядело бы как пустой каталог.
- */
-async function readBody(response: Response): Promise<unknown> {
-  try {
-    return await response.json();
-  } catch {
-    throw new AppError(
-      502,
-      'KASPI_BAD_RESPONSE',
-      'Кабинет вернул не JSON — вероятно, вместо данных пришла страница входа',
-    );
-  }
-}
 
 /**
  * Достаёт список товаров из ответа.

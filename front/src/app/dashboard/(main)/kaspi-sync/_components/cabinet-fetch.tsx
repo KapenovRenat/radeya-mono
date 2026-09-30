@@ -13,8 +13,9 @@ import { WarehousesPanel } from "./warehouses-panel";
 /**
  * Загрузка каталога напрямую из кабинета Kaspi.
  *
- * Результат пока уходит в консоль сервера — смотрим глазами, что пришло.
- * В базу не пишется ничего.
+ * Работает вход по email и паролю — только кнопка, сессию берёт сервер.
+ * Не работает — ручная кука, как раньше. Товары в базу пишет отдельная
+ * кнопка в панели сохранения.
  */
 export function CabinetFetch() {
   const {
@@ -26,7 +27,12 @@ export function CabinetFetch() {
     isLoading,
     result,
     error,
+    signedIn,
+    isAccountLoading,
   } = useKaspiCabinet();
+
+  // Пока статус входа не пришёл, куку не показываем: иначе поле мелькнёт и исчезнет.
+  const showCookieForm = !signedIn && !isAccountLoading;
 
   const productsImport = useImportKaspiProducts(result?.offers ?? []);
 
@@ -51,39 +57,50 @@ export function CabinetFetch() {
     <div className="flex flex-col gap-3 rounded-lg border p-4">
       <div>
         <div className="text-sm font-medium">Загрузка из кабинета</div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          DevTools → Network → запрос <code>list</code> → Headers → Request
-          Headers → скопировать значение <code>Cookie</code> целиком.
-        </p>
+        {signedIn && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Вход по email и паролю из «Настроек» — сервер войдёт сам, если сессия истекла.
+          </p>
+        )}
+        {showCookieForm && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            DevTools → Network → запрос <code>list</code> → Headers → Request
+            Headers → скопировать значение <code>Cookie</code> целиком.
+          </p>
+        )}
       </div>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Кука сессии кабинета
-        <input
-          type="password"
-          className="rounded border bg-transparent px-2 py-1 font-mono"
-          value={cookie}
-          onChange={(event) => setCookie(event.target.value)}
-          placeholder={
-            result?.hasStoredCookie
-              ? "Кука запомнена — поле можно оставить пустым"
-              : "Вставьте значение заголовка Cookie"
-          }
-          autoComplete="off"
-        />
-      </label>
+      {showCookieForm && (
+        <>
+          <label className="flex flex-col gap-1 text-sm">
+            Кука сессии кабинета
+            <input
+              type="password"
+              className="rounded border bg-transparent px-2 py-1 font-mono"
+              value={cookie}
+              onChange={(event) => setCookie(event.target.value)}
+              placeholder={
+                result?.hasStoredCookie
+                  ? "Кука запомнена — поле можно оставить пустым"
+                  : "Вставьте значение заголовка Cookie"
+              }
+              autoComplete="off"
+            />
+          </label>
 
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={remember}
-          onChange={(event) => setRemember(event.target.checked)}
-        />
-        Запомнить до перезапуска сервера
-      </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(event) => setRemember(event.target.checked)}
+            />
+            Запомнить до перезапуска сервера
+          </label>
+        </>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" onClick={load} disabled={isLoading}>
+        <Button type="button" onClick={load} disabled={isLoading || isAccountLoading}>
           {isLoading ? "Загружаю…" : "Загрузить все товары"}
         </Button>
 
@@ -109,7 +126,7 @@ export function CabinetFetch() {
           {result.stoppedAtPage !== null && (
             <div className="text-destructive">
               Прервано на странице {result.stoppedAtPage}: {result.stoppedReason}.
-              Вставьте свежую куку и повторите.
+              {signedIn ? " Повторите загрузку." : " Вставьте свежую куку и повторите."}
             </div>
           )}
         </div>

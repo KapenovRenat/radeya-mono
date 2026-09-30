@@ -27,8 +27,10 @@ export const kaspiCatalogApi = baseApi.injectEndpoints({
     }),
 
     /**
-     * Обход каталога в кабинете Kaspi. Результат пока уходит в консоль сервера —
-     * сюда возвращаются только счётчики.
+     * Обход каталога в кабинете Kaspi — по ручной куке или по сессии входа.
+     *
+     * Сбрасывает `KaspiCabinet`: обход мог войти заново или упереться в неверный
+     * пароль, и статус входа на странице должен это показать.
      */
     fetchKaspiCabinet: build.mutation<
       KaspiCabinetFetchResponse,
@@ -39,6 +41,7 @@ export const kaspiCatalogApi = baseApi.injectEndpoints({
         method: "POST",
         body,
       }),
+      invalidatesTags: ["KaspiCabinet"],
     }),
   }),
 });
