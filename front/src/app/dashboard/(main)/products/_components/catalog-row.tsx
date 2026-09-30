@@ -10,6 +10,7 @@ import {
   SALES_CHANNELS,
   SALES_CHANNEL_LABELS,
   SORT_ORDERS,
+  variantDisplayName,
   type CatalogRowDto,
   type CatalogSortKey,
   type SortOrder,
@@ -243,7 +244,7 @@ export function CatalogRow({ item, selected, onSelectedChange, disabled = false 
 
       <td className={styles.colName}>
         <div className={styles.names}>
-          <span className={styles.master}>{item.kaspi.masterTitle ?? item.name}</span>
+          <span className={styles.master}>{variantDisplayName(item.kaspi.masterTitle, item.name)}</span>
           {item.kaspi.title && item.kaspi.title !== item.kaspi.masterTitle && (
             <span className={styles.own}>{item.kaspi.title}</span>
           )}

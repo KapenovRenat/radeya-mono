@@ -1,5 +1,6 @@
 import {
   SALES_POINT_TYPES,
+  variantDisplayName,
   type OrderDetailsDto,
   type OrderEntryDto,
   type SyncOrderEntriesResponse,
@@ -45,7 +46,10 @@ const detailsSelect = {
       id: true, entryNumber: true, sku: true, offerName: true, quantity: true,
       basePrice: true, totalPrice: true, categoryTitle: true, note: true,
       variant: {
-        select: { id: true, sku: true, kaspiImages: true, product: { select: { name: true } } },
+        select: {
+          id: true, sku: true, kaspiImages: true, kaspiMasterTitle: true,
+          product: { select: { name: true } },
+        },
       },
     },
     orderBy: { entryNumber: 'asc' },
@@ -183,7 +187,8 @@ function toEntry(entry: DetailsRecord['entries'][number]): OrderEntryDto {
     variant: entry.variant === null ? null : {
       id: entry.variant.id,
       sku: entry.variant.sku,
-      name: entry.variant.product.name,
+      // То же правило, что в каталоге: иначе здесь «диван», а там полное название.
+      name: variantDisplayName(entry.variant.kaspiMasterTitle, entry.variant.product.name),
       imageUrl: previewImageUrl(entry.variant.kaspiImages),
     },
   };

@@ -287,6 +287,7 @@ shared/    # Общий код: типы контрактов, констант�
 |---|---|---|
 | `USER_ROLES`, `UserRole` | Роли сотрудников: ADMIN, MANAGER, SELLER, VIEWER. Новая роль — ещё `USER_ROLE_LABELS` и enum в `schema.prisma` | `shared/src/constants/roles.ts` |
 | `hasRole(role, roles?)` | Есть ли у роли доступ; пустой список — все вошедшие. Одна проверка для `can()` сервера и `useCan()` фронта | `shared/src/constants/roles.ts` |
+| `variantDisplayName(masterTitle, name)` | Название товара для показа: карточка Kaspi, иначе название модели. Одно правило на каталог и состав заказа | `shared/src/constants/catalog.ts` |
 | `CATALOG_PURCHASE_ROLES`, `CATALOG_COST_ROLES` | Кто видит закупку и себестоимость в каталоге: сервер срезает поля, фронт прячет столбцы | `shared/src/constants/catalog.ts` |
 | `useCan()` | Фронт: `can()` — любой вошедший, `can([ADMIN])` — только эти роли. Удобство, не защита | `front/src/features/auth/use-can.ts` |
 | `useCatalogColumnCount()` | Число видимых колонок каталога с учётом ролей — для colSpan пустой таблицы | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |

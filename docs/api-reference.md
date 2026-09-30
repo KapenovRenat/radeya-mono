@@ -335,7 +335,9 @@
   `entriesLoaded`, `canLoadEntries`.
 - `entries[]` — `{ id, entryNumber, sku, offerName, quantity, basePrice, totalPrice,
   categoryTitle, note, variant: { id, sku, name, imageUrl } | null }`. `variant` —
-  наш товар по артикулу; null — в каталоге его нет. Заглушка `entryNumber = -1`
+  наш товар по артикулу; null — в каталоге его нет. `variant.name` — по тому же
+  правилу, что в каталоге (`variantDisplayName`): название карточки Kaspi, иначе
+  название модели. Заглушка `entryNumber = -1`
   в список не входит.
 - `entriesLoaded` — состав уже загружали (есть позиции или заглушка «пусто»).
   `canLoadEntries` — заказ Kaspi с `kaspiId`: состав можно забрать с площадки.

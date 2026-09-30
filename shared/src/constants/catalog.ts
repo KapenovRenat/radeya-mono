@@ -8,6 +8,16 @@ import { USER_ROLES, type UserRole } from './roles';
 export const CATALOG_PURCHASE_ROLES: readonly UserRole[] = [USER_ROLES.ADMIN];
 export const CATALOG_COST_ROLES: readonly UserRole[] = [USER_ROLES.ADMIN];
 
+/**
+ * Название товара для показа: карточка Kaspi, иначе наше название модели.
+ *
+ * Одно правило на каталог и окно заказа. Название модели у сотен товаров —
+ * тип изделия («диван»), поэтому первым идёт полное название с витрины.
+ */
+export function variantDisplayName(masterTitle: string | null, name: string): string {
+  return masterTitle ?? name;
+}
+
 /** Настройки серверного каталога; локальная таблица импорта имеет свою пагинацию. */
 export const CATALOG_PAGE_SIZES = [10, 20, 50] as const;
 export const CATALOG_DEFAULT_PAGE_SIZE = 20;
