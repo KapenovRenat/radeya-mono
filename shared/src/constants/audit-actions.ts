@@ -36,6 +36,8 @@ export const AUDIT_ACTIONS = {
   SUPPLIER_UPDATED: 'SUPPLIER_UPDATED',
   MOYSKLAD_PRODUCTS_IMPORTED: 'MOYSKLAD_PRODUCTS_IMPORTED',
   MOYSKLAD_STOCK_IMPORTED: 'MOYSKLAD_STOCK_IMPORTED',
+  KASPI_CABINET_ACCOUNT_SAVED: 'KASPI_CABINET_ACCOUNT_SAVED',
+  KASPI_CABINET_CHECKED: 'KASPI_CABINET_CHECKED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -72,4 +74,6 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   SUPPLIER_UPDATED: 'Карточка поставщика изменена',
   MOYSKLAD_PRODUCTS_IMPORTED: 'Импорт закупки и складов из МойСклада',
   MOYSKLAD_STOCK_IMPORTED: 'Импорт остатков из МойСклада',
+  KASPI_CABINET_ACCOUNT_SAVED: 'Изменены данные входа в кабинет Kaspi',
+  KASPI_CABINET_CHECKED: 'Проверка подключения к кабинету Kaspi',
 };

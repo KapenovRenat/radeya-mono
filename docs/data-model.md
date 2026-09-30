@@ -622,6 +622,35 @@ UUID уникален у всех, а наименования дают 630 гр
 
 ---
 
+## KaspiCabinetAccount — доступ в кабинет Kaspi
+
+Email, пароль и сессия кабинета продавца. **Запись одна**, `id = "main"`:
+магазин один, а постоянный id не даёт upsert'у завести вторую.
+
+| Поле | Тип | Что это |
+|---|---|---|
+| `email` | `String` | Логин в кабинет. Не секрет, показывается в настройках |
+| `passwordEncrypted` | `String` | Пароль, AES-256-GCM, формат `v1:iv:tag:данные` |
+| `sessionEncrypted` | `String?` | Банка кук `tough-cookie` целиком, зашифрованная: сессия `mc.shop.kaspi.kz` и «запомненное устройство» `idmc`. Пусто — входа не было, он не удался или данные сменили |
+| `lastLoginStatus` | `KaspiLoginStatus?` | Итог последней попытки входа. Пусто — входа не было |
+| `lastLoginError` | `String?` | Текст ошибки последнего входа |
+| `lastAttemptAt` | `DateTime?` | Когда пытались войти последний раз |
+| `blockedUntil` | `DateTime?` | Пауза, назначенная Kaspi (`breakTimeSeconds`); до неё вход не пытается |
+
+`enum KaspiLoginStatus`: `OK`, `CODE_REQUIRED`, `MERCHANT_CHOICE_REQUIRED`,
+`CREDENTIALS_INVALID`, `BLOCKED`, `ERROR` — совпадает с `KASPI_LOGIN_STATUSES`
+в `shared/src/constants/kaspi-cabinet.ts`.
+
+Ключ шифрования — `KASPI_SECRETS_KEY` в `.env` (`server/src/lib/secret-box.ts`).
+Бэкап базы без ключа доступа в кабинет не даёт. Сменили ключ — сохранённое
+не расшифровать, email и пароль вводятся заново.
+
+Итог входа пишется с условием «пароль не сменился за время входа»
+(`updateMany` по `passwordEncrypted`): иначе сессия от старых данных легла бы
+поверх только что сохранённых новых.
+
+---
+
 ## Миграции
 
 | Миграция | Что делает |
@@ -640,6 +669,7 @@ UUID уникален у всех, а наименования дают 630 гр
 | `suppliers` | Создаёт `Supplier` с `@unique` на `externalId` и индексом по `name` |
 | `variant_purchase` | Создаёт enum `Currency`; добавляет в `Variant` поля `purchaseCurrency` и `supplierId` со связью на `Supplier` (`onDelete: Restrict`) |
 | `history_and_stock` | `AuditLog`: колонки `source`, `changes`, `context` и индекс `(entityType, entityId, at)`; enum `ChangeSource` + `IMPORT`; удаляет таблицу `VariantChange` (пустая, в неё никто не писал); `VariantStock`: `reserved`, `expected`, `receivedAt`, `stockAt`; `Variant.costPrice` |
+| `kaspi_cabinet_account` | Создаёт `KaspiCabinetAccount` и enum `KaspiLoginStatus` |
 
 Файлы миграций коммитятся в git — без них базу не поднять заново.
 

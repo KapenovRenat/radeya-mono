@@ -17,6 +17,8 @@ export * from './types/audit';
 export * from './types/history';
 export * from './types/kaspi-catalog';
 export * from './types/kaspi-cabinet';
+export * from './constants/kaspi-cabinet';
+export * from './types/kaspi-cabinet-account';
 export * from './types/products';
 export * from './constants/catalog';
 export * from './types/catalog';

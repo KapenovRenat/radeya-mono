@@ -922,6 +922,68 @@ ADMIN и MANAGER: список пополняется по ходу работы
 
 ---
 
+## Kaspi Cabinet — доступ в кабинет по email и паролю (30.09.2026)
+
+Настройка и проверка входа. Самого входа как эндпоинта нет: входит сервер,
+когда кабинет кому-то понадобился, через `withCabinetSession()`
+(`server/src/modules/kaspi-cabinet/cabinet-session.service.ts`). Жива
+сохранённая сессия — запрос идёт без входа; кабинет ответил
+`KASPI_UNAUTHORIZED` — один вход и один повтор. Схема — «Как заходим»
+в [kaspi-api-integration.md](kaspi-api-integration.md).
+
+Все три — только ADMIN. Файл: `server/src/modules/kaspi-cabinet/kaspi-cabinet.controller.ts`.
+
+### GET /api/kaspi-cabinet/account
+Email и состояние входа. Пароля в ответе нет ни в каком виде.
+- Auth: ADMIN
+- Ответ 200: `KaspiCabinetAccountDto` — `configured`, `email`, `hasSession`,
+  `status` (`KASPI_LOGIN_STATUSES` или null — входа не было), `lastError`,
+  `lastAttemptAt`, `blockedUntil` (только если пауза ещё идёт), `updatedAt`.
+  Данных нет — `configured: false`, остальное пусто.
+- Ошибки: общие 401/403.
+
+### PUT /api/kaspi-cabinet/account
+Сохранить email и пароль. **Входа здесь нет** — только хранение.
+- Auth: ADMIN
+- Тело: `{ email: string (email, ≤254), password: string (1–128, не обрезается) }`
+- Ответ 200: `KaspiCabinetAccountDto`.
+- Что происходит: пароль шифруется AES-256-GCM (`KASPI_SECRETS_KEY`); сохранённая
+  сессия и итог прошлого входа стираются — следующая проверка войдёт заново
+  и проверит именно новый пароль. Сменили email — снимается и пауза Kaspi.
+- Ошибки: 400 VALIDATION_ERROR; 503 SECRETS_KEY_MISSING — нет ключа в `.env`,
+  ничего не записано; общие 401/403.
+- Журнал: KASPI_CABINET_ACCOUNT_SAVED — email до и после, без пароля.
+
+### POST /api/kaspi-cabinet/check
+Проверка подключения — тот же путь, что у любого потребителя кабинета.
+- Auth: ADMIN
+- Тело: нет.
+- Порядок: есть сессия — одна страница товаров (`offer-view/list`, `l=1`);
+  ответил JSON — готово, входа нет. Иначе вход: `oauth2/authorization/1` →
+  `POST idmc…/api/p/login` → `redirectUrl` → снова страница товаров.
+- Ответ 200: `KaspiCabinetCheckResponse` — `ok`, `status`, `message`, `loggedIn`
+  (false — сессия была жива), `trace` (шаги: адрес, код, переход, **имена** кук,
+  JSON-тело, заметка о HTML), `account`. Неудачный вход — тоже 200 с `ok: false`:
+  трасса нужна именно тогда.
+- Маскировка трассы: `code`, `state`, токены в адресах и `_p`, `password`,
+  токены в телах — `***`; значения кук не отдаются. Тело запроса входа в трассу
+  не пишется вовсе.
+- Ограничения: один вход на процесс (параллельные ждут тот же); пауза Kaspi
+  (`breakTimeSeconds`) соблюдается — до её конца вход не пытается.
+- Ошибки: 400 VALIDATION_ERROR — не задан `KASPI_MERCHANT_ID`;
+  409 KASPI_CABINET_NOT_CONFIGURED — данных для входа нет; 500 SECRET_UNREADABLE —
+  сменился `KASPI_SECRETS_KEY`; 503 SECRETS_KEY_MISSING; общие 401/403.
+- Журнал: KASPI_CABINET_CHECKED — итог и `loggedIn`, без трассы.
+
+**Ошибки `withCabinetSession()` для будущих потребителей:** 409
+`KASPI_LOGIN_CODE_REQUIRED` / `KASPI_LOGIN_CREDENTIALS_INVALID` /
+`KASPI_LOGIN_MERCHANT_CHOICE_REQUIRED` — после таких итогов сервер сам больше
+не входит, пока не сохранят данные или не нажмут «Проверить подключение»;
+429 `KASPI_LOGIN_BLOCKED`; 502 `KASPI_LOGIN_ERROR`. Сама функция входа наружу
+не выставлена — её вызывают сервисы.
+
+---
+
 ## Warehouses
 
 Справочник складов (точек выдачи). Целиком закрыт ролью `ADMIN`:

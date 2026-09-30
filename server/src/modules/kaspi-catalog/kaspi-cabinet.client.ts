@@ -1,5 +1,6 @@
 import { AppError } from '../../lib/errors';
 import { logger } from '../../lib/logger';
+import { CABINET_USER_AGENT } from '../kaspi-cabinet/cabinet-http';
 
 /**
  * Клиент к внутреннему JSON кабинета Kaspi.
@@ -108,9 +109,7 @@ async function request(url: URL, cookie: string): Promise<Response> {
         cookie,
         accept: 'application/json, text/plain, */*',
         'accept-language': 'ru-RU,ru;q=0.9',
-        // Без правдоподобного клиента кабинет может ответить страницей-заглушкой.
-        'user-agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36',
+        'user-agent': CABINET_USER_AGENT,
         referer: 'https://mc.shop.kaspi.kz/',
       },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

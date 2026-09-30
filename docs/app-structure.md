@@ -29,9 +29,13 @@ front/src/app/
         │   ├── layout.tsx          # RoleGuard: только ADMIN
         │   ├── page.tsx            → /dashboard/accounts
         │   └── _components/        # только для этой страницы
-        └── kaspi-sync/
+        ├── kaspi-sync/
+        │   ├── layout.tsx          # RoleGuard: только ADMIN
+        │   ├── page.tsx            → /dashboard/kaspi-sync
+        │   └── _components/
+        └── settings/
             ├── layout.tsx          # RoleGuard: только ADMIN
-            ├── page.tsx            → /dashboard/kaspi-sync
+            ├── page.tsx            → /dashboard/settings
             └── _components/
 ```
 
@@ -676,6 +680,41 @@ table или tbody. Проверка загрузки, ошибки, пусто�
   `front/src/app/dashboard/(main)/imports/_components/`.
 - Хук: `useMoyskladStockImport()` — `front/src/features/products/use-moysklad-stock-import.ts`.
 - Стили: общий `_components/style.module.scss`.
+
+---
+
+## /dashboard/settings — настройки
+
+Ключи от внешних систем, блоками — по одному на систему. Только ADMIN
+(`RoleGuard` в `layout.tsx`).
+- Тип: раздел dashboard
+- Файл: `front/src/app/dashboard/(main)/settings/page.tsx`
+
+### Блок «Кабинет Kaspi»
+
+Email и пароль от кабинета продавца и кнопка «Проверить подключение».
+**Здесь сервер не входит** — только хранит данные. Входит он сам, когда кабинет
+понадобился, и только если сохранённая сессия умерла.
+
+- Пароль с сервера не приходит: поле всегда пустое, при сохранённых данных —
+  подсказка «Сохранён — введите, чтобы сменить». Email подставляется
+  сохранённый, пока его не начали править.
+- «Сохранить» требует оба поля и сбрасывает сессию на сервере — следующая
+  проверка войдёт заново и проверит именно новый пароль.
+- «Проверить подключение» выключена, пока данных нет. Итог — строкой под
+  формой; **трасса запросов к Kaspi — в консоли браузера**: `console.table`
+  по шагам и каждый шаг целиком с телом ответа. Куки и ключи входа сервер
+  заменил звёздочками.
+- Над формой — итог последнего входа, есть ли сессия, ошибка и пауза Kaspi.
+- Поля с `autoComplete="off"` / `new-password`: браузер не должен запомнить
+  пару Kaspi как вход в нашу админку.
+- Разметка минимальная, на общих `Input` и `Button` с Tailwind — вид
+  дорабатывается отдельно.
+
+- Данные: `GET /api/kaspi-cabinet/account`, `PUT /api/kaspi-cabinet/account`,
+  `POST /api/kaspi-cabinet/check`.
+- Компонент: `KaspiCabinetBlock` — `front/src/app/dashboard/(main)/settings/_components/kaspi-cabinet-block.tsx`.
+- Хук: `useKaspiCabinetSettings()` — `front/src/features/kaspi-cabinet/use-kaspi-cabinet-settings.ts`.
 
 ---
 

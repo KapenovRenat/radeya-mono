@@ -1162,3 +1162,50 @@ enum Currency {
   KZT
   RUB
 }
+
+/// Итог последней попытки входа в кабинет Kaspi. Значения обязаны совпадать
+/// с KASPI_LOGIN_STATUSES в shared/src/constants/kaspi-cabinet.ts.
+enum KaspiLoginStatus {
+  OK
+  CODE_REQUIRED
+  MERCHANT_CHOICE_REQUIRED
+  CREDENTIALS_INVALID
+  BLOCKED
+  ERROR
+}
+
+/// Доступ в кабинет Kaspi: email, пароль и сессия. Запись одна — магазин один.
+///
+/// Вводится на странице «Настройки». Сервер входит сам и только когда
+/// кабинет понадобился: жива сохранённая сессия — входа нет. Частые входы
+/// Kaspi блокирует, поэтому сессия хранится, а не добывается на каждый запрос.
+///
+/// Секреты зашифрованы AES-256-GCM ключом KASPI_SECRETS_KEY (`lib/secret-box.ts`):
+/// бэкап базы без ключа доступа в кабинет не даёт.
+model KaspiCabinetAccount {
+  /// Всегда `main`: постоянный id не даёт upsert'у завести вторую запись.
+  id String @id @default("main")
+
+  /// Логин в кабинет. Не секрет — показывается на странице настроек.
+  email String
+
+  /// Пароль, зашифрованный. Наружу не отдаётся ни в каком виде.
+  passwordEncrypted String
+
+  /// Банка кук кабинета целиком, зашифрованная: сессия `mc.shop.kaspi.kz`
+  /// и кука «запомненного устройства» `idmc` — с ней Kaspi реже спрашивает код.
+  /// Пусто — входа ещё не было или данные для входа сменили.
+  sessionEncrypted String?
+
+  /// Пусто — входа ещё не было.
+  lastLoginStatus KaspiLoginStatus?
+  lastLoginError  String?
+  lastAttemptAt   DateTime?
+
+  /// Kaspi сам назначает паузу после череды неудач (`breakTimeSeconds`).
+  /// До этого момента сервер не пытается входить вовсе.
+  blockedUntil DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

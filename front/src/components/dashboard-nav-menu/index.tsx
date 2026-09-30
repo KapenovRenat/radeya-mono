@@ -70,6 +70,15 @@ export function DashboardNavMenu({ children, className }: { children?: React.Rea
                             <p>Синхронизация товаров Kaspi</p>
                         </Link>
                     </li> : null}
+
+                    {user?.role === USER_ROLES.ADMIN ? <li>
+                        <Link href="/dashboard/settings">
+                            <div>
+
+                            </div>
+                            <p>Настройки</p>
+                        </Link>
+                    </li> : null}
                 </ul>
             </div>
 
