@@ -1,18 +1,21 @@
 import express, { Router } from 'express';
 import { USER_ROLES } from '@radeya/shared';
 
-import { requireAuth, requireRole } from '../../middlewares/require-auth';
+import { can } from '../../middlewares/require-auth';
 import { commitSuppliers, getSuppliers, patchSupplier, previewSuppliers } from './suppliers.controller';
 
+const { ADMIN } = USER_ROLES;
+
 /**
- * Поставщики. Только ADMIN: это закупочная сторона дела, продавцу она не нужна,
- * а импорт — запись в справочник пачкой.
+ * Поставщики. Список — всем вошедшим: он нужен фильтру каталога. Импорт
+ * и правка — только ADMIN: это закупочная сторона дела и запись пачкой.
  */
 export const suppliersRouter = Router();
 
-suppliersRouter.use(requireAuth, requireRole(USER_ROLES.ADMIN));
+// Весь модуль — только вошедшим. Маршрут без своего can() не станет публичным.
+suppliersRouter.use(can());
 
-suppliersRouter.get('/', getSuppliers);
+suppliersRouter.get('/', can(), getSuppliers);
 
 /**
  * Файл приезжает двоичным телом, а не multipart: поле у запроса одно,
@@ -24,6 +27,7 @@ suppliersRouter.get('/', getSuppliers);
  */
 suppliersRouter.post(
   '/import/preview',
+  can([ADMIN]),
   express.raw({ type: '*/*', limit: '25mb' }),
   previewSuppliers,
 );
@@ -31,8 +35,9 @@ suppliersRouter.post(
 /** Запись: тело обычный JSON — строки, которые человек увидел в предпросмотре. */
 suppliersRouter.post(
   '/import/commit',
+  can([ADMIN]),
   express.json({ limit: '5mb' }),
   commitSuppliers,
 );
 
-suppliersRouter.patch('/:id', patchSupplier);
+suppliersRouter.patch('/:id', can([ADMIN]), patchSupplier);

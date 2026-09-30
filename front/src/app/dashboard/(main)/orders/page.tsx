@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { CATALOG_SEARCH_MAX_LENGTH, KASPI_ORDER_PERIODS,
-  KASPI_ORDER_PERIOD_LABELS, SALES_POINT_TYPES } from "@radeya/shared";
+  KASPI_ORDER_PERIOD_LABELS, SALES_POINT_TYPES, USER_ROLES } from "@radeya/shared";
 
 import { Button } from "@/components/button";
 import { DateRangePicker } from "@/components/date-range-picker";
 import { Dropdown, type DropdownOption } from "@/components/dropdown";
 import { Tables } from "@/components/tables";
+import { useCan } from "@/features/auth/use-can";
 import { useGetKaspiOrdersQuery } from "@/features/orders/orders-api";
 import { useKaspiOrdersSync } from "@/features/orders/use-kaspi-orders-sync";
 import { useOrdersList } from "@/features/orders/use-orders-list";
@@ -21,6 +22,7 @@ import { orderColumnCount, OrderRow, OrderTableHead,
 const RAW_DAYS = 14;
 
 export default function OrdersPage() {
+  const can = useCan();
   const sync = useKaspiOrdersSync();
   const orders = useOrdersList();
   const salesPoints = useGetSalesPointsQuery();
@@ -56,7 +58,11 @@ export default function OrdersPage() {
 
   // Сырьё прямо из Kaspi — для разбора расхождений со складом. Запрос идёт
   // на площадку при каждой загрузке страницы, поэтому период короткий.
-  const kaspi = useGetKaspiOrdersQuery({ days: RAW_DAYS, raw: 1 });
+  // Только админу: маршрут закрыт can([ADMIN]), остальным прилетел бы 403.
+  const kaspi = useGetKaspiOrdersQuery(
+    { days: RAW_DAYS, raw: 1 },
+    { skip: !can([USER_ROLES.ADMIN]) },
+  );
 
   useEffect(() => {
     if (!kaspi.data) return;

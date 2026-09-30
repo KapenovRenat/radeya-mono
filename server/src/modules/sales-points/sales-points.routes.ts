@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { USER_ROLES } from '@radeya/shared';
 
-import { requireAuth, requireRole } from '../../middlewares/require-auth';
+import { can } from '../../middlewares/require-auth';
 import { getSalesPoints, patchSalesPoint, postSalesPoint } from './sales-points.controller';
+
+const { ADMIN } = USER_ROLES;
 
 /**
  * Точки продаж.
@@ -16,8 +18,9 @@ import { getSalesPoints, patchSalesPoint, postSalesPoint } from './sales-points.
  */
 export const salesPointsRouter = Router();
 
-salesPointsRouter.use(requireAuth);
+// Весь модуль — только вошедшим. Маршрут без своего can() не станет публичным.
+salesPointsRouter.use(can());
 
-salesPointsRouter.get('/', getSalesPoints);
-salesPointsRouter.post('/', requireRole(USER_ROLES.ADMIN), postSalesPoint);
-salesPointsRouter.patch('/:id', requireRole(USER_ROLES.ADMIN), patchSalesPoint);
+salesPointsRouter.get('/', can(), getSalesPoints);
+salesPointsRouter.post('/', can([ADMIN]), postSalesPoint);
+salesPointsRouter.patch('/:id', can([ADMIN]), patchSalesPoint);

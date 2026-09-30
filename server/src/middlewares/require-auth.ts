@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import type { UserRole } from '@radeya/shared';
+import { hasRole, type UserRole } from '@radeya/shared';
 
 import { SESSION_COOKIE_NAME } from '../config/session';
 import { ForbiddenError, UnauthorizedError } from '../lib/errors';
@@ -12,6 +12,13 @@ import { findActiveSession, toAuthUser } from '../modules/auth/auth.service';
  * сотрудника — отключить, сессию — погасить. Кука сама по себе ничего не доказывает.
  */
 export const requireAuth: RequestHandler = async (req, _res, next) => {
+  // Уже проверено выше по цепочке (модуль закрыт `router.use(can())`,
+  // маршрут уточняет роли) — второй раз в базу не ходим.
+  if (req.user) {
+    next();
+    return;
+  }
+
   const sessionId = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
 
   if (!sessionId) {
@@ -31,21 +38,28 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
 };
 
 /**
- * Ограничение по ролям. Ставится ПОСЛЕ requireAuth — сам он вход не проверяет.
+ * Кто может вызвать маршрут. Ставится у каждого маршрута явно — по строке
+ * видно, кому она открыта:
  *
- * Права всегда проверяются здесь, на сервере. Спрятанная кнопка в интерфейсе
- * защитой не является: запрос можно отправить и без неё.
+ *   router.get('/', can(), getList);                          // все вошедшие
+ *   router.post('/', can([USER_ROLES.ADMIN, USER_ROLES.MANAGER]), create);
+ *
+ * Вход проверяет сам. Права всегда проверяются здесь, на сервере: спрятанная
+ * кнопка в интерфейсе защитой не является, запрос можно отправить и без неё.
  */
-export function requireRole(...roles: UserRole[]): RequestHandler {
-  return (req, _res, next) => {
-    if (!req.user) {
-      throw new UnauthorizedError();
-    }
+export function can(roles: readonly UserRole[] = []): RequestHandler[] {
+  return [
+    requireAuth,
+    (req, _res, next) => {
+      if (!req.user) {
+        throw new UnauthorizedError();
+      }
 
-    if (!roles.includes(req.user.role)) {
-      throw new ForbiddenError();
-    }
+      if (!hasRole(req.user.role, roles)) {
+        throw new ForbiddenError();
+      }
 
-    next();
-  };
+      next();
+    },
+  ];
 }

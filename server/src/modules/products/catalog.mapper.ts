@@ -1,4 +1,12 @@
-import type { CatalogImageDto, CatalogRowDto } from '@radeya/shared';
+import {
+  CATALOG_COST_ROLES,
+  CATALOG_PURCHASE_ROLES,
+  hasRole,
+  type CatalogImageDto,
+  type CatalogResponse,
+  type CatalogRowDto,
+  type UserRole,
+} from '@radeya/shared';
 import type { Prisma } from '../../generated/prisma/client';
 
 /**
@@ -7,8 +15,8 @@ import type { Prisma } from '../../generated/prisma/client';
  * Историю изменений не берём: она в `AuditLog`, и в списке дала бы запрос
  * на каждую строку. Её отдаёт `GET /api/audit` с фильтром по товару.
  *
- * Закупка здесь есть намеренно: эндпоинт закрыт ролью ADMIN, и в дашборде
- * закупка нужна. На витрину этот DTO не отдаётся — см. CatalogRowDto.
+ * Закупка здесь есть намеренно: в дашборде она нужна, а тем, кому её видеть
+ * нельзя, её срезает hideCatalogMoney(). На витрину этот DTO не отдаётся.
  */
 export const catalogRowSelect = {
   id: true, productId: true, sku: true, barcode: true, status: true, sortOrder: true,
@@ -111,6 +119,27 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 function daysSince(from: Date | null, now: Date): number | null {
   if (from === null) return null;
   return Math.max(0, Math.round(((now.getTime() - from.getTime()) / DAY_MS) * 100) / 100);
+}
+
+/**
+ * Закупка и себестоимость — только ролям из CATALOG_PURCHASE_ROLES /
+ * CATALOG_COST_ROLES. Остальным поля приходят пустыми: спрятать столбец
+ * на фронте мало, данные всё равно были бы в ответе.
+ */
+export function hideCatalogMoney(page: CatalogResponse, role: UserRole): CatalogResponse {
+  const seesPurchase = hasRole(role, CATALOG_PURCHASE_ROLES);
+  const seesCost = hasRole(role, CATALOG_COST_ROLES);
+
+  if (seesPurchase && seesCost) return page;
+
+  return {
+    ...page,
+    items: page.items.map((item) => ({
+      ...item,
+      ...(seesPurchase ? {} : { purchasePrice: null, purchaseCurrency: null }),
+      ...(seesCost ? {} : { costPrice: null }),
+    })),
+  };
 }
 
 /** `now` один на страницу: у соседних строк «дней на складе» не должны разъехаться на миллисекунды. */

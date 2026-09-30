@@ -149,8 +149,8 @@ export interface CatalogDeliveryDto {
  * Одна строка = одна модификация. Категория общая для всех модификаций Product.
  *
  * DTO дашборда, не витрины: содержит закупочную цену. На страницы магазина
- * не отдавать. Эндпоинт закрыт ролью ADMIN целиком — когда появятся MANAGER
- * и SELLER, `purchasePrice` нужно срезать по роли, а не открывать всем.
+ * не отдавать. Закупка и себестоимость приходят пустыми, если роли нет
+ * в CATALOG_PURCHASE_ROLES / CATALOG_COST_ROLES.
  */
 export interface CatalogRowDto {
   variantId: string;

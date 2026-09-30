@@ -5,19 +5,20 @@ import { useEffect, type ReactNode } from "react";
 import type { UserRole } from "@radeya/shared";
 
 import { useAuth } from "./use-auth";
+import { useCan } from "./use-can";
 
 interface RoleGuardProps {
-  /** Кому можно. Остальных уводит на `redirectTo`. */
-  roles: UserRole[];
+  /** Кому можно. Не указано или пусто — всем вошедшим. Остальных уводит на `redirectTo`. */
+  roles?: readonly UserRole[];
   children: ReactNode;
   redirectTo?: string;
 }
 
 /**
- * Ограничение раздела по ролям.
+ * Ограничение раздела по ролям — ставится в `layout.tsx` раздела.
  *
  * Как и AuthGuard — это удобство интерфейса, а не безопасность. Настоящая
- * проверка стоит на сервере, в мидлваре requireRole: запрос уходит и без
+ * проверка стоит на сервере, в `can()` у маршрута: запрос уходит и без
  * интерфейса, а спрятанная кнопка ничего не защищает.
  *
  * Смысл в другом: не показывать раздел, где всё равно прилетит 403.
@@ -28,9 +29,10 @@ export function RoleGuard({
   redirectTo = "/dashboard",
 }: RoleGuardProps) {
   const router = useRouter();
-  const { user, isLoading } = useAuth();
+  const { isLoading } = useAuth();
+  const can = useCan();
 
-  const allowed = user ? roles.includes(user.role) : false;
+  const allowed = can(roles);
 
   useEffect(() => {
     if (!isLoading && !allowed) {

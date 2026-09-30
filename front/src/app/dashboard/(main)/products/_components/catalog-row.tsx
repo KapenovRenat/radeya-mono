@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Pencil } from "lucide-react";
 import {
+  CATALOG_COST_ROLES,
+  CATALOG_PURCHASE_ROLES,
   CATALOG_SORT_KEYS,
   CURRENCY_LABELS,
   LISTING_STATUSES,
@@ -11,10 +13,12 @@ import {
   type CatalogRowDto,
   type CatalogSortKey,
   type SortOrder,
+  type UserRole,
 } from "@radeya/shared";
 
 import { Checkbox } from "@/components/checkbox";
 import { Dropdown } from "@/components/dropdown";
+import { useCan } from "@/features/auth/use-can";
 import { formatMoney, moneyToNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import styles from "./catalog-row.module.scss";
@@ -23,10 +27,18 @@ import styles from "./catalog-row.module.scss";
  * Колонки с подписями. Класс колонки задаётся здесь один раз и применяется
  * и к шапке, и к ячейке — иначе ширина и выравнивание разъезжаются.
  *
+ * `roles` — кому колонка видна; не указано — всем. Для денег роли берутся
+ * из shared: по тем же константам сервер не отдаёт сами значения.
+ *
  * Галка выделения и меню действий в этот список не входят: подписей у них нет,
  * и разметка у них своя.
  */
-const COLUMNS: { title: string; className: string; sort?: CatalogSortKey }[] = [
+const COLUMNS: {
+  title: string;
+  className: string;
+  sort?: CatalogSortKey;
+  roles?: readonly UserRole[];
+}[] = [
   { title: "Статус", className: styles.colStatus },
   { title: "Фото", className: styles.colImage },
   { title: "Товар", className: styles.colName },
@@ -36,9 +48,10 @@ const COLUMNS: { title: string; className: string; sort?: CatalogSortKey }[] = [
     sort: CATALOG_SORT_KEYS.PRICE },
   // Закупка и поставщик приезжают из МойСклада. Валюта у закупки своя
   // и в подпись колонки не выносится: у соседних строк она разная.
-  { title: "Закупка", className: styles.colPurchase, sort: CATALOG_SORT_KEYS.PURCHASE_PRICE },
+  { title: "Закупка", className: styles.colPurchase, sort: CATALOG_SORT_KEYS.PURCHASE_PRICE,
+    roles: CATALOG_PURCHASE_ROLES },
   // Себестоимость всегда в тенге — символ стоит у суммы, как у закупки.
-  { title: "Себестоимость", className: styles.colPurchase },
+  { title: "Себестоимость", className: styles.colPurchase, roles: CATALOG_COST_ROLES },
   { title: "Поставщик", className: styles.colSupplier },
   // Склад и его цифры — отдельными колонками, но строки внутри ячеек идут
   // в одном порядке: первая строка каждой колонки — первый склад.
@@ -80,8 +93,17 @@ function count(value: number | null) {
   return value === null ? <span className={styles.muted}>—</span> : value;
 }
 
-/** Подписанные колонки плюс галка и меню. Tables считает этим colSpan пустого состояния. */
-export const CATALOG_COLUMN_COUNT = COLUMNS.length + 2;
+/** Колонки, видимые текущему пользователю. */
+function useCatalogColumns() {
+  const can = useCan();
+
+  return useMemo(() => COLUMNS.filter((column) => can(column.roles)), [can]);
+}
+
+/** Видимые подписанные колонки плюс галка и меню. Tables считает этим colSpan пустого состояния. */
+export function useCatalogColumnCount(): number {
+  return useCatalogColumns().length + 2;
+}
 
 interface CatalogTableHeadProps {
   /** Выбрана вся страница. */
@@ -104,6 +126,8 @@ function nextSortHint(active: boolean, order: SortOrder): string {
 
 export function CatalogTableHead({ allSelected, someSelected, onSelectAll,
   disabled = false, sort, order, onSort }: CatalogTableHeadProps) {
+  const columns = useCatalogColumns();
+
   return (
     <tr>
       <th scope="col" className={styles.colSelect}>
@@ -116,7 +140,7 @@ export function CatalogTableHead({ allSelected, someSelected, onSelectAll,
         />
       </th>
 
-      {COLUMNS.map((column) => {
+      {columns.map((column) => {
         if (column.sort === undefined) {
           return <th key={column.title} scope="col" className={column.className}>{column.title}</th>;
         }
@@ -170,6 +194,7 @@ export function CatalogRow({ item, selected, onSelectedChange, disabled = false 
   onSelectedChange: (productId: string, selected: boolean) => void;
   disabled?: boolean;
 }) {
+  const can = useCan();
   const listing = item.listings.find((entry) => entry.channel === SALES_CHANNELS.KASPI);
   const isOnSale = item.status === LISTING_STATUSES.ON_SALE;
 
@@ -250,25 +275,30 @@ export function CatalogRow({ item, selected, onSelectedChange, disabled = false 
         )}
       </td>
 
-      <td className={styles.colPurchase}>
-        {item.purchasePrice === null ? (
-          <span className={styles.muted}>—</span>
-        ) : (
-          <>
-            {/* Не formatMoney: он подставляет тенге, а закупка бывает в рублях.
-                Приводить к одной валюте нельзя — курса на дату закупки нет. */}
-            {formatMoney(moneyToNumber(item.purchasePrice) ?? 0).replace("₸", "").trim()}
-            {" "}
-            {item.purchaseCurrency === null ? "?" : CURRENCY_LABELS[item.purchaseCurrency]}
-          </>
-        )}
-      </td>
+      {/* Роли — те же, что у колонки в COLUMNS: иначе ячейки съедут под чужие подписи. */}
+      {can(CATALOG_PURCHASE_ROLES) && (
+        <td className={styles.colPurchase}>
+          {item.purchasePrice === null ? (
+            <span className={styles.muted}>—</span>
+          ) : (
+            <>
+              {/* Не formatMoney: он подставляет тенге, а закупка бывает в рублях.
+                  Приводить к одной валюте нельзя — курса на дату закупки нет. */}
+              {formatMoney(moneyToNumber(item.purchasePrice) ?? 0).replace("₸", "").trim()}
+              {" "}
+              {item.purchaseCurrency === null ? "?" : CURRENCY_LABELS[item.purchaseCurrency]}
+            </>
+          )}
+        </td>
+      )}
 
-      <td className={styles.colPurchase}>
-        {item.costPrice === null
-          ? <span className={styles.muted}>—</span>
-          : formatMoney(moneyToNumber(item.costPrice) ?? 0)}
-      </td>
+      {can(CATALOG_COST_ROLES) && (
+        <td className={styles.colPurchase}>
+          {item.costPrice === null
+            ? <span className={styles.muted}>—</span>
+            : formatMoney(moneyToNumber(item.costPrice) ?? 0)}
+        </td>
+      )}
 
       <td className={styles.colSupplier} title={item.supplier?.name ?? undefined}>
         {item.supplier === null

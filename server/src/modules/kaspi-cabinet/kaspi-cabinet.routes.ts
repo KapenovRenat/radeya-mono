@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { USER_ROLES } from '@radeya/shared';
 
-import { requireAuth, requireRole } from '../../middlewares/require-auth';
+import { can } from '../../middlewares/require-auth';
 import { getAccount, postCheck, putAccount } from './kaspi-cabinet.controller';
+
+const { ADMIN } = USER_ROLES;
 
 /**
  * Доступ в кабинет Kaspi. Только ADMIN: это ключи от магазина.
@@ -12,8 +14,9 @@ import { getAccount, postCheck, putAccount } from './kaspi-cabinet.controller';
  */
 export const kaspiCabinetRouter = Router();
 
-kaspiCabinetRouter.use(requireAuth, requireRole(USER_ROLES.ADMIN));
+// Весь модуль — только вошедшим. Маршрут без своего can() не станет публичным.
+kaspiCabinetRouter.use(can());
 
-kaspiCabinetRouter.get('/account', getAccount);
-kaspiCabinetRouter.put('/account', putAccount);
-kaspiCabinetRouter.post('/check', postCheck);
+kaspiCabinetRouter.get('/account', can([ADMIN]), getAccount);
+kaspiCabinetRouter.put('/account', can([ADMIN]), putAccount);
+kaspiCabinetRouter.post('/check', can([ADMIN]), postCheck);

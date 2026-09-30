@@ -197,7 +197,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `Currency` (enum) | Валюта суммы: KZT, RUB. Пересчёта к одной валюте нет — курс на дату закупки неизвестен | — |
 | `KaspiCabinetAccount` | Доступ в кабинет Kaspi, одна запись `main`: email, пароль и банка кук зашифрованы, итог последнего входа, пауза Kaspi | связей нет |
 | `KaspiLoginStatus` (enum) | Итог входа в кабинет: OK, CODE_REQUIRED, MERCHANT_CHOICE_REQUIRED, CREDENTIALS_INVALID, BLOCKED, ERROR | — |
-| `UserRole` (enum) | Роли сотрудников: ADMIN, MANAGER, SELLER | — |
+| `UserRole` (enum) | Роли сотрудников: ADMIN, MANAGER, SELLER, VIEWER — совпадает с `USER_ROLES` | — |
 | `SalesChannel` (enum) | Каналы продаж: SITE, KASPI, OZON | — |
 | `ListingStatus` (enum) | Статус размещения: ON_SALE, OFF_SALE | — |
 | `ChangeSource` (enum) | Источник записи истории: KASPI_SYNC, MANUAL, IMPORT | — |
@@ -240,7 +240,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `PriceTag` | Ценник товара; образец SCSS-модуля с токенами темы | `front/src/components/price-tag/` |
 | `TreeFolder` | Два уровня папок: поиск, выбор, раскрытие; действия папки — в меню `Dropdown` (подпапка, переименовать, выше/ниже, удалить) | `front/src/components/tree-folder/page.tsx`, `front/src/components/tree-folder/style.module.scss` |
 | `Tables` | Таблица с children-строками, head и серверной пагинацией 10/20/50 | `front/src/components/tables/page.tsx`, `front/src/components/tables/style.module.scss` |
-| `ProductsLayout` | Защита раздела товаров ролью ADMIN | `front/src/app/dashboard/(main)/products/layout.tsx` |
+| `ProductsLayout` | Раздел товаров — всем вошедшим (`RoleGuard` без ролей); денежные колонки — по ролям | `front/src/app/dashboard/(main)/products/layout.tsx` |
+| `OrdersLayout` | Раздел заказов — всем вошедшим (`RoleGuard` без ролей) | `front/src/app/dashboard/(main)/orders/layout.tsx` |
 | `Loader` | Сегментное кольцо #f23428; size задаёт диаметр, hideLabel скрывает текст; label по умолчанию «Загрузка ...», подсветка букв каждые 160 мс | `front/src/components/loader/tree-list.tsx`, `front/src/components/loader/style.module.scss` |
 | `Dropdown` | Два режима через проп `mode`: `menu` — меню на три точки (пункты в `items`), `select` — выбор значения (варианты в `options`, `value`/`onChange`, галочка у выбранного, пометка «закрыто»). `multiple` — мультивыбор: `value: string[]`, список не закрывается, «Выбрано: N · Сбросить». Проп `searchable` включает поиск по списку. Клик вне, Escape, стрелки; из поля поиска стрелки уводят в список. Список в портале с `position: fixed`, закрывается при прокрутке | `front/src/components/dropdown/index.tsx`, `front/src/components/dropdown/style.module.scss` |
 | `Checkbox` | Чекбокс поверх нативного input, с частичным состоянием (`indeterminate`) | `front/src/components/checkbox/` |
@@ -249,7 +250,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `Input` | Поле ввода: подпись, ошибка, нативные пропсы | `front/src/components/input/` |
 | `Button` | Кнопка: варианты через классы, нативные пропсы | `front/src/components/button/` |
 | `AuthGuard` | Пускает в разделы админки только вошедших | `front/src/features/auth/auth-guard.tsx` |
-| `RoleGuard` | Ограничение раздела по ролям с редиректом | `front/src/features/auth/role-guard.tsx` |
+| `RoleGuard` | Ограничение раздела по ролям с редиректом; `roles` не указаны — всем вошедшим | `front/src/features/auth/role-guard.tsx` |
 | `UsersTable` | Таблица сотрудников | `front/src/app/dashboard/(main)/accounts/_components/users-table.tsx` |
 | `AuditTable` | Таблица журнала действий | `front/src/app/dashboard/(main)/accounts/_components/audit-table.tsx` |
 | `CreateUserDialog` | Модалка создания сотрудника на нативном `<dialog>` | `front/src/app/dashboard/(main)/accounts/_components/create-user-dialog.tsx` |
@@ -273,7 +274,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `CatalogPagination` | Панель пагинации под таблицей: размер страницы, номера, диапазон | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-pagination.tsx` |
 | `CabinetFetch` | Запуск загрузки из кабинета (поле куки — только если вход по email не работает), счётчики, склады, фильтр и таблица | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-fetch.tsx` |
 | `CabinetTable` | Таблица товаров из кабинета: картинка, штрихкод, цены со скидкой, размер | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-table.tsx` |
-| `CatalogRow`, `CatalogTableHead`, `CATALOG_COLUMN_COUNT` | Строка и шапка таблицы каталога: галка выделения, кружок статуса, квадратное фото, два названия, цена Kaspi в две строки со скидкой, закупка с валютой, себестоимость в ₸, поставщик, склады чипами «код · название», затем колонки Остаток, Резерв, Ожидание, Доступно, Предзаказ, Дней на складе — строкой на склад в том же порядке, закреплённое меню действий. Стили — `catalog-row.module.scss` | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
+| `CatalogRow`, `CatalogTableHead`, `useCatalogColumnCount()` (закупка и себестоимость — только ролям из `CATALOG_PURCHASE_ROLES` / `CATALOG_COST_ROLES`) | Строка и шапка таблицы каталога: галка выделения, кружок статуса, квадратное фото, два названия, цена Kaspi в две строки со скидкой, закупка с валютой, себестоимость в ₸, поставщик, склады чипами «код · название», затем колонки Остаток, Резерв, Ожидание, Доступно, Предзаказ, Дней на складе — строкой на склад в том же порядке, закреплённое меню действий. Стили — `catalog-row.module.scss` | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
 | `MoveToCategoryDialog` | Модалка переноса выбранных товаров: дерево папок с поиском, затем подтверждение | `front/src/app/dashboard/(main)/products/_components/move-to-category-dialog.tsx` |
 | `OrderDictionaryFilters` | Четыре выпадашки под кнопками синхронизации: статус доставки, оплата, откуда товар, откуда клиент. Общий `Dropdown` в режиме `select` с поиском; закрытые значения остаются в списке с пометкой | `front/src/app/dashboard/(main)/orders/_components/order-dictionary-filters.tsx` |
 | `OrderRow`, `OrderTableHead`, `orderColumnCount(kind)`, `OrderTableKind`, `statusDotClass()` (свой цвет у каждой из 13 стадий, словарь `STATUS_DOT`) | Строка и шапка таблицы заказов. Вид `marketplace` (Kaspi): дата, статус, номер, покупатель, город, склад, доставка, сумма, планируемая доставка. Вид `offline`: вместо склада «кто создал» и ещё восемь офлайновых. Колонки — словарь `COLUMNS`, наборы — `TABLE_COLUMNS`. Клик по строке и кнопка-номер открывают заказ. Стили — `order-row.module.scss` | `front/src/app/dashboard/(main)/orders/_components/order-row.tsx` |
@@ -284,7 +285,11 @@ shared/    # Общий код: типы контрактов, констант�
 
 | Имя | Назначение | Файл |
 |---|---|---|
-| `USER_ROLES`, `UserRole` | Роли сотрудников: ADMIN, MANAGER, SELLER | `shared/src/constants/roles.ts` |
+| `USER_ROLES`, `UserRole` | Роли сотрудников: ADMIN, MANAGER, SELLER, VIEWER. Новая роль — ещё `USER_ROLE_LABELS` и enum в `schema.prisma` | `shared/src/constants/roles.ts` |
+| `hasRole(role, roles?)` | Есть ли у роли доступ; пустой список — все вошедшие. Одна проверка для `can()` сервера и `useCan()` фронта | `shared/src/constants/roles.ts` |
+| `CATALOG_PURCHASE_ROLES`, `CATALOG_COST_ROLES` | Кто видит закупку и себестоимость в каталоге: сервер срезает поля, фронт прячет столбцы | `shared/src/constants/catalog.ts` |
+| `useCan()` | Фронт: `can()` — любой вошедший, `can([ADMIN])` — только эти роли. Удобство, не защита | `front/src/features/auth/use-can.ts` |
+| `useCatalogColumnCount()` | Число видимых колонок каталога с учётом ролей — для colSpan пустой таблицы | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
 | `USER_ROLE_LABELS` | Подписи ролей для интерфейса | `shared/src/constants/roles.ts` |
 | `AUDIT_ACTIONS`, `AUDIT_ACTION_LABELS` | Действия для журнала и их подписи | `shared/src/constants/audit-actions.ts` |
 | `HISTORY_ENTITY_TYPES`, `HISTORY_FIELD_LABELS`, `HistoryField<E>`, `historyFieldLabel()` | Словарь истории: сущности с историей и подписи их полей. В базе ключ поля, подпись — отсюда при показе | `shared/src/constants/history-fields.ts` |
@@ -295,7 +300,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `auditQuerySchema` | Проверка фильтров журнала: сущность только парой, тип из `AUDIT_ACTIONS` | `server/src/modules/audit/audit.schemas.ts` |
 | `LOGIN_PATTERN`, `PASSWORD_PATTERN`, `normalizeLogin()` | Правила логина и пароля, общие для сервера и формы | `shared/src/constants/credentials.ts` |
 | `LoginRequest`, `AuthUser`, `AuthResponse` | Контракты входа | `shared/src/types/auth.ts` |
-| `requireAuth`, `requireRole(...roles)` | Проверка сессии и ролей | `server/src/middlewares/require-auth.ts` |
+| `can(roles?)`, `requireAuth` | Доступ к маршруту: `can()` — любой вошедший, `can([ADMIN, MANAGER])` — только эти роли; ставится у каждого маршрута, плюс `router.use(can())` на модуль. `requireAuth` — проверка сессии, повторно в базу не ходит | `server/src/middlewares/require-auth.ts` |
+| `hideCatalogMoney(page, role)` | Срез закупки и себестоимости в ответе каталога по ролям | `server/src/modules/products/catalog.mapper.ts` |
 | `SESSION_COOKIE_NAME`, `sessionCookieOptions` | Настройки куки сессии | `server/src/config/session.ts` |
 | `SALES_POINT_TYPES`, `SALES_POINT_TYPE_LABELS`, `isSystemSalesPointType()` | Виды точек продаж: KASPI, OZON, SITE, OFFLINE | `shared/src/constants/sales-points.ts` |
 | `SYSTEM_SALES_POINT_CODES`, `OFFLINE_SALES_POINT_CODE_PREFIX`, `SALES_POINT_NAME_MAX_LENGTH`, `ORDER_COMMENT_MAX_LENGTH` | Коды системных точек, префикс `OFF` и лимиты названия и комментария | `shared/src/constants/sales-points.ts` |

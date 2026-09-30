@@ -36,7 +36,8 @@ export const createUserSchema = z.object({
     .regex(PASSWORD_PATTERN, 'Только латиница, цифры и знаки препинания'),
   name: z.string().trim().min(1, 'Имя обязательно').max(120),
   position: z.string().trim().min(1, 'Должность обязательна').max(120),
-  role: z.enum([USER_ROLES.ADMIN, USER_ROLES.MANAGER, USER_ROLES.SELLER]),
+  // Весь список из shared: новая роль в USER_ROLES принимается без правки здесь.
+  role: z.enum(USER_ROLES),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;

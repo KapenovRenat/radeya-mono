@@ -1,15 +1,15 @@
 import { Router } from 'express';
-import { USER_ROLES } from '@radeya/shared';
 
-import { requireAuth, requireRole } from '../../middlewares/require-auth';
+import { can } from '../../middlewares/require-auth';
 import { getOrdersStats } from './stats.controller';
 
 /**
- * Статистика. ADMIN, как и сам реестр заказов: выручка по точкам и доля
- * возвратов — не те цифры, которые нужны каждому продавцу.
+ * Статистика — всем вошедшим. Выручка по точкам видна всем; закрыть —
+ * перечислить роли в can().
  */
 export const statsRouter = Router();
 
-statsRouter.use(requireAuth, requireRole(USER_ROLES.ADMIN));
+// Весь модуль — только вошедшим. Маршрут без своего can() не станет публичным.
+statsRouter.use(can());
 
-statsRouter.get('/orders', getOrdersStats);
+statsRouter.get('/orders', can(), getOrdersStats);

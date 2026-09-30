@@ -40,11 +40,13 @@
 
 ### enum UserRole
 
-`ADMIN` · `MANAGER` · `SELLER`
+`ADMIN` · `MANAGER` · `SELLER` · `VIEWER`
 
 Значения обязаны совпадать с `USER_ROLES` в `shared/src/constants/roles.ts` — там же
-лежат подписи для интерфейса. Роль проверяется на сервере; скрытая кнопка в интерфейсе
-защитой не является.
+лежат подписи для интерфейса. Новая роль — три места: `USER_ROLES`, `USER_ROLE_LABELS`
+и этот enum, плюс миграция. Роль проверяется на сервере (`can()` у маршрута); скрытая
+кнопка в интерфейсе защитой не является. Кто что может — «Права и роли»
+в [api-reference.md](api-reference.md).
 
 ---
 
@@ -670,6 +672,7 @@ Email, пароль и сессия кабинета продавца. **Зап�
 | `variant_purchase` | Создаёт enum `Currency`; добавляет в `Variant` поля `purchaseCurrency` и `supplierId` со связью на `Supplier` (`onDelete: Restrict`) |
 | `history_and_stock` | `AuditLog`: колонки `source`, `changes`, `context` и индекс `(entityType, entityId, at)`; enum `ChangeSource` + `IMPORT`; удаляет таблицу `VariantChange` (пустая, в неё никто не писал); `VariantStock`: `reserved`, `expected`, `receivedAt`, `stockAt`; `Variant.costPrice` |
 | `kaspi_cabinet_account` | Создаёт `KaspiCabinetAccount` и enum `KaspiLoginStatus` |
+| `user_role_viewer` | Добавляет в enum `UserRole` значение `VIEWER` |
 
 Файлы миграций коммитятся в git — без них базу не поднять заново.
 

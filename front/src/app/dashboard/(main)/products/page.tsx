@@ -13,11 +13,13 @@ import { useCategoryActions } from "@/features/categories/use-category-actions";
 import { useProductCatalog } from "@/features/products/use-product-catalog";
 import { useGetSuppliersQuery } from "@/features/suppliers/suppliers-api";
 import { useGetWarehousesQuery } from "@/features/warehouses/warehouses-api";
-import { CATALOG_COLUMN_COUNT, CatalogRow, CatalogTableHead } from "./_components/catalog-row";
+import { CatalogRow, CatalogTableHead, useCatalogColumnCount } from "./_components/catalog-row";
 import { MoveToCategoryDialog } from "./_components/move-to-category-dialog";
 
 export default function ProductsPage() {
   const catalog = useProductCatalog();
+  // Денежные колонки видны не всем — число колонок зависит от роли.
+  const columnCount = useCatalogColumnCount();
   const [isMoveOpen, setIsMoveOpen] = useState(false);
   const categoryForm = useCreateCategoryForm(catalog.onCategoryCreated);
   const categoryActions = useCategoryActions(catalog.onCategoryDeleted);
@@ -239,7 +241,7 @@ export default function ProductsPage() {
                 onSort={catalog.toggleSort}
               />
             }
-            columnCount={CATALOG_COLUMN_COUNT}
+            columnCount={columnCount}
             caption="Каталог товаров"
           >
             {catalog.items.map((item) => (

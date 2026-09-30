@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { USER_ROLES } from '@radeya/shared';
 
-import { requireAuth, requireRole } from '../../middlewares/require-auth';
+import { can } from '../../middlewares/require-auth';
 import { getDictionaries, patchDictionaryItem,
   postDictionaryItem } from './dictionaries.controller';
+
+const { ADMIN, MANAGER } = USER_ROLES;
 
 /**
  * Пополняемые списки офлайн-точки.
@@ -17,8 +19,9 @@ import { getDictionaries, patchDictionaryItem,
  */
 export const dictionariesRouter = Router();
 
-dictionariesRouter.use(requireAuth);
+// Весь модуль — только вошедшим. Маршрут без своего can() не станет публичным.
+dictionariesRouter.use(can());
 
-dictionariesRouter.get('/', getDictionaries);
-dictionariesRouter.post('/', requireRole(USER_ROLES.ADMIN, USER_ROLES.MANAGER), postDictionaryItem);
-dictionariesRouter.patch('/:id', requireRole(USER_ROLES.ADMIN, USER_ROLES.MANAGER), patchDictionaryItem);
+dictionariesRouter.get('/', can(), getDictionaries);
+dictionariesRouter.post('/', can([ADMIN, MANAGER]), postDictionaryItem);
+dictionariesRouter.patch('/:id', can([ADMIN, MANAGER]), patchDictionaryItem);

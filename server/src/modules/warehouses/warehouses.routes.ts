@@ -1,16 +1,20 @@
 import { Router } from 'express';
 import { USER_ROLES } from '@radeya/shared';
 
-import { requireAuth, requireRole } from '../../middlewares/require-auth';
+import { can } from '../../middlewares/require-auth';
 import { getWarehouses, postKaspiWarehouses } from './warehouses.controller';
 
+const { ADMIN } = USER_ROLES;
+
 /**
- * Справочник складов — только для админа: это настройка учёта, а не рабочий
- * экран. Ошибка здесь тихо разъедется по товарам и заказам.
+ * Справочник складов. Список нужен всем — фильтр каталога и колонки складов.
+ * Импорт — только ADMIN: это настройка учёта, ошибка тихо разъедется
+ * по товарам и заказам.
  */
 export const warehousesRouter = Router();
 
-warehousesRouter.use(requireAuth, requireRole(USER_ROLES.ADMIN));
+// Весь модуль — только вошедшим. Маршрут без своего can() не станет публичным.
+warehousesRouter.use(can());
 
-warehousesRouter.get('/', getWarehouses);
-warehousesRouter.post('/import-kaspi', postKaspiWarehouses);
+warehousesRouter.get('/', can(), getWarehouses);
+warehousesRouter.post('/import-kaspi', can([ADMIN]), postKaspiWarehouses);

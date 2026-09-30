@@ -1,15 +1,23 @@
 import type { RequestHandler } from 'express';
-import { AUDIT_ACTIONS, HISTORY_SOURCES } from '@radeya/shared';
+import {
+  AUDIT_ACTIONS, CATALOG_PURCHASE_ROLES, CATALOG_SORT_KEYS, HISTORY_SOURCES, hasRole,
+} from '@radeya/shared';
 import { Prisma } from '../../generated/prisma/client';
 import { clientIp, logAction } from '../../lib/audit';
-import { ConflictError, ValidationError } from '../../lib/errors';
+import { ConflictError, ForbiddenError, ValidationError } from '../../lib/errors';
+import { hideCatalogMoney } from './catalog.mapper';
 import { catalogQuerySchema, moveProductsSchema } from './catalog.schemas';
 import { listCatalog, moveProductsToCategory } from './catalog.service';
 
 export const getCatalog: RequestHandler = async (req, res) => {
   const parsed = catalogQuerySchema.safeParse(req.query);
   if (!parsed.success) throw new ValidationError('Проверьте поиск, категорию и параметры страницы');
-  res.json(await listCatalog(parsed.data));
+  const role = req.user!.role;
+  // Порядок строк по закупке выдаёт её саму: кто закупку не видит, по ней и не сортирует.
+  if (parsed.data.sort === CATALOG_SORT_KEYS.PURCHASE_PRICE && !hasRole(role, CATALOG_PURCHASE_ROLES)) {
+    throw new ForbiddenError('Сортировка по закупке недоступна');
+  }
+  res.json(hideCatalogMoney(await listCatalog(parsed.data), role));
 };
 export const patchProductsCategory: RequestHandler = async (req, res) => {
   const parsed = moveProductsSchema.safeParse(req.body);

@@ -1,8 +1,10 @@
 import express, { Router } from 'express';
 import { USER_ROLES } from '@radeya/shared';
 
-import { requireAuth, requireRole } from '../../middlewares/require-auth';
+import { can } from '../../middlewares/require-auth';
 import { commitOfflineOrders, previewOfflineOrders } from './imports.controller';
+
+const { ADMIN } = USER_ROLES;
 
 /**
  * Импорт данных из файлов. Только ADMIN: это запись в заказы пачкой,
@@ -10,7 +12,8 @@ import { commitOfflineOrders, previewOfflineOrders } from './imports.controller'
  */
 export const importsRouter = Router();
 
-importsRouter.use(requireAuth, requireRole(USER_ROLES.ADMIN));
+// Весь модуль — только вошедшим. Маршрут без своего can() не станет публичным.
+importsRouter.use(can());
 
 /**
  * Файл приезжает двоичным телом, а не multipart: полей у запроса всего два,
@@ -22,6 +25,7 @@ importsRouter.use(requireAuth, requireRole(USER_ROLES.ADMIN));
  */
 importsRouter.post(
   '/offline-orders/preview',
+  can([ADMIN]),
   express.raw({ type: '*/*', limit: '25mb' }),
   previewOfflineOrders,
 );
@@ -29,6 +33,7 @@ importsRouter.post(
 /** Запись: здесь тело обычный JSON — строки, которые человек увидел в предпросмотре. */
 importsRouter.post(
   '/offline-orders/commit',
+  can([ADMIN]),
   express.json({ limit: '25mb' }),
   commitOfflineOrders,
 );

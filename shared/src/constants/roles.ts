@@ -10,6 +10,7 @@ export const USER_ROLES = {
   ADMIN: 'ADMIN',
   MANAGER: 'MANAGER',
   SELLER: 'SELLER',
+  VIEWER: 'VIEWER'
 } as const;
 
 export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES];
@@ -19,4 +20,15 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: 'Админ',
   MANAGER: 'Менеджер',
   SELLER: 'Продавец',
+  VIEWER: 'Смотрящий'
 };
+
+/**
+ * Есть ли у роли доступ. Одна проверка на сервер и фронт.
+ *
+ * Пустой список — доступ у всех вошедших: так открытое пишется `can()`,
+ * а закрытое перечисляет роли явно, `can([ADMIN, MANAGER])`.
+ */
+export function hasRole(role: UserRole, roles: readonly UserRole[] = []): boolean {
+  return roles.length === 0 || roles.includes(role);
+}

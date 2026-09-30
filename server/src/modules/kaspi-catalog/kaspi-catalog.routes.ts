@@ -1,8 +1,10 @@
 import express, { Router } from 'express';
 import { USER_ROLES } from '@radeya/shared';
 
-import { requireAuth, requireRole } from '../../middlewares/require-auth';
+import { can } from '../../middlewares/require-auth';
 import { fetchCatalog, previewCatalog } from './kaspi-catalog.controller';
+
+const { ADMIN } = USER_ROLES;
 
 /**
  * Синхронизация с Kaspi. Только для админа: это управление каталогом,
@@ -10,10 +12,12 @@ import { fetchCatalog, previewCatalog } from './kaspi-catalog.controller';
  */
 export const kaspiCatalogRouter = Router();
 
+// Весь модуль — только вошедшим. Маршрут без своего can() не станет публичным.
+kaspiCatalogRouter.use(can());
+
 kaspiCatalogRouter.post(
   '/preview',
-  requireAuth,
-  requireRole(USER_ROLES.ADMIN),
+  can([ADMIN]),
   // Свой разбор тела с увеличенным лимитом: две выгрузки — это ~650 КБ,
   // а общий лимит приложения намеренно оставлен в 1 МБ.
   express.json({ limit: '20mb' }),
@@ -22,9 +26,4 @@ kaspiCatalogRouter.post(
 
 // Обход каталога в кабинете. Тело маленькое (кука и пара флагов),
 // поэтому общего лимита приложения хватает.
-kaspiCatalogRouter.post(
-  '/fetch',
-  requireAuth,
-  requireRole(USER_ROLES.ADMIN),
-  fetchCatalog,
-);
+kaspiCatalogRouter.post('/fetch', can([ADMIN]), fetchCatalog);
