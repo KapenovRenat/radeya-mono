@@ -167,6 +167,13 @@ netstat -an | grep -i listen | grep 4000
 | `@prisma/adapter-pg` | `server` | Prisma 7 ходит в PostgreSQL через драйвер-адаптер |
 | `tsx` | `server`, devDependency | Запуск TypeScript в разработке без сборки |
 | `tough-cookie` | `server` | Банка кук для входа в кабинет Kaspi: цепочка переходов между `mc.` и `idmc.shop.kaspi.kz`, домены и пути кук. Встроенный `fetch` куки между редиректами не переносит |
+| `satori` | `server` | Карточка заказа для Telegram: разметка → SVG. То, что старая админка брала из `next/og`, без Next |
+| `@resvg/resvg-js` | `server` | SVG карточки → PNG. Нативный модуль: на VPS ставится готовой сборкой под linux-x64 вместе с `npm install` |
+
+**Шрифты карточки** — `server/assets/fonts/`, Roboto `.woff` (Satori не понимает
+`.woff2`), шесть файлов: латиница и кириллица, начертания 400/700/900. Лежат
+в репозитории (лицензия Apache 2.0) — на сервер приезжают вместе с кодом.
+Нет файлов — отправка в Telegram стоит, событие в журнале воркера.
 
 ---
 

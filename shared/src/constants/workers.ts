@@ -40,6 +40,23 @@ export const SUPPLIER_NOTIFY_DEFAULT_WEEKDAYS: readonly Weekday[] = [1, 2, 3, 4,
 export const SUPPLIER_NOTIFY_FROM_HOUR = 8;
 export const SUPPLIER_NOTIFY_TO_HOUR = 17;
 
+/**
+ * Склад Астаны. Заказы в наличии с него уходят в группу «Из наличия в Астане»
+ * (её Telegram ID — `Warehouse.telegramChatId`), всё остальное — поставщику товара.
+ */
+export const ASTANA_STOCK_WAREHOUSE_CODE = 'PP3';
+
+/**
+ * Вид отправки в Telegram. Значения обязаны совпадать с enum DispatchKind в schema.prisma.
+ */
+export const DISPATCH_KINDS = {
+  NEW: 'NEW',
+  CANCEL: 'CANCEL',
+  RETURN: 'RETURN',
+} as const;
+
+export type DispatchKind = (typeof DISPATCH_KINDS)[keyof typeof DISPATCH_KINDS];
+
 /** Telegram ID: личка — положительное число, группа — отрицательное (`-100…`). */
 export const TELEGRAM_CHAT_ID_PATTERN = /^-?\d{1,20}$/;
 
@@ -78,6 +95,15 @@ export const WORKER_EVENT_TYPES = {
   ORDER_ENTRIES_FAILED: 'ORDER_ENTRIES_FAILED',
   ORDER_ARRIVAL_DATE_CHANGED: 'ORDER_ARRIVAL_DATE_CHANGED',
   ORDER_CABINET_FAILED: 'ORDER_CABINET_FAILED',
+  DISPATCH_SENT: 'DISPATCH_SENT',
+  DISPATCH_CANCEL_SENT: 'DISPATCH_CANCEL_SENT',
+  DISPATCH_RETURN_SENT: 'DISPATCH_RETURN_SENT',
+  DISPATCH_SKIPPED: 'DISPATCH_SKIPPED',
+  DISPATCH_NO_RECIPIENT: 'DISPATCH_NO_RECIPIENT',
+  DISPATCH_WAITING_DATE: 'DISPATCH_WAITING_DATE',
+  DISPATCH_RETRY: 'DISPATCH_RETRY',
+  DISPATCH_FAILED: 'DISPATCH_FAILED',
+  DISPATCH_BLOCKED: 'DISPATCH_BLOCKED',
   RUN_FAILED: 'RUN_FAILED',
   RUN_TIMEOUT: 'RUN_TIMEOUT',
   RUN_SKIPPED_LOCKED: 'RUN_SKIPPED_LOCKED',
@@ -101,6 +127,15 @@ export const WORKER_EVENT_TYPE_LABELS: Record<WorkerEventType, string> = {
   ORDER_ENTRIES_FAILED: 'Состав не загрузился',
   ORDER_ARRIVAL_DATE_CHANGED: 'Дата прибытия',
   ORDER_CABINET_FAILED: 'Кабинет Kaspi не ответил',
+  DISPATCH_SENT: 'Отправлено в Telegram',
+  DISPATCH_CANCEL_SENT: 'Отправлена отмена',
+  DISPATCH_RETURN_SENT: 'Отправлен возврат',
+  DISPATCH_SKIPPED: 'Не отправлено',
+  DISPATCH_NO_RECIPIENT: 'Некому отправить',
+  DISPATCH_WAITING_DATE: 'Ждёт дату сдачи',
+  DISPATCH_RETRY: 'Отправка не удалась, повтор',
+  DISPATCH_FAILED: 'Отправка не удалась окончательно',
+  DISPATCH_BLOCKED: 'Отправка невозможна',
   RUN_FAILED: 'Ошибка цикла',
   RUN_TIMEOUT: 'Цикл превысил время',
   RUN_SKIPPED_LOCKED: 'Цикл пропущен: идёт ручная синхронизация',

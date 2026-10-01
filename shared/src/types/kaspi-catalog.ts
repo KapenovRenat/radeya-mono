@@ -116,6 +116,13 @@ export interface WarehouseDto {
   kaspiOffersCount: number | null;
   kaspiTotalStock: number | null;
   kaspiStatsAt: string | null;
+  /** Telegram-группа кладовщика: туда уходят заказы в наличии с этого склада. */
+  telegramChatId: string | null;
+}
+
+/** Правка склада руками — пока только Telegram-группа кладовщика. null — снять. */
+export interface UpdateWarehouseRequest {
+  telegramChatId: string | null;
 }
 
 /** Тело POST /api/kaspi-catalog/preview: содержимое файлов как текст. */

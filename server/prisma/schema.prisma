@@ -171,11 +171,18 @@ model Warehouse {
   /// и через месяц будет непонятно, свежие они или прошлогодние.
   kaspiStatsAt DateTime?
 
+  /// Telegram-группа кладовщика: сюда воркер шлёт заказы в наличии с этого склада.
+  /// Сейчас заполняется только у Астаны (PP3) — «Из наличия в Астане».
+  /// Пусто у другого склада — его заказы в наличии идут поставщику, как предзаказ.
+  /// Пусто у Астаны — заказ ждёт, пока группу не укажут: поставщику он не нужен.
+  telegramChatId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  stocks VariantStock[]
-  orders Order[]
+  stocks     VariantStock[]
+  orders     Order[]
+  dispatches OrderDispatch[]
 }
 
 /// Каналы продаж. Значения обязаны совпадать с SALES_CHANNELS
@@ -1006,6 +1013,8 @@ model Order {
 
   /// Журнал воркера по этому заказу.
   workerEvents WorkerEvent[]
+  /// Отправки в Telegram по позициям заказа.
+  dispatches   OrderDispatch[]
 
   @@index([status])
   @@index([placedAt])
@@ -1069,6 +1078,9 @@ model OrderEntry {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  /// Отправки этой позиции в Telegram: заказ, отмена, возврат.
+  dispatches OrderDispatch[]
 
   @@unique([orderId, entryNumber])
   @@index([sku])
@@ -1164,6 +1176,9 @@ model Supplier {
   /// Артикулы, закупаемые у этого поставщика. `onDelete: Restrict` со стороны
   /// `Variant`: поставщика с товарами не удалить, только закрыть.
   variants Variant[]
+
+  /// Что уходило поставщику в Telegram.
+  dispatches OrderDispatch[]
 
   @@index([name])
 }
@@ -1272,6 +1287,74 @@ model WorkerEvent {
   @@index([orderId, at])
   @@index([orderCode])
   @@index([type, at])
+}
+
+/// Что за сообщение. Значения обязаны совпадать с DISPATCH_KINDS в shared.
+enum DispatchKind {
+  /// Новый заказ.
+  NEW
+  /// Отмена — клиентом или в пути. Одна на позицию: «в пути», а потом
+  /// «отменён» — это одна отмена, второе сообщение было бы лишним.
+  CANCEL
+  /// Возврат: поставщик должен его принять.
+  RETURN
+}
+
+/// Судьба отправки. Значения обязаны совпадать с DISPATCH_STATUSES в shared.
+enum DispatchStatus {
+  /// Взята в работу или ждёт повтора после сбоя.
+  PENDING
+  SENT
+  /// Не отправляли и не будем: например, заказ отменили до отправки.
+  SKIPPED
+  /// Попытки кончились — оповещён разработчик.
+  FAILED
+}
+
+/// Кому ушло.
+enum DispatchRecipient {
+  SUPPLIER
+  /// Группа склада — «Из наличия в Астане».
+  WAREHOUSE
+}
+
+/// Отправка позиции заказа в Telegram. Подробности — docs/workers.md.
+///
+/// Уникальность «позиция + вид» и есть защита от дублей: повтор, сбой
+/// или перезапуск посреди цикла второго сообщения не дадут. Получатель —
+/// снимком (`chatId`, `recipientName`): отмена уходит туда же, куда ушёл заказ,
+/// даже если поставщику потом сменили Telegram.
+model OrderDispatch {
+  id String @id @default(uuid()) @db.Uuid
+
+  orderId String     @db.Uuid
+  order   Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  entryId String     @db.Uuid
+  entry   OrderEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  kind   DispatchKind
+  status DispatchStatus @default(PENDING)
+
+  /// Пусто у пропущенных: получателя и не искали.
+  recipient     DispatchRecipient?
+  supplierId    String?            @db.Uuid
+  supplier      Supplier?          @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  warehouseId   String?            @db.Uuid
+  warehouse     Warehouse?         @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  recipientName String?
+  chatId        String?
+
+  attempts          Int       @default(0)
+  lastError         String?
+  telegramMessageId String?
+  sentAt            DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([entryId, kind])
+  @@index([orderId])
+  @@index([kind, status])
 }
 
 /// Итог последней попытки входа в кабинет Kaspi. Значения обязаны совпадать

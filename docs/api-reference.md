@@ -1083,7 +1083,7 @@ Email и состояние входа. Пароля в ответе нет ни
 - Параметры: нет
 - Ответ 200: `{ "items": WarehouseDto[] }` — `id`, `code`, `kaspiStoreId`,
   `kaspiCityId`, `name`, `isActive`, `kaspiOffersCount`, `kaspiTotalStock`,
-  `kaspiStatsAt`
+  `kaspiStatsAt`, `telegramChatId`
 - Ошибки: `401 UNAUTHORIZED`, `403 FORBIDDEN`
 - Файл: `server/src/modules/warehouses/warehouses.routes.ts`
 
@@ -1102,6 +1102,19 @@ Email и состояние входа. Пароля в ответе нет ни
   - `409 CONFLICT` — код склада в списке дважды, либо `storeId` уже занят другим кодом
   - `403 FORBIDDEN` — роль ниже `ADMIN`
 - Файл: `server/src/modules/warehouses/warehouses.routes.ts`
+
+### PATCH /api/warehouses/:id
+
+Telegram-группа кладовщика склада — «Из наличия в Астане» в настройках.
+Туда воркер шлёт заказы в наличии с этого склада ([workers.md](workers.md)).
+
+- Auth: `can([ADMIN])`
+- Тело: `{ "telegramChatId": "-100…" | null }` (`UpdateWarehouseRequest`) — цифры,
+  у группы с минусом; `null` — снять. Другие поля запрещены
+- Ответ 200: `WarehouseDto` (с `telegramChatId`)
+- Ошибки: `400 VALIDATION_ERROR`, `404 NOT_FOUND`, общие 401/403
+- Журнал: WAREHOUSE_UPDATED — Telegram ID до и после
+- Файл: `server/src/modules/warehouses/warehouses.controller.ts` (patchWarehouse)
 
 > Приходит разобранный список, а не XML заново: сохраняется ровно то, что человек
 > увидел на экране. Данные всё равно от клиента, поэтому каждое поле проверяется
@@ -1240,7 +1253,7 @@ router.post('/', can([ADMIN, MANAGER]), create);     // только эти ро
 | `GET /api/warehouses`, `GET /api/suppliers`, `GET /api/stats/orders` | все вошедшие |
 | `GET /api/dictionaries`, `GET /api/sales-points` | все вошедшие |
 | Справочники: добавить, править | ADMIN, MANAGER |
-| Точки продаж, поставщики: создать, править | ADMIN |
+| Точки продаж, поставщики, склад (`PATCH /api/warehouses/:id`): создать, править | ADMIN |
 | Импорты, МойСклад, `kaspi-catalog`, `products/skus`, `products/import-kaspi`, `warehouses/import-kaspi` | ADMIN |
 | Аккаунты (`/api/users`), журнал (`/api/audit`), кабинет Kaspi (`/api/kaspi-cabinet`), воркеры (`/api/workers`) | ADMIN |
 | `GET /api/auth/me`, `POST /api/auth/logout` | все вошедшие |

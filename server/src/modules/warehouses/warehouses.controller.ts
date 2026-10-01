@@ -3,8 +3,8 @@ import { AUDIT_ACTIONS } from '@radeya/shared';
 
 import { clientIp, logAction } from '../../lib/audit';
 import { ValidationError } from '../../lib/errors';
-import { saveWarehousesSchema } from './warehouses.schemas';
-import { listWarehouses, saveKaspiWarehouses } from './warehouses.service';
+import { saveWarehousesSchema, updateWarehouseSchema, warehouseParamsSchema } from './warehouses.schemas';
+import { listWarehouses, saveKaspiWarehouses, updateWarehouseTelegram } from './warehouses.service';
 
 /** GET /api/warehouses */
 export const getWarehouses: RequestHandler = async (_req, res) => {
@@ -41,4 +41,30 @@ export const postKaspiWarehouses: RequestHandler = async (req, res) => {
   });
 
   res.json(result);
+};
+
+/** PATCH /api/warehouses/:id — Telegram-группа кладовщика («Из наличия в Астане»). */
+export const patchWarehouse: RequestHandler = async (req, res) => {
+  const params = warehouseParamsSchema.safeParse(req.params);
+
+  if (!params.success) throw new ValidationError('Некорректный склад');
+
+  const parsed = updateWarehouseSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    throw new ValidationError(parsed.error.issues[0]?.message ?? 'Проверьте Telegram ID');
+  }
+
+  const { before, after } = await updateWarehouseTelegram(params.data.id, parsed.data.telegramChatId);
+  const author = req.user!;
+
+  await logAction({
+    userId: author.id, userLogin: author.login, userRole: author.role,
+    action: AUDIT_ACTIONS.WAREHOUSE_UPDATED, entityType: 'Warehouse', entityId: after.id,
+    before: { telegramChatId: before.telegramChatId },
+    after: { telegramChatId: after.telegramChatId },
+    ip: clientIp(req),
+  });
+
+  res.json(after);
 };

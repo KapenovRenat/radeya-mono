@@ -1,7 +1,7 @@
 import type { SaveWarehousesResponse, WarehouseDto } from '@radeya/shared';
 
 import { prisma } from '../../db/client';
-import { ConflictError } from '../../lib/errors';
+import { ConflictError, NotFoundError } from '../../lib/errors';
 import type { SaveWarehousesInput } from './warehouses.schemas';
 import type { Warehouse } from '../../generated/prisma/client';
 
@@ -17,7 +17,25 @@ export function toWarehouseDto(warehouse: Warehouse): WarehouseDto {
     kaspiOffersCount: warehouse.kaspiOffersCount,
     kaspiTotalStock: warehouse.kaspiTotalStock,
     kaspiStatsAt: warehouse.kaspiStatsAt?.toISOString() ?? null,
+    telegramChatId: warehouse.telegramChatId,
   };
+}
+
+/**
+ * Telegram-группа кладовщика склада. Возвращает было/стало для журнала.
+ * Импорт складов это поле не трогает: его вписывает человек.
+ */
+export async function updateWarehouseTelegram(
+  id: string,
+  telegramChatId: string | null,
+): Promise<{ before: WarehouseDto; after: WarehouseDto }> {
+  const current = await prisma.warehouse.findUnique({ where: { id } });
+
+  if (!current) throw new NotFoundError('Склад не найден');
+
+  const updated = await prisma.warehouse.update({ where: { id }, data: { telegramChatId } });
+
+  return { before: toWarehouseDto(current), after: toWarehouseDto(updated) };
 }
 
 /** Справочник складов, по коду — так их читает человек. */

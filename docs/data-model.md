@@ -696,6 +696,23 @@ Email, пароль и сессия кабинета продавца. **Зап�
 для таблицы, `details` — Json с подробностями. Индексы: `at`, `(orderId, at)`,
 `orderCode`, `(type, at)` — под фильтры страницы журнала.
 
+### OrderDispatch — отправки в Telegram
+
+Отправка позиции заказа получателю: новый заказ, отмена, возврат. Подробности —
+[workers.md](workers.md), раздел 5.
+
+| Поле | Что это |
+|---|---|
+| `orderId`, `entryId` | Заказ и позиция (`Cascade`) |
+| `kind` | `DispatchKind`: `NEW`, `CANCEL` (одна на позицию — «в пути» и «отменён» одна отмена), `RETURN` |
+| `status` | `DispatchStatus`: `PENDING` (в работе или ждёт повтора), `SENT`, `SKIPPED` (закрыт до отправки), `FAILED` (попытки кончились) |
+| `recipient`, `supplierId`, `warehouseId` | `DispatchRecipient`: `SUPPLIER` или `WAREHOUSE` (группа склада); пусто у пропущенных |
+| `recipientName`, `chatId` | Получатель снимком: отмена уходит туда же, куда ушёл заказ |
+| `attempts`, `lastError`, `telegramMessageId`, `sentAt` | Ход отправки |
+
+`@@unique([entryId, kind])` — защита от дублей. `Warehouse.telegramChatId` —
+Telegram-группа кладовщика склада, сейчас только у Астаны (PP3).
+
 ---
 
 ## Миграции
@@ -719,6 +736,7 @@ Email, пароль и сессия кабинета продавца. **Зап�
 | `kaspi_cabinet_account` | Создаёт `KaspiCabinetAccount` и enum `KaspiLoginStatus` |
 | `user_role_viewer` | Добавляет в enum `UserRole` значение `VIEWER` |
 | `workers` | Создаёт `WorkerSettings`, `WorkerState`, `WorkerEvent` и enum `WorkerStatus` |
+| `order_dispatch` | Добавляет `Warehouse.telegramChatId`; создаёт `OrderDispatch` и enum'ы `DispatchKind`, `DispatchStatus`, `DispatchRecipient` |
 | `order_planned_point_delivery` | Добавляет в `Order` поля `plannedPointDeliveryAt` («Планируемая дата прибытия» из кабинета) и `cabinetSyncedAt` (когда спрашивали кабинет) |
 
 Файлы миграций коммитятся в git — без них базу не поднять заново.

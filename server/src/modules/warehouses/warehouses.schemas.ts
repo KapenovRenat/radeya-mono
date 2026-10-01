@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TELEGRAM_CHAT_ID_PATTERN } from '@radeya/shared';
 
 /**
  * Импорт складов из выгрузки Kaspi.
@@ -53,3 +54,12 @@ export const saveWarehousesSchema = z.object({
 });
 
 export type SaveWarehousesInput = z.infer<typeof saveWarehousesSchema>;
+
+export const warehouseParamsSchema = z.object({ id: z.string().uuid() });
+
+/** Telegram-группа кладовщика: цифры, у группы с минусом. null — снять. */
+export const updateWarehouseSchema = z.object({
+  telegramChatId: z.string().trim().max(32)
+    .regex(TELEGRAM_CHAT_ID_PATTERN, 'Telegram ID — только цифры, у группы с минусом')
+    .nullable(),
+}).strict();

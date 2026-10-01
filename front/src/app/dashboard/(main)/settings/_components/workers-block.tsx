@@ -89,7 +89,9 @@ function WorkerCard({ worker }: { worker: WorkerDto }) {
               {formatDateTime(state.lastRunFinishedAt)}
               {state.lastRunTookMs !== null && `, ${(state.lastRunTookMs / 1000).toFixed(1)} с`}
               {stats && ` · получено ${stats.ordersSeen ?? 0}, новых ${stats.created ?? 0}, `
-                + `смен статуса ${stats.statusChanged ?? 0}, составов ${stats.entriesLoaded ?? 0}`}
+                + `смен статуса ${stats.statusChanged ?? 0}, составов ${stats.entriesLoaded ?? 0}, `
+                + `отправлено ${(stats.dispatchSent ?? 0) + (stats.dispatchCancelSent ?? 0) + (stats.dispatchReturnSent ?? 0)}`
+                + (stats.outsideSendWindow ? " (вне часов отправки)" : "")}
             </dd>
           </div>
         )}
@@ -138,16 +140,18 @@ function WorkerCard({ worker }: { worker: WorkerDto }) {
       </div>
 
       <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">Поставщикам в Telegram</legend>
+        <legend className="text-sm font-medium">Заказы в Telegram</legend>
 
         <Checkbox
-          label="Отправлять уведомления поставщикам"
+          label="Отправлять заказы поставщикам и в группу Астаны"
           checked={value.supplierNotifyEnabled}
           onChange={(event) => form.set("supplierNotifyEnabled", event.target.checked)}
         />
 
         <p className="text-sm">
-          Отправка поставщикам подключается третьим этапом — пока настройки только сохраняются.
+          Уходят только заказы, оформленные после включения галочки — старые не высыпаются.
+          Kaspi Доставка без даты сдачи ждёт, пока кабинет её не отдаст.
+          Кому слать — блок «Получатели в Telegram» ниже.
         </p>
 
         <Dropdown

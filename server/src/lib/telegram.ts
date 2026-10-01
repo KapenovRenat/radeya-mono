@@ -27,25 +27,47 @@ export async function sendTelegramMessage(chatId: string, html: string): Promise
   });
 }
 
+/**
+ * Готовая PNG-картинка (карточка заказа) — multipart, без подписи.
+ * Возвращает id сообщения: по нему видно, что именно ушло.
+ */
+export async function sendTelegramPhoto(chatId: string, png: Uint8Array): Promise<string | null> {
+  const form = new FormData();
+
+  form.append('chat_id', chatId);
+  // Копия в обычный ArrayBuffer: Blob не принимает Uint8Array поверх SharedArrayBuffer.
+  form.append('photo', new Blob([new Uint8Array(png)], { type: 'image/png' }), 'card.png');
+
+  const result = await callTelegram('sendPhoto', form);
+  const messageId = typeof result === 'object' && result !== null
+    ? (result as { message_id?: unknown }).message_id
+    : undefined;
+
+  return typeof messageId === 'number' ? String(messageId) : null;
+}
+
 /** Экранирование для parse_mode HTML: без него `<` в тексте ошибки сломает сообщение. */
 export function escapeTelegramHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-async function callTelegram(method: string, body: Record<string, unknown>): Promise<void> {
+/** Вызов Bot API. Возвращает `result` из ответа Telegram. */
+async function callTelegram(method: string, body: Record<string, unknown> | FormData): Promise<unknown> {
   const token = env.TELEGRAM_BOT_TOKEN;
 
   if (!token) {
     throw new AppError(503, 'TELEGRAM_TOKEN_MISSING', 'Не задан TELEGRAM_BOT_TOKEN в .env');
   }
 
+  const isForm = body instanceof FormData;
   let response: Response;
 
   try {
     response = await fetch(`${TELEGRAM_API}/bot${token}/${method}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
+      // У multipart заголовок с границей частей ставит сам fetch.
+      headers: isForm ? undefined : { 'content-type': 'application/json' },
+      body: isForm ? body : JSON.stringify(body),
       signal: AbortSignal.timeout(TELEGRAM_TIMEOUT_MS),
     });
   } catch (error) {
@@ -54,8 +76,9 @@ async function callTelegram(method: string, body: Record<string, unknown>): Prom
     throw new AppError(502, 'TELEGRAM_UNAVAILABLE', `Telegram не ответил: ${reason}`);
   }
 
-  // Ответ Telegram всегда `{ ok, description? }` — даже при ошибке с кодом 400.
-  const data = await response.json().catch(() => null) as { ok?: boolean; description?: string } | null;
+  // Ответ Telegram всегда `{ ok, result?, description? }` — даже при ошибке с кодом 400.
+  const data = await response.json().catch(() => null) as
+    { ok?: boolean; result?: unknown; description?: string } | null;
 
   if (data?.ok !== true) {
     throw new AppError(
@@ -64,4 +87,6 @@ async function callTelegram(method: string, body: Record<string, unknown>): Prom
       `Telegram отклонил сообщение: ${data?.description ?? `код ${response.status}`}`,
     );
   }
+
+  return data.result;
 }

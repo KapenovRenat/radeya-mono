@@ -102,6 +102,15 @@ export function previewImageUrl(images: Prisma.JsonValue): string | null {
   return previewUrl(readImages(images));
 }
 
+/** Самая крупная картинка товара — для карточки заказа в Telegram. */
+export function largeImageUrl(images: Prisma.JsonValue): string | null {
+  for (const image of readImages(images)) {
+    const url = image.large ?? image.medium ?? image.small;
+    if (url) return url;
+  }
+  return null;
+}
+
 /**
  * Доступно = Остаток − Резерв + Ожидание — формула МойСклада, сверена на отчёте.
  * Не указанное слагаемое считается нулём, но если не указано ничего — это

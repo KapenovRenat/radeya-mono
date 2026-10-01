@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { USER_ROLES } from '@radeya/shared';
 
 import { can } from '../../middlewares/require-auth';
-import { getWarehouses, postKaspiWarehouses } from './warehouses.controller';
+import { getWarehouses, patchWarehouse, postKaspiWarehouses } from './warehouses.controller';
 
 const { ADMIN } = USER_ROLES;
 
@@ -18,3 +18,4 @@ warehousesRouter.use(can());
 
 warehousesRouter.get('/', can(), getWarehouses);
 warehousesRouter.post('/import-kaspi', can([ADMIN]), postKaspiWarehouses);
+warehousesRouter.patch('/:id', can([ADMIN]), patchWarehouse);

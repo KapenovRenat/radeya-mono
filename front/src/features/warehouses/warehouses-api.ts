@@ -1,6 +1,7 @@
 import type {
   SaveWarehousesRequest,
   SaveWarehousesResponse,
+  UpdateWarehouseRequest,
   WarehouseDto,
 } from "@radeya/shared";
 
@@ -28,8 +29,17 @@ export const warehousesApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ["Warehouse"],
     }),
+
+    /** Telegram-группа кладовщика склада — «Из наличия в Астане». */
+    updateWarehouse: build.mutation<WarehouseDto, { id: string } & UpdateWarehouseRequest>({
+      query: ({ id, ...body }) => ({ url: `/warehouses/${id}`, method: "PATCH", body }),
+      invalidatesTags: ["Warehouse", "Audit"],
+    }),
   }),
 });
 
-export const { useGetWarehousesQuery, useImportKaspiWarehousesMutation } =
-  warehousesApi;
+export const {
+  useGetWarehousesQuery,
+  useImportKaspiWarehousesMutation,
+  useUpdateWarehouseMutation,
+} = warehousesApi;

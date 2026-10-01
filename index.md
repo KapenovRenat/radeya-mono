@@ -41,7 +41,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `POST /api/kaspi-cabinet/check` | Проверка подключения: жива сессия — без входа, иначе вход; трасса ответов Kaspi для консоли | ADMIN | `server/src/modules/kaspi-cabinet/kaspi-cabinet.controller.ts` |
 | `GET /api/workers` | Настройки и состояние воркеров, пульс, задан ли токен бота | ADMIN | `server/src/modules/workers/workers.controller.ts` |
 | `PUT /api/workers/:key/settings` | Сохранить настройки воркера; включение отправки ставит точку отсечки | ADMIN | `server/src/modules/workers/workers.controller.ts` |
-| `GET /api/warehouses` | Справочник складов | ADMIN | `server/src/modules/warehouses/warehouses.routes.ts` |
+| `GET /api/warehouses` | Справочник складов, с Telegram-группой кладовщика | все вошедшие | `server/src/modules/warehouses/warehouses.routes.ts` |
+| `PATCH /api/warehouses/:id` | Telegram-группа кладовщика склада («Из наличия в Астане») | ADMIN | `server/src/modules/warehouses/warehouses.controller.ts` |
 | `POST /api/warehouses/import-kaspi` | Импорт складов из предпросмотра выгрузки, повторяемый | ADMIN | `server/src/modules/warehouses/warehouses.routes.ts` |
 | `GET /api/products/skus` | Артикулы, уже сохранённые в каталоге | ADMIN | `server/src/modules/products/products.routes.ts` |
 | `POST /api/products/import-kaspi` | Сохранение загруженных товаров в каталог; создаёт только новые | ADMIN | `server/src/modules/products/products.routes.ts` |
@@ -128,6 +129,15 @@ shared/    # Общий код: типы контрактов, констант�
 | workers | `WORKER_JOBS` | Реестр воркеров: `Record` по всем `WORKER_KEYS` — ключ без воркера не соберётся | `server/src/modules/workers/jobs/index.ts` |
 | workers | `ordersJob` | Воркер заказов: шаги по порядку из файлов `*.step.ts` своей папки | `server/src/modules/workers/jobs/orders/orders.job.ts` |
 | workers | `syncOrdersStep()`, `loadEntriesStep()`, `arrivalDatesStep()` | Шаги цикла заказов: заказы и изменения в журнал; составы (до 20); даты прибытия из кабинета | `server/src/modules/workers/jobs/orders/*.step.ts` |
+| workers | `dispatchStep(settings, signal)` | Шаг 4 — отправка в Telegram: выключено/вне окна/нет токена или шрифтов — ничего; отмены и возвраты первыми, потом новые; не больше 10 за цикл | `server/src/modules/workers/jobs/orders/dispatch/dispatch.step.ts` |
+| workers | `dispatchNewOrders()`, `dispatchFollowUps()` | Новые заказы (пропуск закрытых, ожидание даты сдачи, получатель) и отмены/возвраты отправленных — тому же получателю | `server/src/modules/workers/jobs/orders/dispatch/dispatch-new.ts`, `dispatch-followups.ts` |
+| workers | `resolveRecipient(order, entry)` | Кому: в наличии со склада с группой → группа; Астана без группы → ждём; иначе поставщик товара | `server/src/modules/workers/jobs/orders/dispatch/recipients.ts` |
+| workers | `sendDispatch(input)` | Одна карточка: строка `OrderDispatch` до отправки (анти-дубль), повтор до 5 попыток, оповещение при отказе | `server/src/modules/workers/jobs/orders/dispatch/send-dispatch.ts` |
+| workers | `renderOrderCard(card)`, `buildCardData()`, `loadCardFonts()`, `loadImageDataUri()` | Карточка-картинка 600×800: Satori → SVG → PNG; шрифты из `server/assets/fonts`, фото с CDN Kaspi или заглушка | `server/src/modules/workers/jobs/orders/dispatch/order-card.ts`, `dispatch-data.ts`, `card-fonts.ts`, `card-image.ts` |
+| workers | `isWithinSendWindow(now, weekdays)` | Отмеченный день и 8:00–17:00 по Астане | `server/src/modules/workers/jobs/orders/dispatch/send-window.ts` |
+| — | `sendTelegramPhoto(chatId, png)` | Готовая PNG-картинка в Telegram (multipart), возвращает id сообщения | `server/src/lib/telegram.ts` |
+| products | `largeImageUrl(images)` | Самая крупная картинка товара — для карточки в Telegram | `server/src/modules/products/catalog.mapper.ts` |
+| warehouses | `updateWarehouseTelegram(id, chatId)` | Telegram-группа кладовщика склада; было/стало для журнала | `server/src/modules/warehouses/warehouses.service.ts` |
 | workers | `startWorkerMonitor()` | Наблюдатель пульса в API: «не отвечает» / «снова на связи», один раз на смену | `server/src/modules/workers/engine/worker-monitor.ts` |
 | workers | `loadWorkerSettings()`, `loadWorkerState()`, `updateWorkerState()`, `listWorkers()`, `updateWorkerSettings()`, `isHeartbeatFresh()`, `isWeekday()` | Настройки и состояние, DTO, журнал изменений настроек | `server/src/modules/workers/engine/worker-settings.service.ts` |
 | workers | `recordWorkerEvents()`, `recordWorkerEvent()`, `findRecentWorkerEvents()` | Журнал воркера; сбой записи не роняет цикл; «было ли недавно» — повторяющийся сбой раз в час | `server/src/modules/workers/engine/worker-events.service.ts` |
@@ -199,7 +209,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `Customer` | Клиент магазина: свой вход, телефон обязателен, email нет | — |
 | `Session` | Сессия сотрудника; в куке только id, состояние в таблице | `user` → `User`, `onDelete: Cascade` |
 | `AuditLog` | Журнал действий и история изменений полей (`source`, `changes`, `context`), только вставка и чтение | связей нет: логин и роль снимком |
-| `Warehouse` | Склад Kaspi: код `PP3`, `kaspiStoreId`, КАТО, наше название, снимок товаров и остатка | `stocks` → `VariantStock` |
+| `Warehouse` | Склад Kaspi: код `PP3`, `kaspiStoreId`, КАТО, наше название, снимок товаров и остатка, Telegram-группа кладовщика | `stocks` → `VariantStock`, `dispatches` |
 | `Category` | Папка каталога, наше дерево с `path` | self-relation `parent` / `children`, `products` |
 | `Product` | Карточка модели: название, категория, бренд, `kaspiFamilyId` | `category`, `variants` |
 | `Variant` | Артикул: поля кабинета, статус продажи, флаги доставки, закупка с валютой, себестоимость в тенге, поставщик, ткань | `product`, `listings`, `stocks`, `fabric`, `fabricShade`, `supplier` |
@@ -221,6 +231,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `WorkerState` | Состояние процесса: статус, пульс, ход циклов, ошибки подряд | связей нет |
 | `WorkerEvent` | Журнал воркера: события заказов и самого воркера, заказ связью и копией | `order` → `Order` (`SetNull`) |
 | `WorkerStatus` (enum) | STOPPED, IDLE, RUNNING, ERROR | — |
+| `OrderDispatch` | Отправка позиции заказа в Telegram: вид, статус, получатель снимком, попытки; уникальность «позиция + вид» — анти-дубль | `order`, `entry` (`Cascade`), `supplier`, `warehouse` (`SetNull`) |
+| `DispatchKind`, `DispatchStatus`, `DispatchRecipient` (enum) | NEW/CANCEL/RETURN; PENDING/SENT/SKIPPED/FAILED; SUPPLIER/WAREHOUSE | — |
 | `KaspiLoginStatus` (enum) | Итог входа в кабинет: OK, CODE_REQUIRED, MERCHANT_CHOICE_REQUIRED, CREDENTIALS_INVALID, BLOCKED, ERROR | — |
 | `UserRole` (enum) | Роли сотрудников: ADMIN, MANAGER, SELLER, VIEWER — совпадает с `USER_ROLES` | — |
 | `SalesChannel` (enum) | Каналы продаж: SITE, KASPI, OZON | — |
@@ -292,7 +304,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `ImportsLayout` | Защита раздела импортов ролью ADMIN | `front/src/app/dashboard/(main)/imports/layout.tsx` |
 | `SettingsLayout` | Защита раздела настроек ролью ADMIN | `front/src/app/dashboard/(main)/settings/layout.tsx` |
 | `WorkersBlock` | Блок «Воркеры» в настройках: состояние и настройки каждого воркера, «Сохранить» только при изменениях | `front/src/app/dashboard/(main)/settings/_components/workers-block.tsx` |
-| `SupplierTelegramBlock` | Блок «Поставщики в Telegram»: выпадашка поставщиков → окно с полем Telegram ID | `front/src/app/dashboard/(main)/settings/_components/supplier-telegram-block.tsx` |
+| `SupplierTelegramBlock` | Блок «Получатели в Telegram»: поле «Из наличия в Астане — Telegram ID группы» и выпадашка поставщиков → окно с полем Telegram ID | `front/src/app/dashboard/(main)/settings/_components/supplier-telegram-block.tsx` |
 | `KaspiCabinetBlock` | Блок настроек «Кабинет Kaspi»: состояние входа, email, пароль, «Сохранить», «Проверить подключение»; разметка минимальная | `front/src/app/dashboard/(main)/settings/_components/kaspi-cabinet-block.tsx` |
 | `CatalogSummary` | Счётчики разбора выгрузки над таблицей товаров | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-summary.tsx` |
 | `WarehousesPanel` | Таблица складов и сохранение их в справочник; общая для выгрузки и кабинета | `front/src/app/dashboard/(main)/kaspi-sync/_components/warehouses-panel.tsx` |
@@ -411,6 +423,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `WorkerDto`, `WorkerSettingsDto`, `WorkerStateDto`, `UpdateWorkerSettingsRequest`, `WorkersResponse` | Контракты настроек и состояния воркеров | `shared/src/types/workers.ts` |
 | `useGetWorkersQuery`, `useUpdateWorkerSettingsMutation` | Воркеры; тег `Worker` | `front/src/features/workers/workers-api.ts` |
 | `useWorkerSettingsForm(worker)` | Черновик настроек воркера: изменения уходят только по «Сохранить», опрос состояния их не затирает | `front/src/features/workers/use-worker-settings-form.ts` |
+| `useAstanaGroupForm()`, `useUpdateWarehouseMutation` | Поле «Из наличия в Астане»: Telegram-группа склада PP3, черновик и сохранение | `front/src/features/warehouses/use-astana-group-form.ts`, `warehouses-api.ts` |
+| `ASTANA_STOCK_WAREHOUSE_CODE`, `DISPATCH_KINDS`, `DispatchKind`, `UpdateWarehouseRequest` | Склад Астаны (PP3), виды отправки, правка склада | `shared/src/constants/workers.ts`, `shared/src/types/kaspi-catalog.ts` |
 | `useSupplierTelegramForm(suppliers)` | Окно поставщика с полем Telegram ID, проверка формата | `front/src/features/suppliers/use-supplier-telegram-form.ts` |
 | `useKaspiCabinetSignedIn()` | Работает ли вход в кабинет: данные сохранены и последний вход `OK`; отдельно `isLoading` | `front/src/features/kaspi-cabinet/use-kaspi-cabinet-signed-in.ts` |
 | `KASPI_LOGIN_STATUSES`, `KaspiLoginStatus`, `KASPI_LOGIN_STATUS_LABELS`, `KASPI_CABINET_EMAIL_MAX_LENGTH`, `KASPI_CABINET_PASSWORD_MAX_LENGTH` | Итоги входа в кабинет Kaspi и их подписи, лимиты полей | `shared/src/constants/kaspi-cabinet.ts` |

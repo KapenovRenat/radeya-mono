@@ -765,15 +765,21 @@ Email и пароль от кабинета продавца и кнопка «�
 - Компонент: `WorkersBlock` — `.../settings/_components/workers-block.tsx`.
 - Хук: `useWorkerSettingsForm(worker)` — `front/src/features/workers/use-worker-settings-form.ts`.
 
-### Блок «Поставщики в Telegram»
+### Блок «Получатели в Telegram»
 
-Выпадашка поставщиков с поиском; у кого нет Telegram, помечено. Выбор открывает
-окно: адрес, телефон, источник и поле Telegram ID → «Сохранить». Пустое поле
-снимает Telegram — уведомления поставщику перестанут уходить.
+Сверху — поле **«Из наличия в Астане — Telegram ID группы»** со своим
+«Сохранить»: туда уходят заказы в наличии со склада Астаны (PP3). Склада нет
+в справочнике — поле выключено и подсказка «сначала загрузите склады».
 
-- Данные: `GET /api/suppliers`, `PATCH /api/suppliers/:id`.
+Ниже — выпадашка поставщиков с поиском; у кого нет Telegram, помечено. Выбор
+открывает окно: адрес, телефон, источник и поле Telegram ID → «Сохранить».
+Пустое поле снимает Telegram — заказы поставщику перестанут уходить.
+
+- Данные: `GET /api/warehouses`, `PATCH /api/warehouses/:id`, `GET /api/suppliers`,
+  `PATCH /api/suppliers/:id`.
 - Компонент: `SupplierTelegramBlock` — `.../settings/_components/supplier-telegram-block.tsx`.
-- Хук: `useSupplierTelegramForm(suppliers)` — `front/src/features/suppliers/use-supplier-telegram-form.ts`.
+- Хуки: `useAstanaGroupForm()` — `front/src/features/warehouses/use-astana-group-form.ts`,
+  `useSupplierTelegramForm(suppliers)` — `front/src/features/suppliers/use-supplier-telegram-form.ts`.
 
 ---
 
