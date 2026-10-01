@@ -57,6 +57,7 @@ export function toOrderDraft(raw: unknown): KaspiOrderDraft | null {
     assembled: attributes.assembled === true,
     waybillNumber: asString(delivery.waybillNumber),
     courierTransmissionAt: asDate(delivery.courierTransmissionDate),
+    deliveryMode: asString(attributes.deliveryMode),
   };
 
   const deliveryType = readDeliveryType(statusInput);

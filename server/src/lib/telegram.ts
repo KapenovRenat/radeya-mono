@@ -13,6 +13,9 @@ const TELEGRAM_API = 'https://api.telegram.org';
 /** Telegram отвечает быстро; пятнадцать секунд — уже «не отвечает». */
 const TELEGRAM_TIMEOUT_MS = 15_000;
 
+/** Предел подписи к фото — длиннее Telegram отвергает сообщение целиком. */
+const TELEGRAM_CAPTION_MAX_LENGTH = 1024;
+
 export function isTelegramConfigured(): boolean {
   return env.TELEGRAM_BOT_TOKEN !== undefined;
 }
@@ -28,15 +31,18 @@ export async function sendTelegramMessage(chatId: string, html: string): Promise
 }
 
 /**
- * Готовая PNG-картинка (карточка заказа) — multipart, без подписи.
+ * Готовая PNG-картинка (карточка заказа) — multipart. Подпись — простой текст,
+ * без разметки: в неё попадают названия товаров и поставщиков как есть.
  * Возвращает id сообщения: по нему видно, что именно ушло.
  */
-export async function sendTelegramPhoto(chatId: string, png: Uint8Array): Promise<string | null> {
+export async function sendTelegramPhoto(chatId: string, png: Uint8Array, caption?: string): Promise<string | null> {
   const form = new FormData();
 
   form.append('chat_id', chatId);
   // Копия в обычный ArrayBuffer: Blob не принимает Uint8Array поверх SharedArrayBuffer.
   form.append('photo', new Blob([new Uint8Array(png)], { type: 'image/png' }), 'card.png');
+
+  if (caption) form.append('caption', caption.slice(0, TELEGRAM_CAPTION_MAX_LENGTH));
 
   const result = await callTelegram('sendPhoto', form);
   const messageId = typeof result === 'object' && result !== null

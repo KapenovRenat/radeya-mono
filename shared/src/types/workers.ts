@@ -1,4 +1,4 @@
-import type { Weekday, WorkerKey, WorkerStatus } from '../constants/workers';
+import type { Weekday, WorkerEventType, WorkerKey, WorkerStatus } from '../constants/workers';
 
 /** Настройки воркера — то, что меняется в блоке «Воркеры» и применяется после «Сохранить». */
 export interface WorkerSettingsDto {
@@ -7,6 +7,8 @@ export interface WorkerSettingsDto {
   periodMonths: number;
   /** Отправлять поставщикам в Telegram. */
   supplierNotifyEnabled: boolean;
+  /** Тестовый режим: задержка не действует, заказ уходит в ближайшем цикле. */
+  supplierNotifyInstant: boolean;
   supplierNotifyDelayMinutes: number;
   supplierNotifyWeekdays: Weekday[];
   /** Оповещать разработчика о состоянии воркера. */
@@ -44,6 +46,35 @@ export interface WorkerDto {
 
 export interface WorkersResponse {
   items: WorkerDto[];
+}
+
+/** Строка журнала воркера: что произошло и, у отправок, кому. */
+export interface WorkerEventDto {
+  id: string;
+  at: string;
+  type: WorkerEventType;
+  orderCode: string | null;
+  /** Когда заказ оформлен в Kaspi. */
+  orderPlacedAt: string | null;
+  message: string;
+  /** Получатель отправки: поставщик, группа склада, разработчик — или кому собирались. */
+  recipientName: string | null;
+  /** Telegram ID получателя; пусто — его и не было («некому отправить»). */
+  chatId: string | null;
+}
+
+export interface WorkerEventsQuery {
+  page: number;
+  pageSize: number;
+  type?: WorkerEventType;
+  orderCode?: string;
+}
+
+export interface WorkerEventsResponse {
+  items: WorkerEventDto[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 /** Вид тестовой карточки — те же, что уходят по настоящим заказам. */

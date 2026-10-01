@@ -1,4 +1,4 @@
-import type { WorkerEventType, WorkerKey } from '@radeya/shared';
+import type { WorkerEventDto, WorkerEventsResponse, WorkerEventType, WorkerKey } from '@radeya/shared';
 
 import { prisma } from '../../../db/client';
 import type { Prisma } from '../../../generated/prisma/client';
@@ -49,6 +49,66 @@ export async function recordWorkerEvents(
 
 export async function recordWorkerEvent(workerKey: WorkerKey, event: WorkerEventInput): Promise<void> {
   await recordWorkerEvents(workerKey, [event]);
+}
+
+/**
+ * Журнал воркера для таблицы: свежие сверху. Номер заказа — по части,
+ * чтобы находилось и по последним четырём цифрам с карточки.
+ */
+export async function listWorkerEvents(
+  workerKey: WorkerKey,
+  query: { page: number; pageSize: number; type?: WorkerEventType; orderCode?: string },
+): Promise<WorkerEventsResponse> {
+  const where: Prisma.WorkerEventWhereInput = {
+    workerKey,
+    ...(query.type ? { type: query.type } : {}),
+    ...(query.orderCode ? { orderCode: { contains: query.orderCode } } : {}),
+  };
+
+  const [rows, total] = await Promise.all([
+    prisma.workerEvent.findMany({
+      where,
+      orderBy: { at: 'desc' },
+      skip: (query.page - 1) * query.pageSize,
+      take: query.pageSize,
+    }),
+    prisma.workerEvent.count({ where }),
+  ]);
+
+  return {
+    items: rows.map((row): WorkerEventDto => {
+      const details = readRecipientDetails(row.details);
+
+      return {
+        id: row.id,
+        at: row.at.toISOString(),
+        // Тип пишет только код через WORKER_EVENT_TYPES — строка из закрытого списка.
+        type: row.type as WorkerEventType,
+        orderCode: row.orderCode,
+        orderPlacedAt: row.orderPlacedAt?.toISOString() ?? null,
+        message: row.message,
+        recipientName: details.recipientName,
+        chatId: details.chatId,
+      };
+    }),
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+  };
+}
+
+/** Получатель из подробностей события: наружу — только эти два поля, не весь Json. */
+function readRecipientDetails(details: unknown): { recipientName: string | null; chatId: string | null } {
+  if (details === null || typeof details !== 'object' || Array.isArray(details)) {
+    return { recipientName: null, chatId: null };
+  }
+
+  const { recipient, chatId } = details as Record<string, unknown>;
+
+  return {
+    recipientName: typeof recipient === 'string' ? recipient : null,
+    chatId: typeof chatId === 'string' ? chatId : null,
+  };
 }
 
 /**

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { USER_ROLES } from '@radeya/shared';
 
 import { can } from '../../middlewares/require-auth';
-import { getWorkers, postTestCard, putWorkerSettings } from './workers.controller';
+import { getWorkerEvents, getWorkers, postTestCard, putWorkerSettings } from './workers.controller';
 
 const { ADMIN } = USER_ROLES;
 
@@ -18,4 +18,5 @@ workersRouter.use(can());
 workersRouter.get('/', can([ADMIN]), getWorkers);
 // Строго до '/:key/...': иначе «orders» ушло бы в параметр.
 workersRouter.post('/orders/test-card', can([ADMIN]), postTestCard);
+workersRouter.get('/:key/events', can([ADMIN]), getWorkerEvents);
 workersRouter.put('/:key/settings', can([ADMIN]), putWorkerSettings);

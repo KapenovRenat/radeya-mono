@@ -3,6 +3,8 @@ import type {
   SendTestCardResponse,
   UpdateWorkerSettingsRequest,
   WorkerDto,
+  WorkerEventsQuery,
+  WorkerEventsResponse,
   WorkerKey,
   WorkersResponse,
 } from "@radeya/shared";
@@ -14,6 +16,15 @@ export const workersApi = baseApi.injectEndpoints({
     /** Настройки и состояние воркеров. */
     getWorkers: build.query<WorkersResponse, void>({
       query: () => ({ url: "/workers" }),
+      providesTags: ["Worker"],
+    }),
+
+    /**
+     * Журнал воркера: что сделал и кому отправил. Тег общий с настройками:
+     * сохранили настройки — запись «Изменены настройки» появляется сразу.
+     */
+    getWorkerEvents: build.query<WorkerEventsResponse, { key: WorkerKey } & WorkerEventsQuery>({
+      query: ({ key, ...params }) => ({ url: `/workers/${key}/events`, params }),
       providesTags: ["Worker"],
     }),
 
@@ -30,4 +41,9 @@ export const workersApi = baseApi.injectEndpoints({
   }),
 });
 
-export const { useGetWorkersQuery, useUpdateWorkerSettingsMutation, useSendTestCardMutation } = workersApi;
+export const {
+  useGetWorkersQuery,
+  useGetWorkerEventsQuery,
+  useUpdateWorkerSettingsMutation,
+  useSendTestCardMutation,
+} = workersApi;

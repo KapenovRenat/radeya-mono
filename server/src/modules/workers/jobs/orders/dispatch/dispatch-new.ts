@@ -39,6 +39,8 @@ export interface DispatchBudget {
 
 export interface NewOrdersStats {
   sent: number;
+  /** Из них ушли разработчику: поставщик не определён. */
+  toDeveloper: number;
   skipped: number;
   waitingDate: number;
   noRecipient: number;
@@ -46,13 +48,15 @@ export interface NewOrdersStats {
 }
 
 /**
- * Новые заказы: оформлены после точки отсечки, прошла задержка, есть позиции,
- * которые ещё не ушли. Старые первыми.
+ * Новые заказы: оформлены после точки отсечки, прошла задержка (в тестовом
+ * режиме «мгновенно» — без неё), есть позиции, которые ещё не ушли. Старые первыми.
  *
  * - заказ закрылся до отправки → позиции помечаются «не отправлено», ничего не шлём;
  * - Kaspi Доставка без даты сдачи → ждём следующего цикла (решение пользователя);
- * - некому слать (нет Telegram ID, нет поставщика) → в журнал, повтор в следующем
- *   цикле: поправят настройки — уйдёт без перезапуска;
+ * - поставщик не определён → разработчику с пометкой (решение пользователя
+ *   01.10.2026); Telegram ID разработчика не указан — как «некому слать»;
+ * - некому слать (нет группы Астаны, нет ID разработчика) → в журнал, повтор
+ *   в следующем цикле: поправят настройки — уйдёт без перезапуска;
  * - иначе — по карточке на позицию.
  */
 export async function dispatchNewOrders(
@@ -61,13 +65,14 @@ export async function dispatchNewOrders(
   budget: DispatchBudget,
   signal: AbortSignal,
 ): Promise<NewOrdersStats> {
-  const stats: NewOrdersStats = { sent: 0, skipped: 0, waitingDate: 0, noRecipient: 0, failed: 0 };
+  const stats: NewOrdersStats = { sent: 0, toDeveloper: 0, skipped: 0, waitingDate: 0, noRecipient: 0, failed: 0 };
   const now = Date.now();
+  const delayMinutes = settings.supplierNotifyInstant ? 0 : settings.supplierNotifyDelayMinutes;
 
   const orders = await prisma.order.findMany({
     where: {
       salesPoint: { type: SALES_POINT_TYPES.KASPI },
-      placedAt: { gte: cutoff, lte: new Date(now - settings.supplierNotifyDelayMinutes * 60_000) },
+      placedAt: { gte: cutoff, lte: new Date(now - delayMinutes * 60_000) },
       entries: {
         some: {
           entryNumber: { gte: 0 },
@@ -136,7 +141,7 @@ export async function dispatchNewOrders(
       if (budget.left <= 0) break;
       signal.throwIfAborted();
 
-      const resolved = resolveRecipient(order, entry);
+      const resolved = resolveRecipient(order, entry, settings.devChatId);
 
       if ('problem' in resolved) {
         stats.noRecipient += 1;
@@ -145,6 +150,7 @@ export async function dispatchNewOrders(
           await recordWorkerEvent(WORKER_KEYS.ORDERS, {
             type: WORKER_EVENT_TYPES.DISPATCH_NO_RECIPIENT,
             message: `${entryName(entry)}: ${resolved.problem}`,
+            details: { recipient: resolved.intendedName, chatId: null },
             order: eventOrder,
           });
         }
@@ -163,9 +169,13 @@ export async function dispatchNewOrders(
         label: `Заказ: ${entryName(entry)}`,
         eventOrder,
         settings,
+        fallbackReason: resolved.fallbackReason,
       });
 
-      if (outcome === 'sent') stats.sent += 1;
+      if (outcome === 'sent') {
+        stats.sent += 1;
+        if (resolved.recipient.kind === 'DEVELOPER') stats.toDeveloper += 1;
+      }
       if (outcome === 'failed') stats.failed += 1;
 
       await pause(SEND_PAUSE_MS);

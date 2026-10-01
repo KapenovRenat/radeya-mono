@@ -165,6 +165,10 @@ runEntriesSync(storeId):  startEntriesSync → крутим stepEntriesSync с �
 - `status`: `APPROVED_BY_BANK`, `ACCEPTED_BY_MERCHANT`, `COMPLETED`, `CANCELLING`, `CANCELLED`, `RETURNED` (+ `RETURN_REQUESTED`/`KASPI_DELIVERY_RETURN_REQUESTED` — уточнять).
 - `state`: `NEW`, `SIGN_REQUIRED`, `PICKUP`, `DELIVERY`, `KASPI_DELIVERY`, `ARCHIVE`.
 - `deliveryMode`: `DELIVERY_PICKUP`, `DELIVERY_LOCAL`, `DELIVERY_REGIONAL_*`.
+  Проверено 01.10.2026: `DELIVERY_PICKUP` — самовывоз, виден сразу у нового
+  заказа (`state` в это время `NEW`, `PICKUP` — только после принятия);
+  `DELIVERY_LOCAL` — **и у своей доставки, и у Kaspi Доставки по городу**,
+  различает их только `isKaspiDelivery`.
 
 **Списка всех значений Kaspi не публикует, и наш перечень заведомо неполон.**
 Единственный источник правды — сами данные: `GET /api/orders/kaspi` возвращает

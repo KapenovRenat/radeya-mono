@@ -1,7 +1,13 @@
 "use client";
 
 import { useId } from "react";
-import { SUPPLIER_TELEGRAM_ID_MAX_LENGTH } from "@radeya/shared";
+import {
+  ORDER_DELIVERY_TYPES,
+  SUPPLIER_TELEGRAM_ID_MAX_LENGTH,
+  WAREHOUSE_TELEGRAM_GROUP_FIELDS,
+  WAREHOUSE_TELEGRAM_GROUP_LABELS,
+  type OrderDeliveryType,
+} from "@radeya/shared";
 
 import { Button } from "@/components/button";
 import { Dropdown, type DropdownOption } from "@/components/dropdown";
@@ -11,8 +17,16 @@ import { useGetSuppliersQuery } from "@/features/suppliers/suppliers-api";
 import { useSupplierTelegramForm } from "@/features/suppliers/use-supplier-telegram-form";
 import { useAstanaGroupForm } from "@/features/warehouses/use-astana-group-form";
 
+/** Порядок полей групп Астаны: чаще всего — отгрузки на Zammler. */
+const ASTANA_GROUP_TYPES: OrderDeliveryType[] = [
+  ORDER_DELIVERY_TYPES.KASPI,
+  ORDER_DELIVERY_TYPES.OWN,
+  ORDER_DELIVERY_TYPES.PICKUP,
+];
+
 /**
- * Получатели в Telegram: группа «Из наличия в Астане» и поставщики.
+ * Получатели в Telegram: три группы склада Астаны (Zammler, своя доставка,
+ * самовывоз) и поставщики.
  * Выбрал поставщика — окно с его данными и полем Telegram ID. По этим ID
  * воркер шлёт заказы, отмены и возвраты (docs/workers.md).
  */
@@ -37,20 +51,31 @@ export function SupplierTelegramBlock() {
       <h2 id={formId + "-title"} className="text-lg font-semibold">Получатели в Telegram</h2>
 
       <div className="max-w-md space-y-2">
-        <Input
-          id={formId + "-astana"}
-          label="Из наличия в Астане — Telegram ID группы"
-          value={astana.value}
-          onChange={(event) => astana.setValue(event.target.value)}
-          placeholder="Группа — -100…"
-          inputMode="numeric"
-          autoComplete="off"
-          disabled={astana.warehouse === null || astana.isSaving}
-        />
+        <h3 className="font-medium">Склад Астаны — Telegram ID групп</h3>
+
+        {ASTANA_GROUP_TYPES.map((deliveryType) => {
+          const field = WAREHOUSE_TELEGRAM_GROUP_FIELDS[deliveryType];
+
+          return (
+            <Input
+              key={field}
+              id={formId + "-astana-" + field}
+              label={WAREHOUSE_TELEGRAM_GROUP_LABELS[deliveryType]}
+              value={astana.value[field]}
+              onChange={(event) => astana.setValue(field, event.target.value)}
+              placeholder="Группа — -100…"
+              inputMode="numeric"
+              autoComplete="off"
+              disabled={astana.warehouse === null || astana.isSaving}
+            />
+          );
+        })}
 
         <p className="text-sm">
-          Сюда уходят заказы в наличии со склада Астаны. Всё остальное — предзаказы
-          и наличие с других складов — поставщику товара.
+          Сюда уходят все заказы со склада Астаны — и наличие, и предзаказы —
+          по виду доставки: Kaspi Доставка, своя доставка, самовывоз. Пустое поле —
+          заказы этого вида ждут, пока группу не укажут. Заказы с других складов —
+          поставщику товара.
         </p>
 
         {!astana.isLoading && astana.warehouse === null && (
@@ -72,7 +97,9 @@ export function SupplierTelegramBlock() {
       </div>
 
       <p className="text-sm">
-        Без Telegram ID поставщику не уйдут заказы.
+        У поставщика один Telegram ID на любой вид доставки — что делать, скажет карточка:
+        отгрузка на Zammler, адрес клиента или самовывоз.
+        Без Telegram ID заказы поставщика уходят разработчику с пометкой «Поставщик не определён».
         {withoutTelegram > 0 && ` Сейчас без Telegram: ${withoutTelegram}.`}
       </p>
 

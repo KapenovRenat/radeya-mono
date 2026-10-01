@@ -102,7 +102,7 @@ async function sendFollowUps(
 }
 
 function snapshotRecipient(dispatch: {
-  recipient: 'SUPPLIER' | 'WAREHOUSE' | null;
+  recipient: Recipient['kind'] | null;
   supplierId: string | null;
   warehouseId: string | null;
   recipientName: string | null;
@@ -118,6 +118,11 @@ function snapshotRecipient(dispatch: {
 
   if (dispatch.recipient === 'WAREHOUSE' && dispatch.warehouseId) {
     return { kind: 'WAREHOUSE', supplierId: null, warehouseId: dispatch.warehouseId, name, chatId };
+  }
+
+  // Заказ ушёл разработчику — отмена и возврат туда же: поставщик о нём не знает.
+  if (dispatch.recipient === 'DEVELOPER') {
+    return { kind: 'DEVELOPER', supplierId: null, warehouseId: null, name, chatId };
   }
 
   return null;

@@ -672,10 +672,11 @@ Email, пароль и сессия кабинета продавца. **Зап�
 | `intervalMinutes` | `Int` = 2 | Пауза между циклами, 1–10 |
 | `periodMonths` | `Int` = 1 | За сколько месяцев забирать заказы, 1–3 |
 | `supplierNotifyEnabled` | `Boolean` = false | Слать поставщикам в Telegram (этап 3) |
+| `supplierNotifyInstant` | `Boolean` = false | Тестовый режим: задержка не действует; окно, дни и дата сдачи — действуют |
 | `supplierNotifyDelayMinutes` | `Int` = 60 | Задержка после оформления: 10, 30, 60 |
 | `supplierNotifyWeekdays` | `Int[]` = [1..6] | Дни отправки, ISO: 1 — понедельник |
 | `supplierNotifyFrom` | `DateTime?` | Точка отсечки: ставится при включении отправки, старше — не шлём |
-| `devAlertsEnabled`, `devChatId` | `Boolean`, `String?` | Оповещения разработчику и куда |
+| `devAlertsEnabled`, `devChatId` | `Boolean`, `String?` | Оповещения разработчику и куда. `devChatId` — ещё и запасной получатель карточки, если поставщик не определён |
 
 **`WorkerState`** — то, что пишет процесс. Отдельно от настроек: одной строкой
 человек и процесс затирали бы друг друга.
@@ -693,8 +694,9 @@ Email, пароль и сессия кабинета продавца. **Зап�
 `WORKER_EVENT_TYPES` (не enum: новый вид без миграции). Заказ — связью
 `orderId` (`onDelete: SetNull`) и копией: `orderCode`, `orderPlacedAt`
 (оформлен в Kaspi), `orderCreatedAt` (появился у нас). `message` — строка
-для таблицы, `details` — Json с подробностями. Индексы: `at`, `(orderId, at)`,
-`orderCode`, `(type, at)` — под фильтры страницы журнала.
+для таблицы, `details` — Json с подробностями; у событий отправки в нём
+`recipient` (название) и `chatId` — их показывает таблица «История воркера».
+Индексы: `at`, `(orderId, at)`, `orderCode`, `(type, at)` — под фильтры журнала.
 
 ### OrderDispatch — отправки в Telegram
 
@@ -706,12 +708,14 @@ Email, пароль и сессия кабинета продавца. **Зап�
 | `orderId`, `entryId` | Заказ и позиция (`Cascade`) |
 | `kind` | `DispatchKind`: `NEW`, `CANCEL` (одна на позицию — «в пути» и «отменён» одна отмена), `RETURN` |
 | `status` | `DispatchStatus`: `PENDING` (в работе или ждёт повтора), `SENT`, `SKIPPED` (закрыт до отправки), `FAILED` (попытки кончились) |
-| `recipient`, `supplierId`, `warehouseId` | `DispatchRecipient`: `SUPPLIER` или `WAREHOUSE` (группа склада); пусто у пропущенных |
+| `recipient`, `supplierId`, `warehouseId` | `DispatchRecipient`: `SUPPLIER`, `WAREHOUSE` (группа склада) или `DEVELOPER` (поставщик не определён — ушло на `WorkerSettings.devChatId`); пусто у пропущенных |
 | `recipientName`, `chatId` | Получатель снимком: отмена уходит туда же, куда ушёл заказ |
 | `attempts`, `lastError`, `telegramMessageId`, `sentAt` | Ход отправки |
 
-`@@unique([entryId, kind])` — защита от дублей. `Warehouse.telegramChatId` —
-Telegram-группа кладовщика склада, сейчас только у Астаны (PP3).
+`@@unique([entryId, kind])` — защита от дублей. `Warehouse.kaspiDeliveryChatId`,
+`ownDeliveryChatId`, `pickupChatId` — Telegram-группы склада по виду доставки
+(отгрузки на Zammler, своя доставка, самовывоз), сейчас только у Астаны (PP3).
+Поле выбирается по `Order.deliveryType` через `WAREHOUSE_TELEGRAM_GROUP_FIELDS`.
 
 ---
 
@@ -738,6 +742,8 @@ Telegram-группа кладовщика склада, сейчас тольк
 | `workers` | Создаёт `WorkerSettings`, `WorkerState`, `WorkerEvent` и enum `WorkerStatus` |
 | `order_dispatch` | Добавляет `Warehouse.telegramChatId`; создаёт `OrderDispatch` и enum'ы `DispatchKind`, `DispatchStatus`, `DispatchRecipient` |
 | `order_planned_point_delivery` | Добавляет в `Order` поля `plannedPointDeliveryAt` («Планируемая дата прибытия» из кабинета) и `cabinetSyncedAt` (когда спрашивали кабинет) |
+| `worker_instant_dispatch` | Добавляет `WorkerSettings.supplierNotifyInstant`; добавляет в enum `DispatchRecipient` значение `DEVELOPER` |
+| `warehouse_delivery_groups` | **Написана руками:** переименовывает `Warehouse.telegramChatId` в `kaspiDeliveryChatId` (вписанная группа сохраняется), добавляет `ownDeliveryChatId` и `pickupChatId` |
 
 Файлы миграций коммитятся в git — без них базу не поднять заново.
 

@@ -57,9 +57,14 @@ export type SaveWarehousesInput = z.infer<typeof saveWarehousesSchema>;
 
 export const warehouseParamsSchema = z.object({ id: z.string().uuid() });
 
-/** Telegram-группа кладовщика: цифры, у группы с минусом. null — снять. */
+/** Telegram ID группы: цифры, у группы с минусом. null — снять. */
+const telegramChatId = z.string().trim().max(32)
+  .regex(TELEGRAM_CHAT_ID_PATTERN, 'Telegram ID — только цифры, у группы с минусом')
+  .nullable();
+
+/** Три Telegram-группы склада по виду доставки — все поля обязательны. */
 export const updateWarehouseSchema = z.object({
-  telegramChatId: z.string().trim().max(32)
-    .regex(TELEGRAM_CHAT_ID_PATTERN, 'Telegram ID — только цифры, у группы с минусом')
-    .nullable(),
+  kaspiDeliveryChatId: telegramChatId,
+  ownDeliveryChatId: telegramChatId,
+  pickupChatId: telegramChatId,
 }).strict();

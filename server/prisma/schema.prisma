@@ -171,11 +171,14 @@ model Warehouse {
   /// и через месяц будет непонятно, свежие они или прошлогодние.
   kaspiStatsAt DateTime?
 
-  /// Telegram-группа кладовщика: сюда воркер шлёт заказы в наличии с этого склада.
-  /// Сейчас заполняется только у Астаны (PP3) — «Из наличия в Астане».
-  /// Пусто у другого склада — его заказы в наличии идут поставщику, как предзаказ.
-  /// Пусто у Астаны — заказ ждёт, пока группу не укажут: поставщику он не нужен.
-  telegramChatId String?
+  /// Telegram-группы склада по виду доставки заказа: Kaspi Доставка (отгрузка
+  /// на Zammler), своя доставка, самовывоз. Сюда воркер шлёт заказы в наличии
+  /// с этого склада. Сейчас заполняются только у Астаны (PP3).
+  /// Ни одной у склада (и это не Астана) — его заказы в наличии идут поставщику.
+  /// Нужной пусто у склада с группами — заказ ждёт, пока её не укажут.
+  kaspiDeliveryChatId String?
+  ownDeliveryChatId   String?
+  pickupChatId        String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1213,6 +1216,9 @@ model WorkerSettings {
   periodMonths    Int     @default(1)
 
   supplierNotifyEnabled      Boolean @default(false)
+  /// Тестовый режим: задержка не действует, заказ уходит в ближайшем цикле.
+  /// Окно отправки и правило «без даты сдачи не слать» остаются.
+  supplierNotifyInstant      Boolean @default(false)
   supplierNotifyDelayMinutes Int     @default(60)
   /// Дни недели по ISO: 1 — понедельник, 7 — воскресенье.
   supplierNotifyWeekdays     Int[]   @default([1, 2, 3, 4, 5, 6])
@@ -1316,6 +1322,9 @@ enum DispatchRecipient {
   SUPPLIER
   /// Группа склада — «Из наличия в Астане».
   WAREHOUSE
+  /// Поставщик не определён — карточка ушла на Telegram ID разработчика
+  /// из настроек воркера. Отмена и возврат уйдут туда же.
+  DEVELOPER
 }
 
 /// Отправка позиции заказа в Telegram. Подробности — docs/workers.md.

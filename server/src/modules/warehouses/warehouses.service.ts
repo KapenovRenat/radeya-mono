@@ -1,4 +1,4 @@
-import type { SaveWarehousesResponse, WarehouseDto } from '@radeya/shared';
+import type { SaveWarehousesResponse, UpdateWarehouseRequest, WarehouseDto } from '@radeya/shared';
 
 import { prisma } from '../../db/client';
 import { ConflictError, NotFoundError } from '../../lib/errors';
@@ -17,23 +17,32 @@ export function toWarehouseDto(warehouse: Warehouse): WarehouseDto {
     kaspiOffersCount: warehouse.kaspiOffersCount,
     kaspiTotalStock: warehouse.kaspiTotalStock,
     kaspiStatsAt: warehouse.kaspiStatsAt?.toISOString() ?? null,
-    telegramChatId: warehouse.telegramChatId,
+    kaspiDeliveryChatId: warehouse.kaspiDeliveryChatId,
+    ownDeliveryChatId: warehouse.ownDeliveryChatId,
+    pickupChatId: warehouse.pickupChatId,
   };
 }
 
 /**
- * Telegram-группа кладовщика склада. Возвращает было/стало для журнала.
- * Импорт складов это поле не трогает: его вписывает человек.
+ * Telegram-группы склада по виду доставки. Возвращает было/стало для журнала.
+ * Импорт складов эти поля не трогает: их вписывает человек.
  */
 export async function updateWarehouseTelegram(
   id: string,
-  telegramChatId: string | null,
+  groups: UpdateWarehouseRequest,
 ): Promise<{ before: WarehouseDto; after: WarehouseDto }> {
   const current = await prisma.warehouse.findUnique({ where: { id } });
 
   if (!current) throw new NotFoundError('Склад не найден');
 
-  const updated = await prisma.warehouse.update({ where: { id }, data: { telegramChatId } });
+  const updated = await prisma.warehouse.update({
+    where: { id },
+    data: {
+      kaspiDeliveryChatId: groups.kaspiDeliveryChatId,
+      ownDeliveryChatId: groups.ownDeliveryChatId,
+      pickupChatId: groups.pickupChatId,
+    },
+  });
 
   return { before: toWarehouseDto(current), after: toWarehouseDto(updated) };
 }

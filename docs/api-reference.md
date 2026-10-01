@@ -1058,7 +1058,7 @@ Email и состояние входа. Пароля в ответе нет ни
 Заказы и отправки (`OrderDispatch`) не трогает.
 - Auth: `can([ADMIN])`
 - Тело: `{ target: 'ONE' | 'ALL', chatId: string | null, kind: 'NEW' | 'CANCEL_BY_CUSTOMER' | 'CANCEL_IN_TRANSIT' | 'RETURN' }`.
-  `ONE` — на `chatId` (обязателен). `ALL` — группе Астаны, всем активным
+  `ONE` — на `chatId` (обязателен). `ALL` — трём группам Астаны, всем активным
   поставщикам с Telegram ID и на `chatId`, если указан; один чат дважды не получает.
 - Товар: диван с фото, иначе любой товар с фото, иначе любой — самый свежий.
   Картинка рисуется один раз, рассылка с паузой 1,5 с.
@@ -1071,16 +1071,37 @@ Email и состояние входа. Пароля в ответе нет ни
 - Файл: `server/src/modules/workers/workers.controller.ts` (postTestCard),
   `jobs/orders/dispatch/test-card.ts`.
 
+### GET /api/workers/:key/events
+Журнал воркера (`WorkerEvent`): что сделал и кому отправил. Свежие сверху.
+- Auth: `can([ADMIN])`
+- Path: `key` из `WORKER_KEYS` (`ORDERS`).
+- Query: `page` (≥1, по умолчанию 1), `pageSize` (10, 20, 50; по умолчанию 20),
+  `type` — значение `WORKER_EVENT_TYPES` (необязательно), `orderCode` — цифры,
+  до 30 знаков, поиск по части номера (необязательно).
+- Ответ 200: `WorkerEventsResponse` — `{ items, total, page, pageSize }`.
+  `WorkerEventDto`: `id`, `at`, `type`, `orderCode`, `orderPlacedAt`, `message`,
+  `recipientName`, `chatId`. Получатель берётся из `details` события: у отправок —
+  кому ушло, у «Некому отправить» — кому собирались (`chatId` пусто). Остальные
+  поля `details` наружу не отдаются.
+- Ошибки: 400 VALIDATION_ERROR — неизвестный воркер, вид события или не цифры
+  в номере; общие 401/403.
+- Файл: `server/src/modules/workers/workers.controller.ts` (getWorkerEvents),
+  `engine/worker-events.service.ts` (`listWorkerEvents`).
+
 ### PUT /api/workers/:key/settings
 Сохранить настройки. Воркер применяет их в течение 15 секунд.
 - Auth: `can([ADMIN])`
 - Path: `key` из `WORKER_KEYS` (`ORDERS`).
 - Тело (`UpdateWorkerSettingsRequest`), все поля обязательны: `enabled`,
   `intervalMinutes` (1–10), `periodMonths` (1, 2, 3), `supplierNotifyEnabled`,
+  `supplierNotifyInstant` (тестовый режим без задержки),
   `supplierNotifyDelayMinutes` (10, 30, 60), `supplierNotifyWeekdays` (ISO 1–7),
   `devAlertsEnabled`, `devChatId` (цифры, у группы с минусом, или `null`).
 - Включили `supplierNotifyEnabled` — сервер ставит точку отсечки «сейчас»:
   поставщикам уйдут только заказы, оформленные после неё.
+- `devChatId` — ещё и запасной получатель: поставщик позиции не определён —
+  карточка уходит сюда с плашкой «ПОСТАВЩИК НЕ ОПРЕДЕЛЁН», независимо от
+  `devAlertsEnabled`.
 - Ответ 200: обновлённый `WorkerDto`.
 - Ошибки: 400 VALIDATION_ERROR — значение не из списка; оповещения без Telegram ID;
   отправка поставщикам без единого дня; общие 401/403.
@@ -1102,7 +1123,7 @@ Email и состояние входа. Пароля в ответе нет ни
 - Параметры: нет
 - Ответ 200: `{ "items": WarehouseDto[] }` — `id`, `code`, `kaspiStoreId`,
   `kaspiCityId`, `name`, `isActive`, `kaspiOffersCount`, `kaspiTotalStock`,
-  `kaspiStatsAt`, `telegramChatId`
+  `kaspiStatsAt`, `kaspiDeliveryChatId`, `ownDeliveryChatId`, `pickupChatId`
 - Ошибки: `401 UNAUTHORIZED`, `403 FORBIDDEN`
 - Файл: `server/src/modules/warehouses/warehouses.routes.ts`
 
@@ -1124,15 +1145,17 @@ Email и состояние входа. Пароля в ответе нет ни
 
 ### PATCH /api/warehouses/:id
 
-Telegram-группа кладовщика склада — «Из наличия в Астане» в настройках.
+Три Telegram-группы склада по виду доставки — «Из наличия в Астане» в настройках.
 Туда воркер шлёт заказы в наличии с этого склада ([workers.md](workers.md)).
 
 - Auth: `can([ADMIN])`
-- Тело: `{ "telegramChatId": "-100…" | null }` (`UpdateWarehouseRequest`) — цифры,
-  у группы с минусом; `null` — снять. Другие поля запрещены
-- Ответ 200: `WarehouseDto` (с `telegramChatId`)
+- Тело (`UpdateWarehouseRequest`), все три поля обязательны:
+  `{ "kaspiDeliveryChatId": "-100…" | null, "ownDeliveryChatId": … | null, "pickupChatId": … | null }` —
+  Kaspi Доставка (отгрузки на Zammler), своя доставка, самовывоз. Цифры, у группы
+  с минусом; `null` — снять. Другие поля запрещены
+- Ответ 200: `WarehouseDto`
 - Ошибки: `400 VALIDATION_ERROR`, `404 NOT_FOUND`, общие 401/403
-- Журнал: WAREHOUSE_UPDATED — Telegram ID до и после
+- Журнал: WAREHOUSE_UPDATED — три Telegram ID до и после
 - Файл: `server/src/modules/warehouses/warehouses.controller.ts` (patchWarehouse)
 
 > Приходит разобранный список, а не XML заново: сохраняется ровно то, что человек

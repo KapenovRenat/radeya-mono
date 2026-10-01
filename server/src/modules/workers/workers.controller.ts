@@ -1,15 +1,43 @@
 import type { RequestHandler } from 'express';
-import { AUDIT_ACTIONS, type SendTestCardResponse, type WorkersResponse } from '@radeya/shared';
+import {
+  AUDIT_ACTIONS,
+  type SendTestCardResponse,
+  type WorkerEventsResponse,
+  type WorkersResponse,
+} from '@radeya/shared';
 
 import { clientIp, logAction } from '../../lib/audit';
 import { ValidationError } from '../../lib/errors';
+import { listWorkerEvents } from './engine/worker-events.service';
 import { listWorkers, updateWorkerSettings } from './engine/worker-settings.service';
 import { sendTestCard } from './jobs/orders/dispatch/test-card';
-import { sendTestCardSchema, updateWorkerSettingsSchema, workerParamsSchema } from './workers.schemas';
+import {
+  sendTestCardSchema,
+  updateWorkerSettingsSchema,
+  workerEventsQuerySchema,
+  workerParamsSchema,
+} from './workers.schemas';
 
 /** GET /api/workers — настройки и состояние всех воркеров. */
 export const getWorkers: RequestHandler = async (_req, res) => {
   const body: WorkersResponse = { items: await listWorkers() };
+
+  res.json(body);
+};
+
+/** GET /api/workers/:key/events — журнал воркера: что сделал и кому отправил. */
+export const getWorkerEvents: RequestHandler = async (req, res) => {
+  const params = workerParamsSchema.safeParse(req.params);
+
+  if (!params.success) throw new ValidationError('Неизвестный воркер');
+
+  const query = workerEventsQuerySchema.safeParse(req.query);
+
+  if (!query.success) {
+    throw new ValidationError(query.error.issues[0]?.message ?? 'Проверьте фильтры журнала');
+  }
+
+  const body: WorkerEventsResponse = await listWorkerEvents(params.data.key, query.data);
 
   res.json(body);
 };

@@ -10,7 +10,7 @@ import type { WorkerSettings } from '../../../../../generated/prisma/client';
 import { sendTelegramPhoto } from '../../../../../lib/telegram';
 import { alertDeveloper } from '../../../engine/worker-alerts';
 import { recordWorkerEvent, type WorkerEventOrder } from '../../../engine/worker-events.service';
-import { MAX_SEND_ATTEMPTS } from './dispatch.constants';
+import { MAX_SEND_ATTEMPTS, UNKNOWN_SUPPLIER_BANNER } from './dispatch.constants';
 import { renderOrderCard, type OrderCardData } from './order-card';
 import type { Recipient } from './recipients';
 
@@ -22,6 +22,9 @@ const SENT_EVENT: Record<DispatchKind, WorkerEventType> = {
   RETURN: WORKER_EVENT_TYPES.DISPATCH_RETURN_SENT,
 };
 
+/** Подпись у отмены и возврата заказа, который раньше ушёл разработчику: причина уже не известна. */
+const DEVELOPER_FOLLOW_UP_CAPTION = 'Заказ раньше ушёл разработчику: поставщик не был определён. Перешлите тому, кто его собирает';
+
 /**
  * Одна карточка одному получателю — с защитой от дублей и повторами.
  *
@@ -29,6 +32,10 @@ const SENT_EVENT: Record<DispatchKind, WorkerEventType> = {
  * уже есть и не «ждёт» — значит, ушло или решено не слать, второй раз не шлём.
  * Сбой — попытка засчитывается, повтор в следующем цикле; кончились попытки —
  * «не удалось» и оповещение разработчику.
+ *
+ * Получатель — разработчик (поставщик не определён): на карточке плашка
+ * «ПОСТАВЩИК НЕ ОПРЕДЕЛЁН», в подписи причина. Строка отправки после этого
+ * «отправлено» — поставщику позже не уйдёт, переслать должен разработчик.
  */
 export async function sendDispatch(input: {
   kind: DispatchKind;
@@ -40,8 +47,17 @@ export async function sendDispatch(input: {
   label: string;
   eventOrder: WorkerEventOrder;
   settings: WorkerSettings;
+  /** Почему разработчику, а не поставщику — у новых заказов. */
+  fallbackReason?: string | null;
 }): Promise<SendOutcome> {
   const { kind, recipient } = input;
+  const toDeveloper = recipient.kind === 'DEVELOPER';
+  const fallbackReason = input.fallbackReason ?? null;
+  const card: OrderCardData = toDeveloper ? { ...input.card, warning: UNKNOWN_SUPPLIER_BANNER } : input.card;
+  const caption = toDeveloper
+    ? `${UNKNOWN_SUPPLIER_BANNER}. ${fallbackReason ?? DEVELOPER_FOLLOW_UP_CAPTION}`
+    : undefined;
+  const sentEvent = toDeveloper && kind === 'NEW' ? WORKER_EVENT_TYPES.DISPATCH_SENT_TO_DEVELOPER : SENT_EVENT[kind];
   const target = {
     recipient: recipient.kind,
     supplierId: recipient.supplierId,
@@ -65,8 +81,8 @@ export async function sendDispatch(input: {
     });
 
   try {
-    const png = await renderOrderCard(input.card);
-    const messageId = await sendTelegramPhoto(recipient.chatId, png);
+    const png = await renderOrderCard(card);
+    const messageId = await sendTelegramPhoto(recipient.chatId, png, caption);
 
     await prisma.orderDispatch.update({
       where: { id: row.id },
@@ -74,9 +90,9 @@ export async function sendDispatch(input: {
         attempts: row.attempts + 1, lastError: null },
     });
     await recordWorkerEvent(WORKER_KEYS.ORDERS, {
-      type: SENT_EVENT[kind],
-      message: `${input.label} → ${recipient.name}`,
-      details: { kind, recipient: recipient.name, chatId: recipient.chatId, messageId },
+      type: sentEvent,
+      message: `${input.label} → ${recipient.name}${fallbackReason ? ` (${fallbackReason})` : ''}`,
+      details: { kind, recipient: recipient.name, chatId: recipient.chatId, messageId, fallbackReason },
       order: input.eventOrder,
     });
 
@@ -93,7 +109,7 @@ export async function sendDispatch(input: {
     await recordWorkerEvent(WORKER_KEYS.ORDERS, {
       type: gaveUp ? WORKER_EVENT_TYPES.DISPATCH_FAILED : WORKER_EVENT_TYPES.DISPATCH_RETRY,
       message: `${input.label} → ${recipient.name}: ${message} (попытка ${attempts} из ${MAX_SEND_ATTEMPTS})`,
-      details: { kind, recipient: recipient.name, attempts, error: message },
+      details: { kind, recipient: recipient.name, chatId: recipient.chatId, attempts, error: message },
       order: input.eventOrder,
     });
 

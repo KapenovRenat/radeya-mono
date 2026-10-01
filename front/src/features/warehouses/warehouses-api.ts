@@ -30,7 +30,7 @@ export const warehousesApi = baseApi.injectEndpoints({
       invalidatesTags: ["Warehouse"],
     }),
 
-    /** Telegram-группа кладовщика склада — «Из наличия в Астане». */
+    /** Telegram-группы склада по виду доставки: Zammler, своя доставка, самовывоз. */
     updateWarehouse: build.mutation<WarehouseDto, { id: string } & UpdateWarehouseRequest>({
       query: ({ id, ...body }) => ({ url: `/warehouses/${id}`, method: "PATCH", body }),
       invalidatesTags: ["Warehouse", "Audit"],

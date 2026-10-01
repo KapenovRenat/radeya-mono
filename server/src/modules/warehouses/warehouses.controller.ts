@@ -43,7 +43,7 @@ export const postKaspiWarehouses: RequestHandler = async (req, res) => {
   res.json(result);
 };
 
-/** PATCH /api/warehouses/:id — Telegram-группа кладовщика («Из наличия в Астане»). */
+/** PATCH /api/warehouses/:id — Telegram-группы склада: Zammler, своя доставка, самовывоз. */
 export const patchWarehouse: RequestHandler = async (req, res) => {
   const params = warehouseParamsSchema.safeParse(req.params);
 
@@ -55,14 +55,19 @@ export const patchWarehouse: RequestHandler = async (req, res) => {
     throw new ValidationError(parsed.error.issues[0]?.message ?? 'Проверьте Telegram ID');
   }
 
-  const { before, after } = await updateWarehouseTelegram(params.data.id, parsed.data.telegramChatId);
+  const { before, after } = await updateWarehouseTelegram(params.data.id, parsed.data);
   const author = req.user!;
+  const groups = (dto: typeof before) => ({
+    kaspiDeliveryChatId: dto.kaspiDeliveryChatId,
+    ownDeliveryChatId: dto.ownDeliveryChatId,
+    pickupChatId: dto.pickupChatId,
+  });
 
   await logAction({
     userId: author.id, userLogin: author.login, userRole: author.role,
     action: AUDIT_ACTIONS.WAREHOUSE_UPDATED, entityType: 'Warehouse', entityId: after.id,
-    before: { telegramChatId: before.telegramChatId },
-    after: { telegramChatId: after.telegramChatId },
+    before: groups(before),
+    after: groups(after),
     ip: clientIp(req),
   });
 

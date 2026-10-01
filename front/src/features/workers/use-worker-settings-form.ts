@@ -105,6 +105,7 @@ function toDraft(worker: WorkerDto): WorkerSettingsDraft {
     intervalMinutes: settings.intervalMinutes,
     periodMonths: settings.periodMonths,
     supplierNotifyEnabled: settings.supplierNotifyEnabled,
+    supplierNotifyInstant: settings.supplierNotifyInstant,
     supplierNotifyDelayMinutes: settings.supplierNotifyDelayMinutes,
     supplierNotifyWeekdays: settings.supplierNotifyWeekdays,
     devAlertsEnabled: settings.devAlertsEnabled,

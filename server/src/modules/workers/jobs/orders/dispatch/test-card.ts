@@ -1,6 +1,8 @@
 import {
   ASTANA_STOCK_WAREHOUSE_CODE,
+  WAREHOUSE_TELEGRAM_GROUP_FIELDS,
   variantDisplayName,
+  type OrderDeliveryType,
   type SendTestCardRequest,
   type SendTestCardResponse,
   type TestCardKind,
@@ -13,8 +15,9 @@ import { formatAstanaDay } from '../../../../../lib/astana-time';
 import { AppError } from '../../../../../lib/errors';
 import { sendTelegramPhoto } from '../../../../../lib/telegram';
 import { largeImageUrl } from '../../../../products/catalog.mapper';
-import { ASTANA_GROUP_NAME, KASPI_LOGISTICS_NAME, SEND_PAUSE_MS } from './dispatch.constants';
+import { KASPI_LOGISTICS_NAME, SEND_PAUSE_MS } from './dispatch.constants';
 import { renderOrderCard, type OrderCardData } from './order-card';
+import { warehouseGroupName } from './recipients';
 
 /**
  * Тестовая карточка: выдуманный заказ с настоящим диваном из каталога.
@@ -66,7 +69,8 @@ export async function sendTestCard(input: SendTestCardRequest): Promise<SendTest
     salesPointName: 'Kaspi магазин',
     isPreOrder: true,
     shipment: `Отгрузка на ${KASPI_LOGISTICS_NAME} в г. Астана`,
-    handoverDate: formatAstanaDay(tomorrow),
+    address: null,
+    dateLine: `Дата сдачи: ${formatAstanaDay(tomorrow)}`,
     productName,
     fabric: variant.fabric?.name ?? null,
     sku: variant.sku,
@@ -102,7 +106,7 @@ export async function sendTestCard(input: SendTestCardRequest): Promise<SendTest
 
 /**
  * Кому слать. `ALL` — все, кому воркер вообще может что-то отправить:
- * группа Астаны и активные поставщики с Telegram ID, плюс указанный ID.
+ * три группы Астаны и активные поставщики с Telegram ID, плюс указанный ID.
  * Один и тот же чат дважды не получит.
  */
 async function collectRecipients(input: SendTestCardRequest): Promise<TestRecipient[]> {
@@ -113,10 +117,16 @@ async function collectRecipients(input: SendTestCardRequest): Promise<TestRecipi
   if (input.target === 'ALL') {
     const astana = await prisma.warehouse.findUnique({
       where: { code: ASTANA_STOCK_WAREHOUSE_CODE },
-      select: { telegramChatId: true },
+      select: { code: true, name: true, kaspiDeliveryChatId: true, ownDeliveryChatId: true, pickupChatId: true },
     });
 
-    if (astana?.telegramChatId) list.push({ name: ASTANA_GROUP_NAME, chatId: astana.telegramChatId });
+    if (astana) {
+      for (const deliveryType of Object.keys(WAREHOUSE_TELEGRAM_GROUP_FIELDS) as OrderDeliveryType[]) {
+        const chatId = astana[WAREHOUSE_TELEGRAM_GROUP_FIELDS[deliveryType]];
+
+        if (chatId) list.push({ name: warehouseGroupName(astana, deliveryType), chatId });
+      }
+    }
 
     const suppliers = await prisma.supplier.findMany({
       where: { isActive: true, telegramId: { not: null } },

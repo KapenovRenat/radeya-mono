@@ -25,18 +25,29 @@ export interface StatusInput {
   assembled: boolean;
   waybillNumber: string | null;
   courierTransmissionAt: string | null;
+  /** DELIVERY_PICKUP, DELIVERY_LOCAL, DELIVERY_REGIONAL_* — как прислал Kaspi. */
+  deliveryMode: string | null;
 }
+
+/** `deliveryMode` самовывоза покупателем — виден с самого оформления. */
+const PICKUP_DELIVERY_MODE = 'DELIVERY_PICKUP';
 
 /**
  * Тип доставки.
  *
- * `DELIVERY_REGIONAL_PICKUP` сюда не участвует намеренно: это Kaspi-доставка
- * в пункт выдачи, а не самовывоз покупателем. Настоящий самовывоз виден
- * только по `state = PICKUP`.
+ * `state = PICKUP` появляется только после принятия заказа, у нового `state = NEW`.
+ * Поэтому самовывоз смотрим ещё и по `deliveryMode = DELIVERY_PICKUP` — он есть
+ * сразу (проверено на заказе 1094126274, 01.10.2026). `DELIVERY_REGIONAL_PICKUP`
+ * сюда не участвует намеренно: это Kaspi-доставка в пункт выдачи.
+ *
+ * Свою доставку по `deliveryMode` не определить: у Kaspi Доставки по городу
+ * тоже `DELIVERY_LOCAL`. Отличает их только `isKaspiDelivery` — поэтому
+ * своя доставка — это «не Kaspi и не самовывоз».
  */
 export function readDeliveryType(input: StatusInput): OrderDeliveryType {
   if (input.state === 'PICKUP') return ORDER_DELIVERY_TYPES.PICKUP;
   if (input.state === 'KASPI_DELIVERY' || input.isKaspiDelivery) return ORDER_DELIVERY_TYPES.KASPI;
+  if (input.deliveryMode === PICKUP_DELIVERY_MODE) return ORDER_DELIVERY_TYPES.PICKUP;
 
   return ORDER_DELIVERY_TYPES.OWN;
 }

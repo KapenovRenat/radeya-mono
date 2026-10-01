@@ -2,6 +2,8 @@
  * Воркеры — фоновые задачи. Решения и устройство — docs/workers.md.
  */
 
+import type { OrderDeliveryType } from './order-statuses';
+
 export const WORKER_KEYS = {
   /** Заказы Kaspi и отправка поставщикам в Telegram. */
   ORDERS: 'ORDERS',
@@ -41,10 +43,32 @@ export const SUPPLIER_NOTIFY_FROM_HOUR = 8;
 export const SUPPLIER_NOTIFY_TO_HOUR = 17;
 
 /**
- * Склад Астаны. Заказы в наличии с него уходят в группу «Из наличия в Астане»
- * (её Telegram ID — `Warehouse.telegramChatId`), всё остальное — поставщику товара.
+ * Склад Астаны. Заказы в наличии с него уходят в одну из трёх групп склада
+ * по виду доставки (см. WAREHOUSE_TELEGRAM_GROUP_FIELDS), всё остальное —
+ * поставщику товара.
  */
 export const ASTANA_STOCK_WAREHOUSE_CODE = 'PP3';
+
+/**
+ * Telegram-группы склада по виду доставки — поле `Warehouse` на каждый вид.
+ * Решение пользователя 01.10.2026: у Астаны три группы — отгрузки на Zammler,
+ * своя доставка, самовывоз.
+ */
+export const WAREHOUSE_TELEGRAM_GROUP_FIELDS = {
+  KASPI: 'kaspiDeliveryChatId',
+  OWN: 'ownDeliveryChatId',
+  PICKUP: 'pickupChatId',
+} as const satisfies Record<OrderDeliveryType, string>;
+
+export type WarehouseTelegramGroupField =
+  (typeof WAREHOUSE_TELEGRAM_GROUP_FIELDS)[keyof typeof WAREHOUSE_TELEGRAM_GROUP_FIELDS];
+
+/** Подписи групп склада: в настройках, журнале и подписи получателя. */
+export const WAREHOUSE_TELEGRAM_GROUP_LABELS: Record<OrderDeliveryType, string> = {
+  KASPI: 'Отгрузки на Zammler',
+  OWN: 'Своя доставка',
+  PICKUP: 'Самовывоз',
+};
 
 /**
  * Вид отправки в Telegram. Значения обязаны совпадать с enum DispatchKind в schema.prisma.
@@ -64,6 +88,9 @@ export const TEST_CARD_KIND_LABELS = {
   CANCEL_IN_TRANSIT: 'Отмена в пути',
   RETURN: 'Возврат',
 } as const;
+
+/** Номер заказа в фильтре журнала воркера — длиннее номеров Kaspi не бывает. */
+export const WORKER_EVENT_ORDER_CODE_MAX_LENGTH = 30;
 
 /** Telegram ID: личка — положительное число, группа — отрицательное (`-100…`). */
 export const TELEGRAM_CHAT_ID_PATTERN = /^-?\d{1,20}$/;
@@ -104,6 +131,7 @@ export const WORKER_EVENT_TYPES = {
   ORDER_ARRIVAL_DATE_CHANGED: 'ORDER_ARRIVAL_DATE_CHANGED',
   ORDER_CABINET_FAILED: 'ORDER_CABINET_FAILED',
   DISPATCH_SENT: 'DISPATCH_SENT',
+  DISPATCH_SENT_TO_DEVELOPER: 'DISPATCH_SENT_TO_DEVELOPER',
   DISPATCH_CANCEL_SENT: 'DISPATCH_CANCEL_SENT',
   DISPATCH_RETURN_SENT: 'DISPATCH_RETURN_SENT',
   DISPATCH_SKIPPED: 'DISPATCH_SKIPPED',
@@ -136,6 +164,7 @@ export const WORKER_EVENT_TYPE_LABELS: Record<WorkerEventType, string> = {
   ORDER_ARRIVAL_DATE_CHANGED: 'Дата прибытия',
   ORDER_CABINET_FAILED: 'Кабинет Kaspi не ответил',
   DISPATCH_SENT: 'Отправлено в Telegram',
+  DISPATCH_SENT_TO_DEVELOPER: 'Отправлено разработчику: поставщик не определён',
   DISPATCH_CANCEL_SENT: 'Отправлена отмена',
   DISPATCH_RETURN_SENT: 'Отправлен возврат',
   DISPATCH_SKIPPED: 'Не отправлено',

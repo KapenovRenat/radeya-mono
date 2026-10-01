@@ -84,6 +84,7 @@ export async function updateWorkerSettings(
       intervalMinutes: input.intervalMinutes,
       periodMonths: input.periodMonths,
       supplierNotifyEnabled: input.supplierNotifyEnabled,
+      supplierNotifyInstant: input.supplierNotifyInstant,
       supplierNotifyDelayMinutes: input.supplierNotifyDelayMinutes,
       supplierNotifyWeekdays: weekdays,
       ...(turnedOnNotify ? { supplierNotifyFrom: new Date() } : {}),
@@ -139,6 +140,7 @@ function toSettingsDto(settings: WorkerSettings): WorkerSettingsDto {
     intervalMinutes: settings.intervalMinutes,
     periodMonths: settings.periodMonths,
     supplierNotifyEnabled: settings.supplierNotifyEnabled,
+    supplierNotifyInstant: settings.supplierNotifyInstant,
     supplierNotifyDelayMinutes: settings.supplierNotifyDelayMinutes,
     supplierNotifyWeekdays: settings.supplierNotifyWeekdays.filter(isWeekday),
     devAlertsEnabled: settings.devAlertsEnabled,
@@ -174,6 +176,7 @@ function describeChanges(before: WorkerSettings, after: WorkerSettings): string[
   compare('интервал', `${before.intervalMinutes} мин`, `${after.intervalMinutes} мин`);
   compare('период', `${before.periodMonths} мес`, `${after.periodMonths} мес`);
   compare('отправка поставщикам', onOff(before.supplierNotifyEnabled), onOff(after.supplierNotifyEnabled));
+  compare('мгновенная отправка (тест)', onOff(before.supplierNotifyInstant), onOff(after.supplierNotifyInstant));
   compare('задержка', `${before.supplierNotifyDelayMinutes} мин`, `${after.supplierNotifyDelayMinutes} мин`);
   compare('дни отправки', days(before.supplierNotifyWeekdays), days(after.supplierNotifyWeekdays));
   compare('оповещения разработчику', onOff(before.devAlertsEnabled), onOff(after.devAlertsEnabled));

@@ -25,6 +25,7 @@ import { useTestCard } from "@/features/workers/use-test-card";
 import { useWorkerSettingsForm } from "@/features/workers/use-worker-settings-form";
 import { apiErrorMessage } from "@/shared/api/error-message";
 import { formatDateTime } from "@/lib/format";
+import { WorkerEventsTable } from "./worker-events-table";
 
 /** Опрос состояния: воркер пишет пульс раз в 15 секунд — чаще смотреть незачем. */
 const STATE_POLL_MS = 15_000;
@@ -124,7 +125,20 @@ function WorkerCard({ worker }: { worker: WorkerDto }) {
         {!worker.telegramConfigured && (
           <p className="text-destructive">TELEGRAM_BOT_TOKEN не задан на сервере — оповещения не уйдут.</p>
         )}
+
+        {/* Забытый тестовый режим шлёт поставщикам и заказы, отменённые через минуту. */}
+        {worker.settings.supplierNotifyInstant && (
+          <p role="alert" className="text-destructive">
+            Тестовый режим: мгновенная отправка включена, задержка не действует.
+          </p>
+        )}
       </dl>
+
+      <Checkbox
+        label="Мгновенная отправка в Telegram — без задержки (для теста)"
+        checked={value.supplierNotifyInstant}
+        onChange={(event) => form.set("supplierNotifyInstant", event.target.checked)}
+      />
 
       <Checkbox
         label="Работает"
@@ -162,7 +176,8 @@ function WorkerCard({ worker }: { worker: WorkerDto }) {
         <p className="text-sm">
           Уходят только заказы, оформленные после включения галочки — старые не высыпаются.
           Kaspi Доставка без даты сдачи ждёт, пока кабинет её не отдаст.
-          Кому слать — блок «Получатели в Telegram» ниже.
+          Кому слать — блок «Получатели в Telegram» ниже. Поставщик не определён —
+          карточка уходит на Telegram ID разработчика с пометкой «Поставщик не определён».
         </p>
 
         <Dropdown
@@ -224,6 +239,8 @@ function WorkerCard({ worker }: { worker: WorkerDto }) {
       {form.notice && <p role="status" className="text-sm">{form.notice}</p>}
 
       {worker.key === WORKER_KEYS.ORDERS && <TestCardSection devChatId={worker.settings.devChatId} />}
+
+      <WorkerEventsTable workerKey={worker.key} />
     </div>
   );
 }
@@ -235,7 +252,8 @@ function dispatchReasons(stats: Record<string, number>): string[] {
   if (stats.dispatchBlocked) reasons.push("невозможна — нет токена бота или шрифтов карточки");
   if (stats.outsideSendWindow) reasons.push("вне часов или дней отправки");
   if (stats.dispatchWaitingDate) reasons.push(`ждут дату сдачи: ${stats.dispatchWaitingDate}`);
-  if (stats.dispatchNoRecipient) reasons.push(`некому слать (нет Telegram ID или поставщика): ${stats.dispatchNoRecipient}`);
+  if (stats.dispatchToDeveloper) reasons.push(`ушли разработчику — поставщик не определён: ${stats.dispatchToDeveloper}`);
+  if (stats.dispatchNoRecipient) reasons.push(`некому слать — причина в «Истории воркера»: ${stats.dispatchNoRecipient}`);
   if (stats.dispatchSkipped) reasons.push(`закрыты до отправки: ${stats.dispatchSkipped}`);
   if (stats.dispatchFailed) reasons.push(`не удалось: ${stats.dispatchFailed}`);
 

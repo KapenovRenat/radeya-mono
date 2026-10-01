@@ -42,8 +42,10 @@ export interface OrderCardData {
   isPreOrder: boolean;
   /** «Отгрузка на Zammler в г. Астана», «Своя доставка», «Самовывоз». */
   shipment: string;
-  /** «27 сентября» — только у Kaspi Доставки. */
-  handoverDate: string | null;
+  /** «Адрес: …» у своей доставки, «Пункт выдачи: …» у самовывоза; у Kaspi Доставки пусто. */
+  address: string | null;
+  /** «Дата сдачи: 27 сентября» у Kaspi Доставки, «Дата доставки» / «Дата выдачи» у остальных. */
+  dateLine: string | null;
   productName: string;
   fabric: string | null;
   sku: string | null;
@@ -53,7 +55,12 @@ export interface OrderCardData {
   action: string | null;
   /** Тестовая карточка: сверху плашка «ТЕСТ — НЕ ЗАКАЗ», чтобы её не начали собирать. */
   isTest?: boolean;
+  /** Плашка-предупреждение сверху: «ПОСТАВЩИК НЕ ОПРЕДЕЛЁН» у карточки разработчику. */
+  warning?: string | null;
 }
+
+const TEST_BANNER = 'ТЕСТ — НЕ ЗАКАЗ';
+const TOP_BANNER_HEIGHT = 48;
 
 const BANNERS: Record<Exclude<OrderCardKind, 'NEW'>, { banner: string; type: string }> = {
   CANCEL_BY_CUSTOMER: { banner: 'ОТМЕНА ЗАКАЗА', type: 'Отмена клиентом' },
@@ -94,15 +101,16 @@ function buildCard(card: OrderCardData, image: string | null): CardNode {
     : card.isPreOrder ? COLORS.preOrderBg : COLORS.inStockBg;
   const shortNumber = card.orderCode.slice(-4);
   const quantity = card.quantity > 1 ? ` × ${card.quantity}` : '';
-  // Тестовая плашка съедает высоту — её отдаёт фото, а не текст заказа.
-  const imageHeight = IMAGE_HEIGHT - (card.isTest ? 48 : 0);
+  const topBanner = card.isTest ? TEST_BANNER : card.warning ?? null;
+  // Верхняя плашка съедает высоту — её отдаёт фото, а не текст заказа.
+  const imageHeight = IMAGE_HEIGHT - (topBanner ? TOP_BANNER_HEIGHT : 0);
 
   return box(
     { width: WIDTH, height: HEIGHT, flexDirection: 'column', backgroundColor: background, fontFamily: CARD_FONT_FAMILY },
 
-    card.isTest ? box(
-      { height: 48, backgroundColor: COLORS.action, alignItems: 'center', justifyContent: 'center' },
-      text('ТЕСТ — НЕ ЗАКАЗ', { color: '#000000', fontSize: 28, fontWeight: 900 }),
+    topBanner ? box(
+      { height: TOP_BANNER_HEIGHT, backgroundColor: COLORS.action, alignItems: 'center', justifyContent: 'center' },
+      text(topBanner, { color: '#000000', fontSize: 28, fontWeight: 900 }),
     ) : null,
 
     followUp && box(
@@ -133,9 +141,12 @@ function buildCard(card: OrderCardData, image: string | null): CardNode {
         : text(card.salesPointName, { color: COLORS.accent, fontSize: 24, fontWeight: 700 }),
 
       followUp ? null : text(card.shipment, { color: COLORS.white, fontSize: 28, fontWeight: 900 }),
-      followUp || card.handoverDate === null
+      followUp || card.address === null
         ? null
-        : text(`Дата сдачи: ${card.handoverDate}`, { color: COLORS.white, fontSize: 24, fontWeight: 700 }),
+        : text(card.address, { color: COLORS.white, fontSize: 22 }),
+      followUp || card.dateLine === null
+        ? null
+        : text(card.dateLine, { color: COLORS.white, fontSize: 24, fontWeight: 700 }),
 
       text(card.productName + quantity, { color: COLORS.product, fontSize: 26, fontWeight: 700 }),
       card.fabric === null ? null : text(`Основная ткань: ${card.fabric}`, { color: COLORS.muted, fontSize: 22 }),

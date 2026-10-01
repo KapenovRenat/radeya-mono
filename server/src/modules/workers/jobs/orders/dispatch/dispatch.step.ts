@@ -45,6 +45,7 @@ export async function dispatchStep(
 
   return {
     dispatchSent: fresh.sent,
+    dispatchToDeveloper: fresh.toDeveloper,
     dispatchCancelSent: followUps.cancelSent,
     dispatchReturnSent: followUps.returnSent,
     dispatchSkipped: fresh.skipped,
