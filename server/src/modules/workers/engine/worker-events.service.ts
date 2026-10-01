@@ -1,8 +1,8 @@
 import type { WorkerEventType, WorkerKey } from '@radeya/shared';
 
-import { prisma } from '../../db/client';
-import type { Prisma } from '../../generated/prisma/client';
-import { logger } from '../../lib/logger';
+import { prisma } from '../../../db/client';
+import type { Prisma } from '../../../generated/prisma/client';
+import { logger } from '../../../lib/logger';
 
 /** Заказ, к которому относится событие, — копией, журнал должен остаться как был. */
 export interface WorkerEventOrder {
@@ -49,4 +49,30 @@ export async function recordWorkerEvents(
 
 export async function recordWorkerEvent(workerKey: WorkerKey, event: WorkerEventInput): Promise<void> {
   await recordWorkerEvents(workerKey, [event]);
+}
+
+/**
+ * Было ли такое событие недавно — чтобы повторяющийся сбой попадал в журнал
+ * раз в час, а не каждый цикл. `orderIds` не задан — событие без заказа;
+ * задан — возвращаются заказы, по которым оно уже было.
+ */
+export async function findRecentWorkerEvents(
+  type: WorkerEventType,
+  withinMs: number,
+  orderIds?: string[],
+): Promise<{ any: boolean; orderIds: Set<string> }> {
+  const rows = await prisma.workerEvent.findMany({
+    where: {
+      type,
+      at: { gte: new Date(Date.now() - withinMs) },
+      orderId: orderIds === undefined ? null : { in: orderIds },
+    },
+    select: { orderId: true },
+    take: orderIds === undefined ? 1 : undefined,
+  });
+
+  return {
+    any: rows.length > 0,
+    orderIds: new Set(rows.map((row) => row.orderId).filter((id): id is string => id !== null)),
+  };
 }

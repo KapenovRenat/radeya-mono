@@ -11,9 +11,9 @@ import {
   type WorkerStatus,
 } from '@radeya/shared';
 
-import { prisma } from '../../db/client';
-import type { WorkerSettings, WorkerState } from '../../generated/prisma/client';
-import { isTelegramConfigured } from '../../lib/telegram';
+import { prisma } from '../../../db/client';
+import type { WorkerSettings, WorkerState } from '../../../generated/prisma/client';
+import { isTelegramConfigured } from '../../../lib/telegram';
 import { recordWorkerEvent } from './worker-events.service';
 import { HEARTBEAT_STALE_MS } from './worker.constants';
 
@@ -147,7 +147,7 @@ function toSettingsDto(settings: WorkerSettings): WorkerSettingsDto {
   };
 }
 
-function isWeekday(value: number): value is Weekday {
+export function isWeekday(value: number): value is Weekday {
   return (WEEKDAYS as readonly number[]).includes(value);
 }
 

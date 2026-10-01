@@ -3,7 +3,7 @@ import { AUDIT_ACTIONS, type WorkersResponse } from '@radeya/shared';
 
 import { clientIp, logAction } from '../../lib/audit';
 import { ValidationError } from '../../lib/errors';
-import { listWorkers, updateWorkerSettings } from './worker-settings.service';
+import { listWorkers, updateWorkerSettings } from './engine/worker-settings.service';
 import { updateWorkerSettingsSchema, workerParamsSchema } from './workers.schemas';
 
 /** GET /api/workers — настройки и состояние всех воркеров. */

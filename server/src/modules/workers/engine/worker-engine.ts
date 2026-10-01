@@ -1,9 +1,9 @@
 import { WORKER_EVENT_TYPES, WORKER_STATUSES, type WorkerKey } from '@radeya/shared';
 
-import { disconnectDatabase } from '../../db/client';
-import type { WorkerSettings } from '../../generated/prisma/client';
-import { withAdvisoryLock } from '../../lib/advisory-lock';
-import { logger } from '../../lib/logger';
+import { disconnectDatabase } from '../../../db/client';
+import type { WorkerSettings } from '../../../generated/prisma/client';
+import { withAdvisoryLock } from '../../../lib/advisory-lock';
+import { logger } from '../../../lib/logger';
 import { alertDeveloper } from './worker-alerts';
 import { recordWorkerEvent } from './worker-events.service';
 import { loadWorkerSettings, loadWorkerState, updateWorkerState } from './worker-settings.service';
@@ -17,12 +17,14 @@ import {
 } from './worker.constants';
 
 /**
- * Движок воркера: цикл, пульс, потолок времени, самовосстановление.
- * Что делает конкретный воркер — его `WorkerJob`. Устройство — docs/workers.md.
+ * Движок воркеров — общий для всех. Что делает конкретный воркер — его
+ * `WorkerJob` в `jobs/<имя>/`. Устройство — docs/workers.md.
  *
  *   читаем настройки → выключен: ждём → включён: цикл → ждём интервал → снова
  *
- * Следующий цикл планируется после конца текущего — наложений нет.
+ * Каждый воркер крутит свой цикл со своими настройками, состоянием и пульсом:
+ * снятая галочка или ошибка одного не задевает другие. Следующий цикл
+ * планируется после конца текущего — наложений нет.
  */
 
 export interface JobContext {
@@ -45,16 +47,24 @@ class RunTimeoutError extends Error {
   }
 }
 
-/** Запуск воркера в этом процессе. Не возвращается: цикл бесконечный. */
-export async function startWorker(job: WorkerJob): Promise<void> {
-  await announceProcessStart(job);
+/**
+ * Запуск воркеров в этом процессе. Не возвращается: циклы бесконечные.
+ * Пульс и штатная остановка — одни на процесс для всех воркеров: два
+ * обработчика остановки завершили бы процесс, не дав второму стереть пульс.
+ */
+export async function startWorkers(jobs: WorkerJob[]): Promise<void> {
+  for (const job of jobs) await announceProcessStart(job);
 
-  const heartbeat = setInterval(() => { void beat(job.key); }, HEARTBEAT_MS);
-  await beat(job.key);
+  const keys = jobs.map((job) => job.key);
+  const heartbeat = setInterval(() => {
+    for (const key of keys) void beat(key);
+  }, HEARTBEAT_MS);
 
-  registerShutdown(job.key, heartbeat);
+  await Promise.all(keys.map(beat));
 
-  await loop(job);
+  registerShutdown(keys, heartbeat);
+
+  await Promise.all(jobs.map(loop));
 }
 
 /**
@@ -152,7 +162,7 @@ async function runCycle(job: WorkerJob, settings: WorkerSettings): Promise<void>
       await updateWorkerState(job.key, { status: WORKER_STATUSES.IDLE, ...finished });
       await recordWorkerEvent(job.key, {
         type: WORKER_EVENT_TYPES.RUN_SKIPPED_LOCKED,
-        message: 'Цикл пропущен: заказы сейчас синхронизируются вручную',
+        message: 'Цикл пропущен: эти данные сейчас обрабатываются вручную',
       });
 
       return;
@@ -253,24 +263,33 @@ async function beat(key: WorkerKey): Promise<void> {
 }
 
 /**
- * Штатная остановка стирает пульс: следующий старт поймёт, что сбоя не было.
- * Не успели за 10 секунд — выходим как есть, следующий старт сочтёт это сбоем.
+ * Штатная остановка стирает пульс всем воркерам процесса: следующий старт
+ * поймёт, что сбоя не было. Не успели за 10 секунд — выходим как есть,
+ * следующий старт сочтёт это сбоем.
  */
-function registerShutdown(key: WorkerKey, heartbeat: NodeJS.Timeout): void {
+function registerShutdown(keys: WorkerKey[], heartbeat: NodeJS.Timeout): void {
+  let stopping = false;
+
   const shutdown = async (signal: string) => {
-    logger.info(`Воркер ${key}: получен ${signal}, останавливаюсь`);
+    if (stopping) return;
+    stopping = true;
+
+    logger.info(`Воркеры: получен ${signal}, останавливаюсь`);
     clearInterval(heartbeat);
 
     setTimeout(() => process.exit(1), 10_000).unref();
 
     try {
-      const state = await loadWorkerState(key);
+      for (const key of keys) {
+        const state = await loadWorkerState(key);
 
-      await updateWorkerState(key, {
-        heartbeatAt: null,
-        runStartedAt: null,
-        ...(state.status === WORKER_STATUSES.RUNNING ? { status: WORKER_STATUSES.IDLE } : {}),
-      });
+        await updateWorkerState(key, {
+          heartbeatAt: null,
+          runStartedAt: null,
+          ...(state.status === WORKER_STATUSES.RUNNING ? { status: WORKER_STATUSES.IDLE } : {}),
+        });
+      }
+
       await disconnectDatabase();
     } finally {
       process.exit(0);

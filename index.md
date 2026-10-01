@@ -124,13 +124,16 @@ shared/    # Общий код: типы контрактов, констант�
 | kaspi-cabinet | `fetchCabinetOrderDetail(code, cookie)` | GraphQL `getOrderDetails` слово в слово как у кабинета; `plannedPointDeliveryAt` и ответ целиком | `server/src/modules/kaspi-cabinet/cabinet-orders.client.ts` |
 | kaspi-cabinet | `cabinetPostJson(url, cookie, body)` | POST к кабинету (GraphQL) с теми же правилами «не пустил», что у `cabinetGetJson` | `server/src/modules/kaspi-cabinet/cabinet-http.ts` |
 | orders | `loadKaspiEntries(id)` | Состав заказа с площадки в базу — общее для окна заказа и воркера; есть — Kaspi не трогает | `server/src/modules/orders/order-details.service.ts` |
-| workers | `startWorker(job)`, `WorkerJob` | Движок: цикл без наложений, потолок 10 мин, пульс, штатная остановка, «перезапуск после сбоя», оповещения по порогу ошибок | `server/src/modules/workers/worker-engine.ts` |
-| workers | `ordersJob` | Цикл заказов: синхронизация за период, события в журнал, составы новых заказов (до 20 за цикл) | `server/src/modules/workers/orders.job.ts` |
-| workers | `startWorkerMonitor()` | Наблюдатель пульса в API: «не отвечает» / «снова на связи», один раз на смену | `server/src/modules/workers/worker-monitor.ts` |
-| workers | `loadWorkerSettings()`, `loadWorkerState()`, `updateWorkerState()`, `listWorkers()`, `updateWorkerSettings()`, `isHeartbeatFresh()` | Настройки и состояние, DTO, журнал изменений настроек | `server/src/modules/workers/worker-settings.service.ts` |
-| workers | `recordWorkerEvents()`, `recordWorkerEvent()` | Запись в журнал воркера; сбой записи не роняет цикл | `server/src/modules/workers/worker-events.service.ts` |
-| workers | `alertDeveloper(key, settings, text)` | Оповещение разработчику в Telegram, если включено | `server/src/modules/workers/worker-alerts.ts` |
-| — | `worker.ts` | Процесс воркеров: `npm run worker` / `start:worker`, только при `WORKERS_ENABLED=true` | `server/src/worker.ts` |
+| workers | `startWorkers(jobs)`, `WorkerJob`, `JobContext` | Движок: по циклу на воркер без наложений, потолок 10 мин, пульс, одна штатная остановка на процесс, «перезапуск после сбоя», оповещения по порогу ошибок | `server/src/modules/workers/engine/worker-engine.ts` |
+| workers | `WORKER_JOBS` | Реестр воркеров: `Record` по всем `WORKER_KEYS` — ключ без воркера не соберётся | `server/src/modules/workers/jobs/index.ts` |
+| workers | `ordersJob` | Воркер заказов: шаги по порядку из файлов `*.step.ts` своей папки | `server/src/modules/workers/jobs/orders/orders.job.ts` |
+| workers | `syncOrdersStep()`, `loadEntriesStep()`, `arrivalDatesStep()` | Шаги цикла заказов: заказы и изменения в журнал; составы (до 20); даты прибытия из кабинета | `server/src/modules/workers/jobs/orders/*.step.ts` |
+| workers | `startWorkerMonitor()` | Наблюдатель пульса в API: «не отвечает» / «снова на связи», один раз на смену | `server/src/modules/workers/engine/worker-monitor.ts` |
+| workers | `loadWorkerSettings()`, `loadWorkerState()`, `updateWorkerState()`, `listWorkers()`, `updateWorkerSettings()`, `isHeartbeatFresh()`, `isWeekday()` | Настройки и состояние, DTO, журнал изменений настроек | `server/src/modules/workers/engine/worker-settings.service.ts` |
+| workers | `recordWorkerEvents()`, `recordWorkerEvent()`, `findRecentWorkerEvents()` | Журнал воркера; сбой записи не роняет цикл; «было ли недавно» — повторяющийся сбой раз в час | `server/src/modules/workers/engine/worker-events.service.ts` |
+| workers | `alertDeveloper(key, settings, text)` | Оповещение разработчику в Telegram, если включено | `server/src/modules/workers/engine/worker-alerts.ts` |
+| — | `formatAstanaDay()`, `formatAstanaDayWithYear()`, `astanaWeekdayAndHour()` | Даты и час по Астане: карточки, журнал, окно отправки | `server/src/lib/astana-time.ts` |
+| — | `worker.ts` | Процесс воркеров: `npm run worker` (все) или `npm run worker -- orders` (выбранные), только при `WORKERS_ENABLED=true` | `server/src/worker.ts` |
 | warehouses | `listWarehouses()` | Справочник складов по коду | `server/src/modules/warehouses/warehouses.service.ts` |
 | warehouses | `saveKaspiWarehouses(input)` | Импорт складов: upsert по `code`, не трогает `name` и заполненный город | `server/src/modules/warehouses/warehouses.service.ts` |
 | warehouses | `toWarehouseDto(warehouse)` | DTO наружу | `server/src/modules/warehouses/warehouses.service.ts` |
@@ -471,8 +474,8 @@ shared/    # Общий код: типы контрактов, констант�
 
 | Задача | Расписание | Файл |
 |---|---|---|
-| Воркер заказов `ORDERS`: заказы Kaspi за 1–3 месяца, журнал изменений, составы новых заказов; (этап 3) отправка поставщикам | Интервал 1–10 мин из настроек, от конца прошлого цикла; отдельный процесс `npm run worker` | `server/src/modules/workers/orders.job.ts` |
-| Наблюдатель пульса воркеров | Раз в минуту, в процессе API | `server/src/modules/workers/worker-monitor.ts` |
+| Воркер заказов `ORDERS`: заказы Kaspi за 1–3 месяца, журнал изменений, составы новых заказов, даты прибытия из кабинета; (этап 3) отправка в Telegram | Интервал 1–10 мин из настроек, от конца прошлого цикла; отдельный процесс `npm run worker` | `server/src/modules/workers/jobs/orders/` |
+| Наблюдатель пульса воркеров | Раз в минуту, в процессе API | `server/src/modules/workers/engine/worker-monitor.ts` |
 
 Устройство и решения — [docs/workers.md](docs/workers.md).
 

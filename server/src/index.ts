@@ -2,7 +2,7 @@ import { createApp } from './app';
 import { env } from './config/env';
 import { logger } from './lib/logger';
 import { disconnectDatabase } from './db/client';
-import { startWorkerMonitor } from './modules/workers/worker-monitor';
+import { startWorkerMonitor } from './modules/workers/engine/worker-monitor';
 
 const app = createApp();
 

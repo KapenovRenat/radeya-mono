@@ -1,9 +1,9 @@
 import { WORKER_TITLES, type WorkerKey } from '@radeya/shared';
 
-import { env } from '../../config/env';
-import type { WorkerSettings } from '../../generated/prisma/client';
-import { logger } from '../../lib/logger';
-import { escapeTelegramHtml, isTelegramConfigured, sendTelegramMessage } from '../../lib/telegram';
+import { env } from '../../../config/env';
+import type { WorkerSettings } from '../../../generated/prisma/client';
+import { logger } from '../../../lib/logger';
+import { escapeTelegramHtml, isTelegramConfigured, sendTelegramMessage } from '../../../lib/telegram';
 
 /**
  * Оповещение разработчика о состоянии воркера: упал, восстановился, перезапущен.

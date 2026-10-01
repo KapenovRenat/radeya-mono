@@ -1,11 +1,15 @@
+import type { WorkerKey } from '@radeya/shared';
+
 import { env } from './config/env';
 import { logger } from './lib/logger';
-import { ordersJob } from './modules/workers/orders.job';
-import { startWorker } from './modules/workers/worker-engine';
+import { startWorkers } from './modules/workers/engine/worker-engine';
+import { WORKER_JOBS } from './modules/workers/jobs';
 
 /**
- * Процесс воркеров — отдельно от API (`npm run worker`). Падение воркера
- * не роняет API, перезапуск API не обрывает цикл. Устройство — docs/workers.md.
+ * Процесс воркеров — отдельно от API. Устройство — docs/workers.md.
+ *
+ *   npm run worker              — все воркеры из реестра (jobs/index.ts)
+ *   npm run worker -- orders    — только указанные, через пробел
  *
  * Запускается только при WORKERS_ENABLED=true: копия боевой базы с галочкой
  * «Работает» иначе начала бы тянуть заказы и слать поставщикам с ноутбука.
@@ -28,6 +32,17 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-logger.info(`Процесс воркеров запущен (${env.NODE_ENV})`);
+const allKeys = Object.keys(WORKER_JOBS) as WorkerKey[];
+const requested = process.argv.slice(2).map((name) => name.toUpperCase());
+const unknown = requested.filter((name) => !allKeys.includes(name as WorkerKey));
 
-void startWorker(ordersJob);
+if (unknown.length > 0) {
+  logger.error(`Неизвестные воркеры: ${unknown.join(', ')}. Есть: ${allKeys.join(', ').toLowerCase()}`);
+  process.exit(1);
+}
+
+const keys = requested.length > 0 ? (requested as WorkerKey[]) : allKeys;
+
+logger.info(`Процесс воркеров запущен (${env.NODE_ENV}): ${keys.join(', ')}`);
+
+void startWorkers(keys.map((key) => WORKER_JOBS[key]));

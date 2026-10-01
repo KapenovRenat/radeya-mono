@@ -1,6 +1,6 @@
 import { WORKER_EVENT_TYPES, WORKER_TITLES, type WorkerKey } from '@radeya/shared';
 
-import { logger } from '../../lib/logger';
+import { logger } from '../../../lib/logger';
 import { alertDeveloper } from './worker-alerts';
 import { recordWorkerEvent } from './worker-events.service';
 import {
