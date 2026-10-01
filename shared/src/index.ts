@@ -32,3 +32,5 @@ export * from './constants/currencies';
 export * from './constants/moysklad';
 export * from './types/moysklad';
 export * from './types/stats';
+export * from './constants/workers';
+export * from './types/workers';

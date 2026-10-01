@@ -38,6 +38,7 @@ export const AUDIT_ACTIONS = {
   MOYSKLAD_STOCK_IMPORTED: 'MOYSKLAD_STOCK_IMPORTED',
   KASPI_CABINET_ACCOUNT_SAVED: 'KASPI_CABINET_ACCOUNT_SAVED',
   KASPI_CABINET_CHECKED: 'KASPI_CABINET_CHECKED',
+  WORKER_SETTINGS_UPDATED: 'WORKER_SETTINGS_UPDATED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -76,4 +77,5 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   MOYSKLAD_STOCK_IMPORTED: 'Импорт остатков из МойСклада',
   KASPI_CABINET_ACCOUNT_SAVED: 'Изменены данные входа в кабинет Kaspi',
   KASPI_CABINET_CHECKED: 'Проверка подключения к кабинету Kaspi',
+  WORKER_SETTINGS_UPDATED: 'Изменены настройки воркера',
 };

@@ -47,6 +47,15 @@ const envSchema = z.object({
       'должен быть ровно 32 байта в base64',
     )
     .optional(),
+
+  // Разрешено ли запускать воркеры (`npm run worker`). Только `true` на боевом
+  // сервере: копия базы с галочкой «Работает» иначе начала бы тянуть заказы
+  // и слать поставщикам с ноутбука разработчика.
+  WORKERS_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+
+  // Токен Telegram-бота (@BotFather). Уходит только в адрес запроса к Telegram,
+  // в логи и ответы не попадает. Необязательный — без него не уходят оповещения.
+  TELEGRAM_BOT_TOKEN: z.string().regex(/^\d+:[\w-]+$/, 'не похож на токен бота').optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

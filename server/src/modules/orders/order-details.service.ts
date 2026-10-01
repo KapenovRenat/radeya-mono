@@ -11,6 +11,7 @@ import { prisma } from '../../db/client';
 import { AppError, NotFoundError } from '../../lib/errors';
 import type { Prisma } from '../../generated/prisma/client';
 import { normalizeName } from '../dictionaries/dictionaries.service';
+import { isCabinetRefreshDue } from './order-cabinet.service';
 import { previewImageUrl } from '../products/catalog.mapper';
 import { fetchKaspiOrderEntries } from './kaspi-orders.client';
 import { toEntryDraft, type KaspiEntryDraft } from './kaspi-order-entries.mapper';
@@ -41,6 +42,7 @@ const detailsSelect = {
   deliveryMode: true, isKaspiDelivery: true, isExpress: true, waybillNumber: true,
   deliveryFormattedAddress: true, deliveryComment: true,
   originCityName: true, kaspiPickupPointId: true,
+  plannedPointDeliveryAt: true, cabinetSyncedAt: true,
   entries: {
     select: {
       id: true, entryNumber: true, sku: true, offerName: true, quantity: true,
@@ -74,6 +76,17 @@ export async function getOrderDetails(id: string): Promise<OrderDetailsDto> {
  * пишутся с пропуском уже существующих пар «заказ + номер позиции».
  */
 export async function syncOrderEntries(id: string): Promise<SyncOrderEntriesResponse> {
+  const { created } = await loadKaspiEntries(id);
+
+  return { created, order: await getOrderDetails(id) };
+}
+
+/**
+ * Состав заказа с площадки в базу — общее для окна заказа и воркера.
+ * Состав уже есть — Kaspi не трогается. `names` — названия позиций с площадки,
+ * для журнала воркера.
+ */
+export async function loadKaspiEntries(id: string): Promise<{ created: number; names: string[] }> {
   const order = await prisma.order.findUnique({
     where: { id },
     select: { id: true, kaspiId: true, salesPoint: { select: { type: true } },
@@ -82,7 +95,7 @@ export async function syncOrderEntries(id: string): Promise<SyncOrderEntriesResp
 
   if (!order) throw new NotFoundError('Заказ не найден');
 
-  if (order._count.entries > 0) return { created: 0, order: await getOrderDetails(id) };
+  if (order._count.entries > 0) return { created: 0, names: [] };
 
   if (order.salesPoint.type !== SALES_POINT_TYPES.KASPI || order.kaspiId === null) {
     throw new AppError(400, 'ENTRIES_NOT_AVAILABLE',
@@ -124,7 +137,10 @@ export async function syncOrderEntries(id: string): Promise<SyncOrderEntriesResp
   // упрётся в @@unique([orderId, entryNumber]) и просто пропустится.
   const { count } = await prisma.orderEntry.createMany({ data, skipDuplicates: true });
 
-  return { created: drafts.length === 0 ? 0 : count, order: await getOrderDetails(id) };
+  return {
+    created: drafts.length === 0 ? 0 : count,
+    names: drafts.map((draft) => draft.offerName ?? draft.sku ?? 'без названия'),
+  };
 }
 
 /**
@@ -155,6 +171,10 @@ function toDetails(row: DetailsRecord): OrderDetailsDto {
     completedAt: iso(row.completedAt),
     courierTransmissionPlannedAt: iso(row.courierTransmissionPlannedAt),
     courierTransmissionAt: iso(row.courierTransmissionAt),
+    plannedPointDeliveryAt: iso(row.plannedPointDeliveryAt),
+    cabinetRefreshDue: isCabinetRefreshDue({
+      status: row.status, salesPointType: row.salesPoint.type, cabinetSyncedAt: row.cabinetSyncedAt,
+    }),
     deliveryCost: row.deliveryCost?.toFixed(2) ?? null,
     paymentMode: row.paymentMode,
     creditTerm: row.creditTerm,

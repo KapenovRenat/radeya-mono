@@ -29,6 +29,7 @@ export const baseApi = createApi({
     "Dictionary",
     "Warehouse",
     "KaspiCabinet",
+    "Worker",
   ],
   endpoints: () => ({}),
 });

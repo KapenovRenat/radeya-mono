@@ -39,6 +39,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `GET /api/kaspi-cabinet/account` | Email и состояние входа в кабинет Kaspi, без пароля | ADMIN | `server/src/modules/kaspi-cabinet/kaspi-cabinet.controller.ts` |
 | `PUT /api/kaspi-cabinet/account` | Сохранить email и пароль кабинета (шифруются); входа нет, сессия сбрасывается | ADMIN | `server/src/modules/kaspi-cabinet/kaspi-cabinet.controller.ts` |
 | `POST /api/kaspi-cabinet/check` | Проверка подключения: жива сессия — без входа, иначе вход; трасса ответов Kaspi для консоли | ADMIN | `server/src/modules/kaspi-cabinet/kaspi-cabinet.controller.ts` |
+| `GET /api/workers` | Настройки и состояние воркеров, пульс, задан ли токен бота | ADMIN | `server/src/modules/workers/workers.controller.ts` |
+| `PUT /api/workers/:key/settings` | Сохранить настройки воркера; включение отправки ставит точку отсечки | ADMIN | `server/src/modules/workers/workers.controller.ts` |
 | `GET /api/warehouses` | Справочник складов | ADMIN | `server/src/modules/warehouses/warehouses.routes.ts` |
 | `POST /api/warehouses/import-kaspi` | Импорт складов из предпросмотра выгрузки, повторяемый | ADMIN | `server/src/modules/warehouses/warehouses.routes.ts` |
 | `GET /api/products/skus` | Артикулы, уже сохранённые в каталоге | ADMIN | `server/src/modules/products/products.routes.ts` |
@@ -69,11 +71,13 @@ shared/    # Общий код: типы контрактов, констант�
 | `PATCH /api/sales-points/:id` | Переименовать, закрыть или открыть точку; удаления нет | ADMIN | `server/src/modules/sales-points/sales-points.controller.ts` |
 | `GET /api/orders` | Страница заказов из нашей базы: поиск по номеру, период, точки продаж и продавцы | ADMIN | `server/src/modules/orders/orders.controller.ts` |
 | `GET /api/orders/:id` | Заказ целиком для окна: поля строки, адрес, даты, деньги, состав с нашим товаром по артикулу | ADMIN | `server/src/modules/orders/orders.controller.ts` |
+| `POST /api/orders/:id/cabinet/sync` | «Планируемая дата прибытия» одного заказа из кабинета — окно заказа, когда пора перечитать | все вошедшие | `server/src/modules/orders/orders.controller.ts` |
+| `POST /api/orders/cabinet/sync` | Шаг дат прибытия для активных заказов после синхронизации кнопкой: до 20, `remaining` | ADMIN, MANAGER | `server/src/modules/orders/orders.controller.ts` |
 | `POST /api/orders/:id/entries/sync` | Состав заказа Kaspi с площадки при первом открытии; уже есть — Kaspi не трогает | ADMIN | `server/src/modules/orders/orders.controller.ts` |
 | `GET /api/orders/:id/comments` | Лента комментариев заказа, старые сверху | ADMIN | `server/src/modules/orders/orders.controller.ts` |
 | `POST /api/orders/:id/comments` | Новый комментарий; автор из сессии, правок и удалений нет | ADMIN | `server/src/modules/orders/orders.controller.ts` |
 | `GET /api/orders/kaspi` | Страница заказов Kaspi, разобранная в нашу модель; без записи в БД | ADMIN | `server/src/modules/orders/orders.controller.ts` |
-| `POST /api/orders/sync` | Шаг синхронизации заказов: чанки по 3 дня, курсор, запись в БД | ADMIN | `server/src/modules/orders/orders.controller.ts` |
+| `POST /api/orders/sync` | Шаг синхронизации заказов: чанки по 3 дня, курсор, запись в БД; под общей с воркером блокировкой, занято — 409 | ADMIN, MANAGER | `server/src/modules/orders/orders.controller.ts` |
 
 Подробные контракты — в [docs/api-reference.md](docs/api-reference.md).
 
@@ -113,6 +117,20 @@ shared/    # Общий код: типы контрактов, констант�
 | kaspi-cabinet | `maskUrl()`, `maskBody()`, `cookieName()`, `describePage()` | Маскировка трассы: ключи входа и пароль — `***`, у кук только имена | `server/src/modules/kaspi-cabinet/cabinet-trace.ts` |
 | kaspi-cabinet | `getCabinetAccount()`, `saveCabinetAccount(input)`, `loadStoredAccount()`, `recordLoginResult()`, `saveSession()`, `newCabinetJar()` | Хранение доступа: одна запись, пароль и банка кук зашифрованы; итог входа пишется, только если пароль не сменили | `server/src/modules/kaspi-cabinet/cabinet-account.service.ts` |
 | — | `encryptSecret(plain)`, `decryptSecret(box)` | AES-256-GCM ключом `KASPI_SECRETS_KEY`, формат `v1:iv:tag:данные` | `server/src/lib/secret-box.ts` |
+| — | `withAdvisoryLock(key, run, holdMs)`, `LOCKS` | Блокировка PostgreSQL между процессами: занято — `acquired: false` сразу, без ожидания | `server/src/lib/advisory-lock.ts` |
+| — | `sendTelegramMessage(chatId, html)`, `escapeTelegramHtml()`, `isTelegramConfigured()` | Telegram Bot API; токен только в адресе запроса | `server/src/lib/telegram.ts` |
+| orders | `syncKaspiOrdersPeriod(from, to, { signal, onChanges })`, `OrderChange` | Весь период за вызов — для воркера; изменения (новый заказ, смена стадии) отдаются после каждого отрезка | `server/src/modules/orders/orders.service.ts` |
+| orders | `refreshOrderCabinet(id)`, `refreshDueOrdersCabinet({ signal, onResult, onOrderFailed })`, `isCabinetRefreshDue()`, `CABINET_REFRESH_MS`, `CABINET_BATCH_SIZE` | Дата прибытия из кабинета: один заказ / пачка активных, которым пора (новые сразу, остальные раз в час); сбой заказа — откладывается на час, сбой входа — останавливает пачку | `server/src/modules/orders/order-cabinet.service.ts` |
+| kaspi-cabinet | `fetchCabinetOrderDetail(code, cookie)` | GraphQL `getOrderDetails` слово в слово как у кабинета; `plannedPointDeliveryAt` и ответ целиком | `server/src/modules/kaspi-cabinet/cabinet-orders.client.ts` |
+| kaspi-cabinet | `cabinetPostJson(url, cookie, body)` | POST к кабинету (GraphQL) с теми же правилами «не пустил», что у `cabinetGetJson` | `server/src/modules/kaspi-cabinet/cabinet-http.ts` |
+| orders | `loadKaspiEntries(id)` | Состав заказа с площадки в базу — общее для окна заказа и воркера; есть — Kaspi не трогает | `server/src/modules/orders/order-details.service.ts` |
+| workers | `startWorker(job)`, `WorkerJob` | Движок: цикл без наложений, потолок 10 мин, пульс, штатная остановка, «перезапуск после сбоя», оповещения по порогу ошибок | `server/src/modules/workers/worker-engine.ts` |
+| workers | `ordersJob` | Цикл заказов: синхронизация за период, события в журнал, составы новых заказов (до 20 за цикл) | `server/src/modules/workers/orders.job.ts` |
+| workers | `startWorkerMonitor()` | Наблюдатель пульса в API: «не отвечает» / «снова на связи», один раз на смену | `server/src/modules/workers/worker-monitor.ts` |
+| workers | `loadWorkerSettings()`, `loadWorkerState()`, `updateWorkerState()`, `listWorkers()`, `updateWorkerSettings()`, `isHeartbeatFresh()` | Настройки и состояние, DTO, журнал изменений настроек | `server/src/modules/workers/worker-settings.service.ts` |
+| workers | `recordWorkerEvents()`, `recordWorkerEvent()` | Запись в журнал воркера; сбой записи не роняет цикл | `server/src/modules/workers/worker-events.service.ts` |
+| workers | `alertDeveloper(key, settings, text)` | Оповещение разработчику в Telegram, если включено | `server/src/modules/workers/worker-alerts.ts` |
+| — | `worker.ts` | Процесс воркеров: `npm run worker` / `start:worker`, только при `WORKERS_ENABLED=true` | `server/src/worker.ts` |
 | warehouses | `listWarehouses()` | Справочник складов по коду | `server/src/modules/warehouses/warehouses.service.ts` |
 | warehouses | `saveKaspiWarehouses(input)` | Импорт складов: upsert по `code`, не трогает `name` и заполненный город | `server/src/modules/warehouses/warehouses.service.ts` |
 | warehouses | `toWarehouseDto(warehouse)` | DTO наружу | `server/src/modules/warehouses/warehouses.service.ts` |
@@ -189,13 +207,17 @@ shared/    # Общий код: типы контрактов, констант�
 | `SalesPoint` | Точка продаж: площадки (`KASPI`, `OZON`, `SITE`) и офлайн-точки в одном справочнике. Удаления нет, только закрытие | `orders` → `Order` |
 | `DictionaryItem` | Пополняемые списки офлайн-точки: откуда клиент, статус доставки, откуда поехал товар, способ оплаты. Различаются полем `kind` | четыре связи с `Order` |
 | `OrderComment` | Комментарий к заказу: автор связью, роль снимком. Только добавление | `order`, `author` → `User` |
-| `Order` | Заказ: точка продаж, продавец, два статуса площадки + наш вычисленный, даты, деньги, покупатель, адрес, склад. Поля кабинета заведены пустыми | `salesPoint`, `seller` → `User`, `warehouse` → `Warehouse`, `entries`, `markers`, `steps`, `comments` |
+| `Order` | Заказ: точка продаж, продавец, два статуса площадки + наш вычисленный, даты, деньги, покупатель, адрес, склад. «Планируемая дата прибытия» (`plannedPointDeliveryAt`) и `cabinetSyncedAt` — из кабинета; остальные поля кабинета пока пустые | `salesPoint`, `seller` → `User`, `warehouse` → `Warehouse`, `entries`, `markers`, `steps`, `comments` |
 | `OrderEntry` | Позиция заказа: артикул, названия обоих источников, количество, цены | `order`, `variant` (необязательная) |
 | `OrderMarker` | Событие истории заказа: кто и когда двигал. Только из кабинета | `order`; `@@unique([orderId, marker, at])` |
 | `OrderStep` | Этап заказа со сроками и дедлайном. Только из кабинета | `order`; `@@unique([orderId, step])` |
 | `Supplier` | Поставщик: от кого приехал товар. `externalId` — UUID МойСклада, `@unique`, ключ повторного импорта. `telegramId` только руками. Удаления нет, только закрытие | `variants` → `Variant`, `onDelete: Restrict` |
 | `Currency` (enum) | Валюта суммы: KZT, RUB. Пересчёта к одной валюте нет — курс на дату закупки неизвестен | — |
 | `KaspiCabinetAccount` | Доступ в кабинет Kaspi, одна запись `main`: email, пароль и банка кук зашифрованы, итог последнего входа, пауза Kaspi | связей нет |
+| `WorkerSettings` | Настройки воркера из блока «Воркеры»: строка на воркер, точка отсечки отправки | связей нет |
+| `WorkerState` | Состояние процесса: статус, пульс, ход циклов, ошибки подряд | связей нет |
+| `WorkerEvent` | Журнал воркера: события заказов и самого воркера, заказ связью и копией | `order` → `Order` (`SetNull`) |
+| `WorkerStatus` (enum) | STOPPED, IDLE, RUNNING, ERROR | — |
 | `KaspiLoginStatus` (enum) | Итог входа в кабинет: OK, CODE_REQUIRED, MERCHANT_CHOICE_REQUIRED, CREDENTIALS_INVALID, BLOCKED, ERROR | — |
 | `UserRole` (enum) | Роли сотрудников: ADMIN, MANAGER, SELLER, VIEWER — совпадает с `USER_ROLES` | — |
 | `SalesChannel` (enum) | Каналы продаж: SITE, KASPI, OZON | — |
@@ -266,6 +288,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `SupplierPreviewTable` | Таблица разобранных контрагентов: непригодные подсвечены, расхождения с нашими данными и замечания — строками под записью | `front/src/app/dashboard/(main)/imports/_components/supplier-preview-table.tsx` |
 | `ImportsLayout` | Защита раздела импортов ролью ADMIN | `front/src/app/dashboard/(main)/imports/layout.tsx` |
 | `SettingsLayout` | Защита раздела настроек ролью ADMIN | `front/src/app/dashboard/(main)/settings/layout.tsx` |
+| `WorkersBlock` | Блок «Воркеры» в настройках: состояние и настройки каждого воркера, «Сохранить» только при изменениях | `front/src/app/dashboard/(main)/settings/_components/workers-block.tsx` |
+| `SupplierTelegramBlock` | Блок «Поставщики в Telegram»: выпадашка поставщиков → окно с полем Telegram ID | `front/src/app/dashboard/(main)/settings/_components/supplier-telegram-block.tsx` |
 | `KaspiCabinetBlock` | Блок настроек «Кабинет Kaspi»: состояние входа, email, пароль, «Сохранить», «Проверить подключение»; разметка минимальная | `front/src/app/dashboard/(main)/settings/_components/kaspi-cabinet-block.tsx` |
 | `CatalogSummary` | Счётчики разбора выгрузки над таблицей товаров | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-summary.tsx` |
 | `WarehousesPanel` | Таблица складов и сохранение их в справочник; общая для выгрузки и кабинета | `front/src/app/dashboard/(main)/kaspi-sync/_components/warehouses-panel.tsx` |
@@ -338,8 +362,11 @@ shared/    # Общий код: типы контрактов, констант�
 | `useOfflineImport()` | Импорт продаж: файл, список листов, разбор, счётчики, запись, сброс | `front/src/features/imports/use-offline-import.ts` |
 | `useCreateSalesPointForm(onCreated)` | Форма новой офлайн-точки: одно поле, защита от двойной отправки | `front/src/features/sales-points/use-create-sales-point-form.ts` |
 | `useGetOrderCommentsQuery`, `useAddOrderCommentMutation` | Лента комментариев заказа; тег с id заказа | `front/src/features/orders/orders-api.ts` |
+| `useSyncOrderCabinetMutation`, `useSyncOrdersCabinetMutation` | Дата прибытия из кабинета: одного заказа (ответ в кэш окна) и шаг для активных после синхронизации | `front/src/features/orders/orders-api.ts` |
+| `formatDate(iso)` | Дата без времени: `1 окт. 2026 г.` | `front/src/lib/format.ts` |
+| `OrderDetailsDto.plannedPointDeliveryAt`, `cabinetRefreshDue`, `SyncOrdersCabinetResponse` | Дата прибытия в окне заказа, «пора перечитать кабинет», ответ шага дат | `shared/src/types/orders.ts` |
 | `useGetOrderQuery`, `useSyncOrderEntriesMutation` | Заказ целиком (тег `Order` с id) и загрузка состава; ответ загрузки кладётся в кэш заказа | `front/src/features/orders/orders-api.ts` |
-| `useOrderDetails(orderId)` | Окно заказа: заказ из базы, автозагрузка состава Kaspi один раз на заказ, ошибка и повтор | `front/src/features/orders/use-order-details.ts` |
+| `useOrderDetails(orderId)` | Окно заказа: заказ из базы, автозагрузка состава Kaspi и даты прибытия из кабинета — по разу на заказ, ошибки и повтор | `front/src/features/orders/use-order-details.ts` |
 | `useOrderComments(orderId)` | Лента комментариев и поле «добавить»: лимит длины, защита от двойной отправки | `front/src/features/orders/use-order-comments.ts` |
 | `customerTitle(order)`, `discountTitle(order)` | Покупатель «фамилия имя» и скидка «10% · причина» — общие для таблицы и окна | `front/src/features/orders/order-format.ts` |
 | `OrderDetailsDto`, `OrderEntryDto`, `SyncOrderEntriesResponse` | Контракты окна заказа и загрузки состава | `shared/src/types/orders.ts` |
@@ -377,6 +404,11 @@ shared/    # Общий код: типы контрактов, констант�
 | `usePreviewKaspiCatalogMutation` | Отправка выгрузок на разбор | `front/src/features/kaspi-catalog/kaspi-catalog-api.ts` |
 | `useFetchKaspiCabinetMutation` | Запуск обхода кабинета Kaspi | `front/src/features/kaspi-catalog/kaspi-catalog-api.ts` |
 | `useKaspiCabinet()` | Кука, «запомнить», запуск обхода (по сессии, если вход по email работает), счётчики и ошибка; печатает разбор в консоль браузера | `front/src/features/kaspi-catalog/use-kaspi-cabinet.ts` |
+| `WORKER_KEYS`, `WORKER_TITLES`, `WORKER_INTERVAL_MINUTES`, `WORKER_ORDER_PERIOD_MONTHS`, `SUPPLIER_NOTIFY_DELAY_MINUTES`, `WEEKDAYS`, `WEEKDAY_LABELS`, `SUPPLIER_NOTIFY_FROM_HOUR`/`TO_HOUR`, `TELEGRAM_CHAT_ID_PATTERN`, `WORKER_STATUSES`, `WORKER_EVENT_TYPES` и подписи | Воркеры: ключи, допустимые значения настроек, окно отправки, статусы и виды событий журнала | `shared/src/constants/workers.ts` |
+| `WorkerDto`, `WorkerSettingsDto`, `WorkerStateDto`, `UpdateWorkerSettingsRequest`, `WorkersResponse` | Контракты настроек и состояния воркеров | `shared/src/types/workers.ts` |
+| `useGetWorkersQuery`, `useUpdateWorkerSettingsMutation` | Воркеры; тег `Worker` | `front/src/features/workers/workers-api.ts` |
+| `useWorkerSettingsForm(worker)` | Черновик настроек воркера: изменения уходят только по «Сохранить», опрос состояния их не затирает | `front/src/features/workers/use-worker-settings-form.ts` |
+| `useSupplierTelegramForm(suppliers)` | Окно поставщика с полем Telegram ID, проверка формата | `front/src/features/suppliers/use-supplier-telegram-form.ts` |
 | `useKaspiCabinetSignedIn()` | Работает ли вход в кабинет: данные сохранены и последний вход `OK`; отдельно `isLoading` | `front/src/features/kaspi-cabinet/use-kaspi-cabinet-signed-in.ts` |
 | `KASPI_LOGIN_STATUSES`, `KaspiLoginStatus`, `KASPI_LOGIN_STATUS_LABELS`, `KASPI_CABINET_EMAIL_MAX_LENGTH`, `KASPI_CABINET_PASSWORD_MAX_LENGTH` | Итоги входа в кабинет Kaspi и их подписи, лимиты полей | `shared/src/constants/kaspi-cabinet.ts` |
 | `KaspiCabinetAccountDto`, `SaveKaspiCabinetAccountRequest`, `KaspiCabinetTraceStep`, `KaspiCabinetCheckResponse` | Контракты настроек и проверки входа в кабинет | `shared/src/types/kaspi-cabinet-account.ts` |
@@ -428,7 +460,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `KASPI_ORDER_PERIODS`, `KASPI_ORDER_PERIOD_LABELS`, `KASPI_ORDER_PERIOD_DAYS` | Периоды кнопок: 3 месяца и 2 года | `shared/src/constants/kaspi-orders.ts` |
 | `KASPI_ORDER_CHUNK_DAYS`, `KASPI_ORDER_PAGE_SIZE`, `KASPI_SYNC_DEFAULT_CHUNKS`, `KASPI_SYNC_MAX_CHUNKS` | Ширина отрезка (3 дня), размер страницы Kaspi, сколько отрезков за вызов | `shared/src/constants/kaspi-orders.ts` |
 | `useSyncKaspiOrdersMutation` | Один шаг синхронизации; тег `Order` сбрасывается только на последнем | `front/src/features/orders/orders-api.ts` |
-| `useKaspiOrdersSync()` | Крутит шаги до `done`, складывает счётчики, даёт прогресс и отмену | `front/src/features/orders/use-kaspi-orders-sync.ts` |
+| `useKaspiOrdersSync()` | Крутит шаги до `done`, складывает счётчики, даёт прогресс и отмену; следом — шаги дат прибытия из кабинета (`cabinet`: спрошено, изменилось) | `front/src/features/orders/use-kaspi-orders-sync.ts` |
 | `useGetOrdersQuery` | Страница заказов из базы, тег `Order` | `front/src/features/orders/orders-api.ts` |
 | `useOrdersList()` | Список заказов: серверный поиск по номеру с задержкой 300 мс, период, фильтры по точкам, продавцам и четырём справочникам, страницы | `front/src/features/orders/use-orders-list.ts` |
 | `DictionaryFilterField` | Поля запроса заказов, соответствующие пополняемым спискам | `front/src/features/orders/use-orders-list.ts` |
@@ -439,7 +471,10 @@ shared/    # Общий код: типы контрактов, констант�
 
 | Задача | Расписание | Файл |
 |---|---|---|
-| — | пусто | |
+| Воркер заказов `ORDERS`: заказы Kaspi за 1–3 месяца, журнал изменений, составы новых заказов; (этап 3) отправка поставщикам | Интервал 1–10 мин из настроек, от конца прошлого цикла; отдельный процесс `npm run worker` | `server/src/modules/workers/orders.job.ts` |
+| Наблюдатель пульса воркеров | Раз в минуту, в процессе API | `server/src/modules/workers/worker-monitor.ts` |
+
+Устройство и решения — [docs/workers.md](docs/workers.md).
 
 ---
 
@@ -455,6 +490,7 @@ shared/    # Общий код: типы контрактов, констант�
 | [data-model.md](docs/data-model.md) | Модели Prisma пользователей, сессий, складов и каталога; ручные папки Category, служебный пункт «Все товары», Product/Variant, цены, остатки и ткани; список миграций. |
 | [analytics-spec.md](docs/analytics-spec.md) | Спецификация аналитического модуля: принципы визуализации (Tufte / Few / Munzner), информационная архитектура из 8 табов, состав графиков и KPI. Источник правды для имплементации дашборда. |
 | [kaspi-api-integration.md](docs/kaspi-api-integration.md) | Kaspi Shop API целиком: авторизация по `X-Auth-Token`, шифрование токена, эндпоинты заказов и позиций, стратегия синхронизации, маппинг полей, статусы заказов, схема БД, грабли. Раздел 10 — каталог товаров: разбор XML-выгрузки и JSON кабинета (`list?m=&p=&l=&a=`), маппинг всех полей, три цены и три идентификатора, картинки, штрихкод. Раздел 11 — дерево папок из `categoryPathCodes` и `familyId`. Раздел 10, «Как заходим» — разведка входа в кабинет (29.09.2026): JSON-вход `idmc.shop.kaspi.kz/api/p/login`, ответы и ошибки, адреса кабинета, GraphQL заказов. Раздел 12 — чек-лист непроверенного. Раздел 13 — обратное направление: наличие товара ведётся у нас и уходит в Kaspi через XML, поля `storeId`/`preOrder`/`stockCount`/`available` и откуда они берутся. |
+| [workers.md](docs/workers.md) | Воркеры — фоновые задачи: решения пользователя (интервал, период, задержка и часы отправки, оповещения), отдельный процесс, цикл без наложений, самовосстановление, журнал, этапы и открытые вопросы этапа 3. |
 | [telegram-bot.md](docs/telegram-bot.md) | Telegram-бот: отправка сообщений и карточек-картинок заказа, маршрутизация получателям (поставщик / склад / доставка), уведомления об отменах и возвратах, cron и расписание, грабли. |
 
 Новые документы создаются в момент первой записи, по правилу «новый код — сразу

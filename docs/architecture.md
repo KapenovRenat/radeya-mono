@@ -34,7 +34,8 @@ server/
 │   └── migrations/            # SQL-миграции, обязательно в git
 ├── prisma.config.ts           # конфиг Prisma 7: путь к схеме и DATABASE_URL
 ├── src/
-│   ├── index.ts               # запуск сервера, graceful shutdown
+│   ├── index.ts               # запуск сервера, graceful shutdown, наблюдатель воркеров
+│   ├── worker.ts              # отдельный процесс воркеров (docs/workers.md)
 │   ├── app.ts                 # сборка Express: мидлвары + маршруты
 │   ├── routes.ts              # подключение модулей к /api
 │   ├── config/
@@ -43,8 +44,11 @@ server/
 │   │   └── client.ts          # единственный экземпляр Prisma Client
 │   ├── generated/prisma/      # сгенерированный клиент, в git не попадает
 │   ├── lib/                   # переиспользуемое, без привязки к домену
+│   │   ├── advisory-lock.ts   # блокировки PostgreSQL между процессами
 │   │   ├── errors.ts          # AppError и наследники
 │   │   ├── excel.ts           # чтение книги .xlsx и её ячеек
+│   │   ├── secret-box.ts      # AES-256-GCM для секретов в базе
+│   │   ├── telegram.ts        # отправка в Telegram Bot API
 │   │   └── logger.ts
 │   ├── middlewares/
 │   │   ├── error-handler.ts   # ставится последним
@@ -71,6 +75,12 @@ server/
 Смысл разделения: сервис можно вызвать из воркера (у которого нет `req`) и протестировать
 без поднятия сервера. `repository` заводится, когда запросов становится много —
 на мелком модуле сервис ходит в Prisma сам.
+
+**Два процесса.** `index.ts` — API, `worker.ts` — фоновые задачи
+(модуль `modules/workers/`). Код общий: воркер вызывает те же сервисы, что
+и контроллеры, например `syncKaspiOrdersPeriod()` из модуля заказов. Общую
+работу двух процессов разводит блокировка PostgreSQL (`lib/advisory-lock.ts`),
+а не память процесса. Подробности — [workers.md](workers.md).
 
 ### Как добавить модуль
 

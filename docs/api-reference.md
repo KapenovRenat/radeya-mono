@@ -277,6 +277,8 @@
 ### POST /api/orders/sync
 Шаг синхронизации заказов: читает из Kaspi и **пишет в базу**.
 - Auth: `can([ADMIN, MANAGER])`.
+- Блокировка: та же, что у воркера заказов (`LOCKS.KASPI_ORDERS_SYNC`). Воркер
+  в цикле — сразу 409 CONFLICT «повторите через минуту», без ожидания.
 - Body: `{ period: '3m' | '2y', to?: string, cursor?: string, maxChunks?: number }`.
   `to` — правый край всего периода (ISO), задаёт первый вызов и повторяют
   остальные; `cursor` — граница, с которой продолжать, пусто на первом шаге;
@@ -341,6 +343,10 @@
   в список не входит.
 - `entriesLoaded` — состав уже загружали (есть позиции или заглушка «пусто»).
   `canLoadEntries` — заказ Kaspi с `kaspiId`: состав можно забрать с площадки.
+- `plannedPointDeliveryAt` — «Планируемая дата прибытия» из кабинета Kaspi
+  (показывать датой без времени). `cabinetRefreshDue` — активный заказ Kaspi,
+  дату не спрашивали или больше часа назад: окно само вызывает
+  `POST …/cabinet/sync`.
 - Телефон и адрес здесь полные: окно заказа — рабочий экран всех сотрудников.
   Скрывать их от кого-то — срезать поля по роли на сервере, как закупку в каталоге.
 - Чтение на площадку не ходит и в базу не пишет — это `POST …/entries/sync`.
@@ -368,6 +374,32 @@
   404 NOT_FOUND; 503 KASPI_TOKEN_MISSING; 401 KASPI_UNAUTHORIZED;
   502 KASPI_UNAVAILABLE / KASPI_BAD_RESPONSE; общие 401/403.
 - Файл: `server/src/modules/orders/orders.controller.ts` (postSyncOrderEntries).
+
+### POST /api/orders/:id/cabinet/sync
+«Планируемая дата прибытия» одного заказа из кабинета Kaspi — окно заказа,
+когда `cabinetRefreshDue`.
+- Auth: `can()` — любой вошедший: вызывается сам при открытии заказа.
+- Параметры: `id` (path, UUID). Тела нет.
+- Ответ 200: `OrderDetailsDto` с обновлённой датой.
+- Ходит через `withCabinetSession()` (GraphQL `getOrderDetails`, см.
+  kaspi-api-integration.md). Пишет `plannedPointDeliveryAt`, `rawCabinet`,
+  `cabinetSyncedAt`. Кабинет заказа не знает — дата не трогается, время опроса ставится.
+- Ошибки: 400 CABINET_NOT_AVAILABLE — заказ не из Kaspi; 404 NOT_FOUND;
+  ошибки кабинета (409 KASPI_CABINET_NOT_CONFIGURED, KASPI_LOGIN_*, 401
+  KASPI_UNAUTHORIZED, 502 KASPI_GRAPHQL_ERROR / KASPI_BAD_RESPONSE / KASPI_UNAVAILABLE);
+  общие 401/403.
+- Файл: `server/src/modules/orders/orders.controller.ts` (postSyncOrderCabinet),
+  сервис `order-cabinet.service.ts`.
+
+### POST /api/orders/cabinet/sync
+Шаг дат прибытия для активных заказов — после синхронизации кнопкой.
+- Auth: `can([ADMIN, MANAGER])`.
+- Тела нет. Под общей с воркером блокировкой: занято — 409.
+- Берёт до 20 активных заказов Kaspi, которым пора (не спрашивали или больше
+  часа назад), новые первыми. Ответ 200: `{ processed, changed, remaining }` —
+  повторять, пока `remaining` не ноль. Сбой про один заказ — он откладывается
+  на час, шаг идёт дальше; сбой входа или сети — ошибка шага.
+- Файл: `server/src/modules/orders/orders.controller.ts` (postSyncOrdersCabinet).
 
 ### GET /api/orders/:id/comments
 Лента комментариев заказа, старые сверху.
@@ -574,7 +606,9 @@ Kaspi, банки, площадки, услуги и поставщики в о�
 Правка карточки руками — прежде всего Telegram ID, которого в выгрузке нет.
 - Auth: ADMIN.
 - Body: любое подмножество `{ name, address, phone, telegramId, isActive }`.
-  Пустое тело отклоняется.
+  Пустое тело отклоняется. `telegramId` — только цифры, у группы с минусом
+  (`TELEGRAM_CHAT_ID_PATTERN`), `null` — снять. Ник `@name` не принимается:
+  бот по нему не отправит. Правится из «Настройки» → «Поставщики в Telegram».
 - `externalId` сменить нельзя: это ключ сверки с МойСкладом, и подмена склеила бы
   двух поставщиков при следующем импорте.
 - Удаления нет, только `isActive: false`: на поставщика будут ссылаться закупки.
@@ -1000,6 +1034,42 @@ Email и состояние входа. Пароля в ответе нет ни
 
 ---
 
+## Workers — фоновые задачи (01.10.2026)
+
+Настройки и состояние воркеров. Сам воркер — отдельный процесс, он читает
+настройки из базы перед каждым циклом; эндпоинтов «запустить цикл» нет.
+Устройство и решения — [workers.md](workers.md).
+Файл: `server/src/modules/workers/workers.controller.ts`.
+
+### GET /api/workers
+Все воркеры: настройки, состояние, задан ли токен бота.
+- Auth: `can([ADMIN])`
+- Ответ 200: `WorkersResponse` — `{ items: WorkerDto[] }`. `WorkerDto`: `key`, `title`,
+  `settings` (`WorkerSettingsDto`), `state` (`WorkerStateDto`: `status`, `alive` —
+  пульс свежее 2 минут, времена последнего цикла, `lastError`,
+  `consecutiveFailures`, `nextRunAt`, `lastRunStats`), `telegramConfigured`.
+- Строки настроек и состояния заводятся сами при первом чтении — по умолчанию
+  из схемы (выключен, 2 мин, 1 мес, 60 мин, пн–сб).
+- Ошибки: общие 401/403.
+
+### PUT /api/workers/:key/settings
+Сохранить настройки. Воркер применяет их в течение 15 секунд.
+- Auth: `can([ADMIN])`
+- Path: `key` из `WORKER_KEYS` (`ORDERS`).
+- Тело (`UpdateWorkerSettingsRequest`), все поля обязательны: `enabled`,
+  `intervalMinutes` (1–10), `periodMonths` (1, 2, 3), `supplierNotifyEnabled`,
+  `supplierNotifyDelayMinutes` (10, 30, 60), `supplierNotifyWeekdays` (ISO 1–7),
+  `devAlertsEnabled`, `devChatId` (цифры, у группы с минусом, или `null`).
+- Включили `supplierNotifyEnabled` — сервер ставит точку отсечки «сейчас»:
+  поставщикам уйдут только заказы, оформленные после неё.
+- Ответ 200: обновлённый `WorkerDto`.
+- Ошибки: 400 VALIDATION_ERROR — значение не из списка; оповещения без Telegram ID;
+  отправка поставщикам без единого дня; общие 401/403.
+- Журнал: WORKER_SETTINGS_UPDATED (before/after) и событие воркера
+  SETTINGS_CHANGED «кто: что было → что стало».
+
+---
+
 ## Warehouses
 
 Справочник складов (точек выдачи). Список — любому вошедшему (фильтр и колонки
@@ -1162,7 +1232,8 @@ router.post('/', can([ADMIN, MANAGER]), create);     // только эти ро
 | Маршруты | Кто |
 |---|---|
 | Заказы: список, окно, состав Kaspi, комментарии (чтение и запись) | все вошедшие |
-| `POST /api/orders/sync` | ADMIN, MANAGER |
+| `POST /api/orders/sync`, `POST /api/orders/cabinet/sync` | ADMIN, MANAGER |
+| `POST /api/orders/:id/cabinet/sync` (дата прибытия при открытии заказа) | все вошедшие |
 | `GET /api/orders/kaspi` (отладка) | ADMIN |
 | Каталог `GET /api/products/variants`, папки `GET /api/categories` | все вошедшие |
 | Папки: создать, переименовать, порядок, удалить; `PATCH /api/products/category` | ADMIN, MANAGER |
@@ -1171,7 +1242,7 @@ router.post('/', can([ADMIN, MANAGER]), create);     // только эти ро
 | Справочники: добавить, править | ADMIN, MANAGER |
 | Точки продаж, поставщики: создать, править | ADMIN |
 | Импорты, МойСклад, `kaspi-catalog`, `products/skus`, `products/import-kaspi`, `warehouses/import-kaspi` | ADMIN |
-| Аккаунты (`/api/users`), журнал (`/api/audit`), кабинет Kaspi (`/api/kaspi-cabinet`) | ADMIN |
+| Аккаунты (`/api/users`), журнал (`/api/audit`), кабинет Kaspi (`/api/kaspi-cabinet`), воркеры (`/api/workers`) | ADMIN |
 | `GET /api/auth/me`, `POST /api/auth/logout` | все вошедшие |
 
 ## Дерево категорий и серверный каталог (18.09.2026)

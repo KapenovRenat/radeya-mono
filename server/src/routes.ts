@@ -15,6 +15,7 @@ import { statsRouter } from './modules/stats/stats.routes';
 import { suppliersRouter } from './modules/suppliers/suppliers.routes';
 import { usersRouter } from './modules/users/users.routes';
 import { warehousesRouter } from './modules/warehouses/warehouses.routes';
+import { workersRouter } from './modules/workers/workers.routes';
 
 /**
  * Единственное место, где модули подключаются к API.
@@ -37,3 +38,4 @@ apiRouter.use('/imports', importsRouter);
 apiRouter.use('/suppliers', suppliersRouter);
 apiRouter.use('/stats', statsRouter);
 apiRouter.use('/orders', ordersRouter);
+apiRouter.use('/workers', workersRouter);

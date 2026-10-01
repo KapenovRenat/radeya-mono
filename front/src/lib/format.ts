@@ -22,6 +22,24 @@ export function formatDateTime(iso: string): string {
   return dateTimeFormatter.format(date);
 }
 
+const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
+/**
+ * `1 окт. 2026 г.` — дата без времени. Для дат, у которых время ничего
+ * не значит: Kaspi держит «Планируемую дату прибытия» как конец дня.
+ */
+export function formatDate(iso: string): string {
+  const date = new Date(iso);
+
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return dateFormatter.format(date);
+}
+
 /**
  * Цена из API в число для показа.
  *

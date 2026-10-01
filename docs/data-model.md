@@ -478,6 +478,11 @@ WB убран по решению от 16.09.2026 — вернуть его бу
   намеренно — статистика за период обязана считать все источники по одной дате,
   а `createdAtKaspi` у офлайн-заказа означал бы событие, которого не было.
   Не путать с `createdAt`: тот про нашу запись.
+- **`plannedPointDeliveryAt` — «Планируемая дата прибытия»**, только из кабинета
+  (GraphQL `getOrderDetails`). На карточке поставщику — «Дата сдачи». Меняется
+  кнопкой «Изменить» в кабинете, поэтому у активного заказа перечитывается раз
+  в час; когда спрашивали — `cabinetSyncedAt`. Синхронизация через Shop API
+  этих полей не трогает. Ответ кабинета целиком — в `rawCabinet`.
 - **Два составных индекса под статистику:** `[salesPointId, placedAt]`
   и `[sellerId, placedAt]`. Оба разреза — «точка за период» и «продавец
   за период» — читаются одним проходом по индексу, без сортировки.
@@ -653,6 +658,46 @@ Email, пароль и сессия кабинета продавца. **Зап�
 
 ---
 
+## Воркеры — WorkerSettings, WorkerState, WorkerEvent
+
+Фоновые задачи, устройство — [workers.md](workers.md). Ключ воркера — строка
+из `WORKER_KEYS` в shared (`ORDERS`).
+
+**`WorkerSettings`** — то, что меняет человек в блоке «Воркеры». Строка на воркер,
+заводится сама при первом чтении значениями по умолчанию.
+
+| Поле | Тип | Что это |
+|---|---|---|
+| `enabled` | `Boolean` = false | Работает ли |
+| `intervalMinutes` | `Int` = 2 | Пауза между циклами, 1–10 |
+| `periodMonths` | `Int` = 1 | За сколько месяцев забирать заказы, 1–3 |
+| `supplierNotifyEnabled` | `Boolean` = false | Слать поставщикам в Telegram (этап 3) |
+| `supplierNotifyDelayMinutes` | `Int` = 60 | Задержка после оформления: 10, 30, 60 |
+| `supplierNotifyWeekdays` | `Int[]` = [1..6] | Дни отправки, ISO: 1 — понедельник |
+| `supplierNotifyFrom` | `DateTime?` | Точка отсечки: ставится при включении отправки, старше — не шлём |
+| `devAlertsEnabled`, `devChatId` | `Boolean`, `String?` | Оповещения разработчику и куда |
+
+**`WorkerState`** — то, что пишет процесс. Отдельно от настроек: одной строкой
+человек и процесс затирали бы друг друга.
+
+| Поле | Что это |
+|---|---|
+| `status` | `WorkerStatus`: `STOPPED`, `IDLE`, `RUNNING`, `ERROR` |
+| `heartbeatAt` | Пульс раз в 15 с. Пусто — процесс остановлен штатно; не пусто при старте — прошлый упал |
+| `runStartedAt`, `lastRunFinishedAt`, `lastRunTookMs`, `lastSuccessAt` | Ход циклов |
+| `lastError`, `consecutiveFailures` | Последняя ошибка и сколько циклов подряд с ошибкой |
+| `nextRunAt`, `lastRunStats` | Следующий цикл и счётчики последнего |
+| `downNotified` | Наблюдатель API уже сообщил «не отвечает» — не повторять |
+
+**`WorkerEvent`** — журнал, только вставка и чтение. `type` — строка из
+`WORKER_EVENT_TYPES` (не enum: новый вид без миграции). Заказ — связью
+`orderId` (`onDelete: SetNull`) и копией: `orderCode`, `orderPlacedAt`
+(оформлен в Kaspi), `orderCreatedAt` (появился у нас). `message` — строка
+для таблицы, `details` — Json с подробностями. Индексы: `at`, `(orderId, at)`,
+`orderCode`, `(type, at)` — под фильтры страницы журнала.
+
+---
+
 ## Миграции
 
 | Миграция | Что делает |
@@ -673,6 +718,8 @@ Email, пароль и сессия кабинета продавца. **Зап�
 | `history_and_stock` | `AuditLog`: колонки `source`, `changes`, `context` и индекс `(entityType, entityId, at)`; enum `ChangeSource` + `IMPORT`; удаляет таблицу `VariantChange` (пустая, в неё никто не писал); `VariantStock`: `reserved`, `expected`, `receivedAt`, `stockAt`; `Variant.costPrice` |
 | `kaspi_cabinet_account` | Создаёт `KaspiCabinetAccount` и enum `KaspiLoginStatus` |
 | `user_role_viewer` | Добавляет в enum `UserRole` значение `VIEWER` |
+| `workers` | Создаёт `WorkerSettings`, `WorkerState`, `WorkerEvent` и enum `WorkerStatus` |
+| `order_planned_point_delivery` | Добавляет в `Order` поля `plannedPointDeliveryAt` («Планируемая дата прибытия» из кабинета) и `cabinetSyncedAt` (когда спрашивали кабинет) |
 
 Файлы миграций коммитятся в git — без них базу не поднять заново.
 

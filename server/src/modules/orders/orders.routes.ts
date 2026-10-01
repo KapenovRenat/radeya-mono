@@ -3,7 +3,8 @@ import { USER_ROLES } from '@radeya/shared';
 
 import { can } from '../../middlewares/require-auth';
 import { getKaspiOrders, getOrder, getOrderComments, getOrders, postOrderComment,
-  postSyncKaspiOrders, postSyncOrderEntries } from './orders.controller';
+  postSyncKaspiOrders, postSyncOrderCabinet, postSyncOrderEntries,
+  postSyncOrdersCabinet } from './orders.controller';
 
 const { ADMIN, MANAGER } = USER_ROLES;
 
@@ -21,8 +22,11 @@ ordersRouter.get('/', can(), getOrders);
 // Сырьё Kaspi для сверки статусов — отладка, не рабочий экран.
 ordersRouter.get('/kaspi', can([ADMIN]), getKaspiOrders);
 ordersRouter.post('/sync', can([ADMIN, MANAGER]), postSyncKaspiOrders);
+// Дата прибытия из кабинета для активных заказов — следом за синхронизацией кнопкой.
+ordersRouter.post('/cabinet/sync', can([ADMIN, MANAGER]), postSyncOrdersCabinet);
 ordersRouter.get('/:id', can(), getOrder);
-// Срабатывает сам при первом открытии заказа Kaspi — значит, у всех, кто его открывает.
+// Срабатывают сами при открытии заказа Kaspi — значит, у всех, кто его открывает.
 ordersRouter.post('/:id/entries/sync', can(), postSyncOrderEntries);
+ordersRouter.post('/:id/cabinet/sync', can(), postSyncOrderCabinet);
 ordersRouter.get('/:id/comments', can(), getOrderComments);
 ordersRouter.post('/:id/comments', can(), postOrderComment);

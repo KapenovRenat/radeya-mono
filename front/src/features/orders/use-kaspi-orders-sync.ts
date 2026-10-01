@@ -4,7 +4,13 @@ import { useCallback, useRef, useState } from "react";
 import type { KaspiOrderPeriod, SyncKaspiOrdersResponse } from "@radeya/shared";
 
 import { apiErrorMessage } from "@/shared/api/error-message";
-import { useSyncKaspiOrdersMutation } from "./orders-api";
+import { useSyncKaspiOrdersMutation, useSyncOrdersCabinetMutation } from "./orders-api";
+
+/**
+ * Предел шагов дат прибытия за один прогон: шаг — до 20 заказов, активных
+ * обычно десятки. Предел — страховка от бесконечного цикла, а не норма.
+ */
+const MAX_CABINET_STEPS = 20;
 
 /** Итог всего прогона: шаги складываются, потому что сервер считает только свой. */
 export interface SyncTotals {
@@ -40,6 +46,9 @@ export function useKaspiOrdersSync() {
   const cancelled = useRef(false);
   const running = useRef(false);
   const [syncOrders] = useSyncKaspiOrdersMutation();
+  const [syncCabinet] = useSyncOrdersCabinetMutation();
+  /** Даты прибытия из кабинета: скольких заказов спросили и у скольких поменялась. */
+  const [cabinet, setCabinet] = useState({ checked: 0, changed: 0 });
 
   const merge = (previous: SyncTotals, step: SyncKaspiOrdersResponse): SyncTotals => ({
     created: previous.created + step.created,
@@ -62,6 +71,7 @@ export function useKaspiOrdersSync() {
     cancelled.current = false;
     setPeriod(next);
     setTotals(EMPTY);
+    setCabinet({ checked: 0, changed: 0 });
     setError(null);
     setIsRunning(true);
 
@@ -85,11 +95,34 @@ export function useKaspiOrdersSync() {
       }
     } catch (requestError) {
       setError(apiErrorMessage(requestError, "Не удалось синхронизировать заказы"));
+      // Заказы не дошли — даты прибытия догонять не к чему.
+      cancelled.current = true;
+    }
+
+    // Следом — «Планируемая дата прибытия» из кабинета для активных заказов.
+    // Отдельным шагом: заказы из Shop API уже записаны, и сбой кабинета
+    // не должен выглядеть как сбой синхронизации.
+    try {
+      for (let step = 0; step < MAX_CABINET_STEPS && !cancelled.current; step += 1) {
+        const result = await syncCabinet().unwrap();
+
+        setCabinet((previous) => ({
+          checked: previous.checked + result.processed,
+          changed: previous.changed + result.changed,
+        }));
+
+        // Пусто или шаг ничего не взял — дальше крутить бессмысленно.
+        if (result.remaining === 0 || result.processed === 0) break;
+      }
+    } catch (requestError) {
+      setError(apiErrorMessage(
+        requestError, "Заказы синхронизированы, но даты прибытия из кабинета Kaspi не обновились",
+      ));
     } finally {
       running.current = false;
       setIsRunning(false);
     }
-  }, [syncOrders]);
+  }, [syncOrders, syncCabinet]);
 
   const cancel = useCallback(() => {
     cancelled.current = true;
@@ -99,5 +132,5 @@ export function useKaspiOrdersSync() {
     ? 0
     : Math.round((totals.chunksDone / totals.chunksTotal) * 100);
 
-  return { start, cancel, isRunning, period, totals, progress, error };
+  return { start, cancel, isRunning, period, totals, cabinet, progress, error };
 }

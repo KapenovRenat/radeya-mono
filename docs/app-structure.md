@@ -263,6 +263,13 @@ Kaspi — по ним видно, что площадка завела новы�
 
 ### Окно заказа
 
+> **Планируемая дата прибытия** (01.10.2026) — строка в блоке «Заказ» у заказов
+> площадки, датой без времени. Если сервер говорит `cabinetRefreshDue`, окно
+> один раз просит кабинет (`POST /api/orders/:id/cabinet/sync`, хук
+> `useOrderDetails`); пока ждёт — «обновляю из кабинета…», кабинет не ответил —
+> старая дата и причина мелким. Кнопка синхронизации после заказов догоняет
+> даты активных заказов шагами (`useKaspiOrdersSync` → `cabinet`).
+
 Клик по строке открывает `OrderDetailsModal` (общий `Modal`, шире обычного —
 64rem). С клавиатуры — номер заказа: он кнопка, у строки таблицы роли кнопки нет.
 Только просмотр и комментарии; правка полей — отдельная задача.
@@ -741,6 +748,32 @@ Email и пароль от кабинета продавца и кнопка «�
   `POST /api/kaspi-cabinet/check`.
 - Компонент: `KaspiCabinetBlock` — `front/src/app/dashboard/(main)/settings/_components/kaspi-cabinet-block.tsx`.
 - Хук: `useKaspiCabinetSettings()` — `front/src/features/kaspi-cabinet/use-kaspi-cabinet-settings.ts`.
+
+### Блок «Воркеры»
+
+Карточка на каждый воркер ([workers.md](workers.md)): состояние сверху,
+под ним настройки — «Работает», интервал (1–10 мин), период заказов (1–3 мес),
+отправка поставщикам (галочка, задержка 10/30/60 мин, дни недели), оповещения
+разработчику (галочка, Telegram ID). «Сохранить» и «Отменить» активны, только
+если что-то поменяли: изменения живут в черновике формы, воркер работает
+по сохранённому. Состояние опрашивается раз в 15 секунд и черновик не затирает.
+
+Если воркер включён, а процесс не отвечает, это пишется красным: «не запущен
+(`npm run worker`) или упал».
+
+- Данные: `GET /api/workers`, `PUT /api/workers/:key/settings`.
+- Компонент: `WorkersBlock` — `.../settings/_components/workers-block.tsx`.
+- Хук: `useWorkerSettingsForm(worker)` — `front/src/features/workers/use-worker-settings-form.ts`.
+
+### Блок «Поставщики в Telegram»
+
+Выпадашка поставщиков с поиском; у кого нет Telegram, помечено. Выбор открывает
+окно: адрес, телефон, источник и поле Telegram ID → «Сохранить». Пустое поле
+снимает Telegram — уведомления поставщику перестанут уходить.
+
+- Данные: `GET /api/suppliers`, `PATCH /api/suppliers/:id`.
+- Компонент: `SupplierTelegramBlock` — `.../settings/_components/supplier-telegram-block.tsx`.
+- Хук: `useSupplierTelegramForm(suppliers)` — `front/src/features/suppliers/use-supplier-telegram-form.ts`.
 
 ---
 

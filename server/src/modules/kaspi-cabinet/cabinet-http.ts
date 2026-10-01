@@ -40,18 +40,54 @@ export const CABINET_UNAUTHORIZED_CODE = 'KASPI_UNAUTHORIZED';
  * «не пустил» (KASPI_UNAUTHORIZED), а не данные. Возвращает JSON как есть.
  */
 export async function cabinetGetJson(url: string, cookie: string): Promise<unknown> {
+  return cabinetRequestJson(url, cookie, {
+    method: 'GET',
+    headers: { accept: 'application/json, text/plain, */*', referer: `${CABINET_ORIGIN}/` },
+  });
+}
+
+/**
+ * POST к данным кабинета — для GraphQL (`/mc/facade/graphql`). Правила те же,
+ * что у cabinetGetJson: не пустил — KASPI_UNAUTHORIZED, и withCabinetSession
+ * войдёт заново.
+ *
+ * Страница кабинета живёт на `kaspi.kz/mc`, поэтому Origin и Referer — оттуда:
+ * так запрос выглядит ровно как из браузера.
+ */
+export async function cabinetPostJson(url: string, cookie: string, body: unknown): Promise<unknown> {
+  return cabinetRequestJson(url, cookie, {
+    method: 'POST',
+    headers: {
+      accept: '*/*',
+      'content-type': 'application/json',
+      origin: KASPI_SITE_ORIGIN,
+      referer: `${KASPI_SITE_ORIGIN}/mc/`,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+/** Сайт, с которого кабинет шлёт свои запросы. */
+const KASPI_SITE_ORIGIN = 'https://kaspi.kz';
+
+async function cabinetRequestJson(
+  url: string,
+  cookie: string,
+  init: { method: 'GET' | 'POST'; headers: Record<string, string>; body?: string },
+): Promise<unknown> {
   let response: Response;
 
   try {
     response = await fetch(url, {
+      method: init.method,
       headers: {
+        ...init.headers,
         // Кука уходит заголовком, а не в адресе: адреса оседают в логах и в Referer.
         cookie,
-        accept: 'application/json, text/plain, */*',
         'accept-language': 'ru-RU,ru;q=0.9',
         'user-agent': CABINET_USER_AGENT,
-        referer: `${CABINET_ORIGIN}/`,
       },
+      body: init.body,
       redirect: 'manual',
       signal: AbortSignal.timeout(CABINET_REQUEST_TIMEOUT_MS),
     });

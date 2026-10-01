@@ -4,6 +4,7 @@ import {
   KASPI_ORDER_PERIOD_DAYS,
   type KaspiOrderDraft,
   type OrderListResponse,
+  type OrderStatus,
   type SyncKaspiOrdersResponse,
 } from '@radeya/shared';
 
@@ -33,6 +34,39 @@ interface Parsed {
 }
 
 /**
+ * Что изменилось при записи: новый заказ или смена нашей стадии.
+ * Из этого воркер пишет журнал. Сравнение — со строкой в базе до записи.
+ */
+export interface OrderChange {
+  kind: 'created' | 'status';
+  orderId: string;
+  code: string;
+  placedAt: Date;
+  /** Когда заказ появился у нас. */
+  createdAt: Date;
+  fromStatus: OrderStatus | null;
+  toStatus: OrderStatus;
+  totalPrice: string | null;
+}
+
+/** Границы и ход синхронизации — общее для кнопок и воркера. */
+interface SyncRange {
+  periodFrom: number;
+  periodTo: number;
+  cursor: number;
+  maxChunks: number;
+  /** Воркер прерывает долгий цикл: проверяется между страницами и отрезками. */
+  signal?: AbortSignal;
+  /**
+   * Изменения после записи каждого отрезка — сразу, а не в конце: оборвётся
+   * цикл на середине, и записанное уже не будет «изменением» в следующем.
+   */
+  onChanges?: (changes: OrderChange[]) => Promise<void>;
+}
+
+type SyncStats = Omit<SyncKaspiOrdersResponse, 'period' | 'from' | 'to'>;
+
+/**
  * Шаг синхронизации заказов Kaspi.
  *
  * Период идёт **от свежих к старым** трёхдневными отрезками: Kaspi отдаёт около
@@ -48,6 +82,45 @@ interface Parsed {
  * Повторный прогон безопасен: заказы пишутся по номеру, существующие обновляются.
  */
 export async function syncKaspiOrders(input: SyncOrdersInput): Promise<SyncKaspiOrdersResponse> {
+  const periodTo = input.to ? Date.parse(input.to) : Date.now();
+  const cursor = input.cursor ? Date.parse(input.cursor) : periodTo;
+
+  if (Number.isNaN(periodTo) || Number.isNaN(cursor)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Границы периода не похожи на даты');
+  }
+
+  const periodFrom = periodTo - KASPI_ORDER_PERIOD_DAYS[input.period] * DAY_MS;
+
+  // Изменения кнопкам не нужны — их пишет в журнал только воркер.
+  const { stats } = await runKaspiOrdersSync({
+    periodFrom, periodTo, cursor, maxChunks: input.maxChunks,
+  });
+
+  return {
+    period: input.period,
+    from: new Date(periodFrom).toISOString(),
+    to: new Date(periodTo).toISOString(),
+    ...stats,
+  };
+}
+
+/**
+ * Весь период за один вызов — для воркера. Отрезки те же, что у кнопок,
+ * только без курсора: воркер не ждёт браузер между шагами.
+ */
+export async function syncKaspiOrdersPeriod(
+  periodFrom: number,
+  periodTo: number,
+  options: Pick<SyncRange, 'signal' | 'onChanges'>,
+): Promise<SyncStats> {
+  const { stats } = await runKaspiOrdersSync({
+    periodFrom, periodTo, cursor: periodTo, maxChunks: Number.MAX_SAFE_INTEGER, ...options,
+  });
+
+  return stats;
+}
+
+async function runKaspiOrdersSync(range: SyncRange): Promise<{ stats: SyncStats }> {
   const token = env.KASPI_API_TOKEN;
 
   if (!token) {
@@ -60,15 +133,7 @@ export async function syncKaspiOrders(input: SyncOrdersInput): Promise<SyncKaspi
 
   const startedAt = Date.now();
   const chunkWidth = KASPI_ORDER_CHUNK_DAYS * DAY_MS;
-
-  const periodTo = input.to ? Date.parse(input.to) : startedAt;
-  const cursor = input.cursor ? Date.parse(input.cursor) : periodTo;
-
-  if (Number.isNaN(periodTo) || Number.isNaN(cursor)) {
-    throw new AppError(400, 'VALIDATION_ERROR', 'Границы периода не похожи на даты');
-  }
-
-  const periodFrom = periodTo - KASPI_ORDER_PERIOD_DAYS[input.period] * DAY_MS;
+  const { periodFrom, periodTo, cursor, signal } = range;
   const chunksTotal = Math.max(1, Math.ceil((periodTo - periodFrom) / chunkWidth));
 
   const warehouses = await loadWarehouses();
@@ -85,7 +150,7 @@ export async function syncKaspiOrders(input: SyncOrdersInput): Promise<SyncKaspi
   let skipped = 0;
   let withProblems = 0;
 
-  while (end > periodFrom && chunksHandled < input.maxChunks) {
+  while (end > periodFrom && chunksHandled < range.maxChunks) {
     // Границы не пересекаются: конец отрезка на миллисекунду меньше начала
     // следующего, иначе заказ ровно на стыке приедет дважды.
     const start = Math.max(periodFrom, end - chunkWidth + 1);
@@ -94,6 +159,8 @@ export async function syncKaspiOrders(input: SyncOrdersInput): Promise<SyncKaspi
     let page = 0;
 
     for (;;) {
+      signal?.throwIfAborted();
+
       const result = await fetchKaspiOrders({
         token, from: start, to: end, page, pageSize: KASPI_ORDER_PAGE_SIZE,
       });
@@ -137,6 +204,8 @@ export async function syncKaspiOrders(input: SyncOrdersInput): Promise<SyncKaspi
     updated += saved.updated;
     skipped += saved.foreign;
 
+    if (range.onChanges && saved.changes.length > 0) await range.onChanges(saved.changes);
+
     end = start - 1;
     chunksHandled += 1;
 
@@ -145,10 +214,7 @@ export async function syncKaspiOrders(input: SyncOrdersInput): Promise<SyncKaspi
 
   const done = end <= periodFrom;
 
-  return {
-    period: input.period,
-    from: new Date(periodFrom).toISOString(),
-    to: new Date(periodTo).toISOString(),
+  const stats: SyncStats = {
     done,
     nextCursor: done ? null : new Date(end).toISOString(),
     chunksTotal,
@@ -163,6 +229,8 @@ export async function syncKaspiOrders(input: SyncOrdersInput): Promise<SyncKaspi
     unknownWarehouses: [...unknownWarehouses].sort(),
     tookMs: Date.now() - startedAt,
   };
+
+  return { stats };
 }
 
 /**
@@ -259,22 +327,25 @@ async function saveOrders(
   warehouses: Map<string, string>,
   unknownWarehouses: Set<string>,
   kaspiSalesPointId: string,
-): Promise<{ created: number; updated: number; foreign: number }> {
+): Promise<{ created: number; updated: number; foreign: number; changes: OrderChange[] }> {
   let created = 0;
   let updated = 0;
   let foreign = 0;
+  const changes: OrderChange[] = [];
 
   for (let from = 0; from < parsed.length; from += WRITE_BATCH) {
     const batch = parsed.slice(from, from + WRITE_BATCH);
 
     // Узнаём заранее, что уже лежит в базе: upsert сам этого не скажет,
     // а «создано» и «обновлено» — разные новости для человека. Заодно видим
-    // точку продаж — по ней отсеиваются чужие заказы.
+    // точку продаж — по ней отсеиваются чужие заказы, и стадию — по ней
+    // видно, что заказ сменил статус.
     const existing = await prisma.order.findMany({
       where: { code: { in: batch.map((item) => item.draft.code) } },
-      select: { code: true, salesPointId: true },
+      select: { code: true, salesPointId: true, status: true },
     });
     const known = new Map(existing.map((row) => [row.code, row.salesPointId]));
+    const statusBefore = new Map(existing.map((row) => [row.code, row.status]));
 
     // Заказ с тем же номером, но не от Kaspi, синхронизация не трогает.
     // Номера офлайн-заказов начинаются с букв и с цифровыми номерами площадки
@@ -292,7 +363,7 @@ async function saveOrders(
       return true;
     });
 
-    await prisma.$transaction(writable.map((item) => {
+    const rows = await prisma.$transaction(writable.map((item) => {
       const warehouseId = readWarehouseId(item.draft, warehouses, unknownWarehouses);
       const fields = toShopApiFields(item.draft, warehouseId, item.raw);
 
@@ -304,16 +375,34 @@ async function saveOrders(
         // их заполняет отдельный проход. Точки продаж и продавца здесь тоже
         // нет: у заказа площадки они не меняются.
         update: fields,
+        select: { id: true, code: true, status: true, placedAt: true, createdAt: true,
+          totalPrice: true },
       });
     }));
 
-    for (const item of writable) {
-      if (known.has(item.draft.code)) updated += 1;
-      else created += 1;
+    for (const row of rows) {
+      const isNew = !known.has(row.code);
+      const before = statusBefore.get(row.code) ?? null;
+
+      if (isNew) created += 1;
+      else updated += 1;
+
+      if (isNew || before !== row.status) {
+        changes.push({
+          kind: isNew ? 'created' : 'status',
+          orderId: row.id,
+          code: row.code,
+          placedAt: row.placedAt,
+          createdAt: row.createdAt,
+          fromStatus: isNew ? null : before,
+          toStatus: row.status,
+          totalPrice: row.totalPrice?.toFixed(2) ?? null,
+        });
+      }
     }
   }
 
-  return { created, updated, foreign };
+  return { created, updated, foreign, changes };
 }
 
 function readWarehouseId(

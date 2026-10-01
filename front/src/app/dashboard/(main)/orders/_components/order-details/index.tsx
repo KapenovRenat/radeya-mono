@@ -49,7 +49,11 @@ export function OrderDetailsModal({ orderId, onClose }: {
 
       {order !== null && orderId !== null && (
         <div className={styles.layout}>
-          <SummarySection order={order} />
+          <SummarySection
+            order={order}
+            isLoadingCabinet={details.isLoadingCabinet}
+            cabinetError={details.cabinetError}
+          />
           <CustomerSection order={order} />
           <MoneySection order={order} />
           <EntriesSection

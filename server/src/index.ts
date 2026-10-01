@@ -2,12 +2,17 @@ import { createApp } from './app';
 import { env } from './config/env';
 import { logger } from './lib/logger';
 import { disconnectDatabase } from './db/client';
+import { startWorkerMonitor } from './modules/workers/worker-monitor';
 
 const app = createApp();
 
 const server = app.listen(env.PORT, () => {
   logger.info(`API запущен: http://localhost:${env.PORT}/api/health (${env.NODE_ENV})`);
 });
+
+// Пульс воркеров смотрит API: мёртвый процесс воркера сам о себе не скажет.
+// Там, где воркеры не запускаются, следить не за чем.
+if (env.WORKERS_ENABLED) startWorkerMonitor();
 
 /**
  * Корректное завершение: перестаём принимать новые запросы,

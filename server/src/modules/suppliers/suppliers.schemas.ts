@@ -5,6 +5,7 @@ import {
   SUPPLIER_NAME_MAX_LENGTH,
   SUPPLIER_PHONE_MAX_LENGTH,
   SUPPLIER_TELEGRAM_ID_MAX_LENGTH,
+  TELEGRAM_CHAT_ID_PATTERN,
 } from '@radeya/shared';
 
 /**
@@ -62,7 +63,11 @@ export const updateSupplierSchema = z.object({
   name: z.string().trim().min(1).max(SUPPLIER_NAME_MAX_LENGTH).optional(),
   address: nullableText(SUPPLIER_ADDRESS_MAX_LENGTH).optional(),
   phone: nullableText(SUPPLIER_PHONE_MAX_LENGTH).optional(),
-  telegramId: nullableText(SUPPLIER_TELEGRAM_ID_MAX_LENGTH).optional(),
+  // Числом, как его выдаёт Telegram: личка — положительное, группа — с минусом.
+  // Ник вида @name бот не примет как адрес — лучше отказать сразу, чем молча не отправить.
+  telegramId: z.string().trim().max(SUPPLIER_TELEGRAM_ID_MAX_LENGTH)
+    .regex(TELEGRAM_CHAT_ID_PATTERN, 'Telegram ID — только цифры, у группы с минусом')
+    .nullable().optional(),
   isActive: z.boolean().optional(),
 }).strict()
   .refine((body) => Object.keys(body).length > 0, 'Не указано, что менять');

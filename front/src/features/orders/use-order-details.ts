@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import { apiErrorMessage } from "@/shared/api/error-message";
-import { useGetOrderQuery, useSyncOrderEntriesMutation } from "./orders-api";
+import { useGetOrderQuery, useSyncOrderCabinetMutation, useSyncOrderEntriesMutation } from "./orders-api";
 
 /**
  * Данные окна заказа.
@@ -45,6 +45,25 @@ export function useOrderDetails(orderId: string | null) {
     if (orderId !== null) void syncEntries(orderId);
   }, [orderId, syncEntries]);
 
+  // Дата прибытия из кабинета — так же, один раз на заказ: сервер сам говорит,
+  // пора ли перечитать (активный заказ, дату не спрашивали больше часа).
+  const [syncCabinet, cabinet] = useSyncOrderCabinetMutation();
+  const cabinetRequested = useRef<string | null>(null);
+  const { reset: resetCabinet } = cabinet;
+
+  useEffect(() => {
+    resetCabinet();
+  }, [orderId, resetCabinet]);
+
+  const needsCabinet = data !== undefined && data.cabinetRefreshDue;
+
+  useEffect(() => {
+    if (orderId === null || !needsCabinet || cabinetRequested.current === orderId) return;
+
+    cabinetRequested.current = orderId;
+    void syncCabinet(orderId);
+  }, [orderId, needsCabinet, syncCabinet]);
+
   return {
     order: data ?? null,
     isLoading: order.isLoading || order.isFetching,
@@ -56,5 +75,10 @@ export function useOrderDetails(orderId: string | null) {
       ? apiErrorMessage(sync.error, "Не удалось загрузить состав заказа из Kaspi")
       : null,
     retryEntries,
+    /** Дата прибытия сейчас запрашивается в кабинете Kaspi. */
+    isLoadingCabinet: cabinet.isLoading,
+    cabinetError: cabinet.isError
+      ? apiErrorMessage(cabinet.error, "Кабинет Kaspi не ответил")
+      : null,
   };
 }

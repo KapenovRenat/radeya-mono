@@ -1,7 +1,7 @@
 import type { CreateOrderCommentRequest, KaspiOrdersPreview, OrderCommentDto,
   OrderCommentsResponse, OrderDetailsDto, OrderListQuery, OrderListResponse,
   SyncKaspiOrdersRequest, SyncKaspiOrdersResponse,
-  SyncOrderEntriesResponse } from "@radeya/shared";
+  SyncOrderEntriesResponse, SyncOrdersCabinetResponse } from "@radeya/shared";
 
 import { baseApi } from "@/shared/api/base-api";
 
@@ -52,6 +52,27 @@ export const ordersApi = baseApi.injectEndpoints({
       invalidatesTags: (result) => (result && result.created > 0 ? ["Order"] : []),
     }),
 
+    /**
+     * «Планируемая дата прибытия» из кабинета для одного заказа — окно заказа
+     * просит сама, когда сервер говорит `cabinetRefreshDue`. Ответ — заказ целиком,
+     * сразу в кэш окна.
+     */
+    syncOrderCabinet: build.mutation<OrderDetailsDto, string>({
+      query: (orderId) => ({ url: `/orders/${orderId}/cabinet/sync`, method: "POST" }),
+      async onQueryStarted(orderId, { dispatch, queryFulfilled }): Promise<void> {
+        const { data } = await queryFulfilled.catch(() => ({ data: null }));
+
+        if (data) dispatch(ordersApi.util.upsertQueryData("getOrder", orderId, data));
+      },
+    }),
+
+    /** Шаг дат прибытия для активных заказов — следом за синхронизацией кнопкой. */
+    syncOrdersCabinet: build.mutation<SyncOrdersCabinetResponse, void>({
+      query: () => ({ url: "/orders/cabinet/sync", method: "POST" }),
+      // Открытое окно заказа должно увидеть новую дату.
+      invalidatesTags: (result) => (result && result.changed > 0 ? ["Order"] : []),
+    }),
+
     getKaspiOrders: build.query<KaspiOrdersPreview, KaspiOrdersQuery | void>({
       query: (params) => ({ url: "/orders/kaspi", params: params ?? {} }),
     }),
@@ -99,4 +120,5 @@ export const ordersApi = baseApi.injectEndpoints({
 
 export const { useGetOrdersQuery, useGetKaspiOrdersQuery, useLazyGetKaspiOrdersQuery,
   useSyncKaspiOrdersMutation, useGetOrderCommentsQuery,
-  useAddOrderCommentMutation, useGetOrderQuery, useSyncOrderEntriesMutation } = ordersApi;
+  useAddOrderCommentMutation, useGetOrderQuery, useSyncOrderEntriesMutation,
+  useSyncOrderCabinetMutation, useSyncOrdersCabinetMutation } = ordersApi;

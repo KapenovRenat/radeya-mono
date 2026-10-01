@@ -319,6 +319,18 @@ export interface OrderDetailsDto extends OrderRowDto {
   courierTransmissionPlannedAt: string | null;
   courierTransmissionAt: string | null;
 
+  /**
+   * «Планируемая дата прибытия» из кабинета Kaspi — когда заказ должен быть
+   * в пункте приёма. На карточке поставщику — «Дата сдачи». Kaspi держит её
+   * как конец дня, показывать — датой без времени.
+   */
+  plannedPointDeliveryAt: string | null;
+  /**
+   * Пора перечитать кабинет: активный заказ Kaspi, дату не спрашивали
+   * или спрашивали больше часа назад. Окно само попросит обновить.
+   */
+  cabinetRefreshDue: boolean;
+
   deliveryCost: string | null;
   paymentMode: string | null;
   creditTerm: number | null;
@@ -347,6 +359,16 @@ export interface OrderDetailsDto extends OrderRowDto {
    * состав приходит из файла, и тянуть его неоткуда.
    */
   canLoadEntries: boolean;
+}
+
+/** Шаг дотягивания полей кабинета для активных заказов (кнопка синхронизации). */
+export interface SyncOrdersCabinetResponse {
+  /** Скольких заказов спросили кабинет этим шагом. */
+  processed: number;
+  /** У скольких дата прибытия поменялась (или появилась). */
+  changed: number;
+  /** Сколько ещё ждут — повторять шаг, пока не ноль. */
+  remaining: number;
 }
 
 /** Ответ загрузки состава с площадки. */

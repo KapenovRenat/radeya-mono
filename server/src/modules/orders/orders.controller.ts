@@ -1,14 +1,16 @@
 import type { RequestHandler } from 'express';
 import { AUDIT_ACTIONS, type KaspiOrderDraft, type KaspiOrdersPreview,
-  type ValueCounts } from '@radeya/shared';
+  type SyncOrdersCabinetResponse, type ValueCounts } from '@radeya/shared';
 
 import { env } from '../../config/env';
+import { LOCKS, withAdvisoryLock } from '../../lib/advisory-lock';
 import { clientIp, logAction } from '../../lib/audit';
-import { AppError, ValidationError } from '../../lib/errors';
+import { AppError, ConflictError, ValidationError } from '../../lib/errors';
 import { isKnownState, isKnownStatus } from './kaspi-order-status';
 import { fetchKaspiOrders } from './kaspi-orders.client';
 import { toOrderDraft } from './kaspi-orders.mapper';
 import { addOrderComment, listOrderComments } from './order-comments.service';
+import { refreshDueOrdersCabinet, refreshOrderCabinet } from './order-cabinet.service';
 import { createOrderCommentSchema, kaspiOrdersQuerySchema, orderListSchema,
   orderParamsSchema, syncOrdersSchema } from './orders.schemas';
 import { getOrderDetails, syncOrderEntries } from './order-details.service';
@@ -48,6 +50,39 @@ export const postSyncOrderEntries: RequestHandler = async (req, res) => {
   res.json(await syncOrderEntries(params.data.id));
 };
 
+/**
+ * Поля кабинета для одного заказа — окно заказа, когда пора перечитать дату.
+ * POST по той же причине, что загрузка состава: ходит во внешний сервис и пишет в базу.
+ */
+export const postSyncOrderCabinet: RequestHandler = async (req, res) => {
+  const params = orderParamsSchema.safeParse(req.params);
+
+  if (!params.success) throw new ValidationError('Некорректный заказ');
+
+  await refreshOrderCabinet(params.data.id);
+
+  res.json(await getOrderDetails(params.data.id));
+};
+
+/**
+ * Шаг дотягивания полей кабинета для активных заказов — после синхронизации
+ * кнопкой. Под той же блокировкой: воркер делает то же самое в своём цикле.
+ */
+export const postSyncOrdersCabinet: RequestHandler = async (_req, res) => {
+  const outcome = await withAdvisoryLock(
+    LOCKS.KASPI_ORDERS_SYNC, () => refreshDueOrdersCabinet({}), SYNC_STEP_HOLD_MS,
+  );
+
+  if (!outcome.acquired) {
+    throw new ConflictError('Сейчас заказы синхронизирует воркер — повторите через минуту');
+  }
+
+  const { processed, changed, remaining } = outcome.value;
+  const body: SyncOrdersCabinetResponse = { processed, changed, remaining };
+
+  res.json(body);
+};
+
 /** Лента комментариев заказа, старые сверху. */
 export const getOrderComments: RequestHandler = async (req, res) => {
   const params = orderParamsSchema.safeParse(req.params);
@@ -76,6 +111,9 @@ export const postOrderComment: RequestHandler = async (req, res) => {
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Сколько держать блокировку на шаг кнопки: шаг — несколько отрезков, минуты с запасом. */
+const SYNC_STEP_HOLD_MS = 5 * 60_000;
 
 /**
  * Одна страница заказов Kaspi, разобранная в нашу модель. **В базу не пишет** —
@@ -147,7 +185,17 @@ export const postSyncKaspiOrders: RequestHandler = async (req, res) => {
 
   if (!parsed.success) throw new ValidationError('Проверьте период, курсор и maxChunks');
 
-  const result = await syncKaspiOrders(parsed.data);
+  // Та же блокировка, что у воркера: два прохода разом писали бы одни заказы
+  // и вдвое нагружали Kaspi. Занято — сразу ответ, без ожидания.
+  const outcome = await withAdvisoryLock(
+    LOCKS.KASPI_ORDERS_SYNC, () => syncKaspiOrders(parsed.data), SYNC_STEP_HOLD_MS,
+  );
+
+  if (!outcome.acquired) {
+    throw new ConflictError('Сейчас заказы синхронизирует воркер — повторите через минуту');
+  }
+
+  const result = outcome.value;
   const author = req.user!;
 
   // В журнал — только счётчики: сами заказы это персональные данные покупателей,

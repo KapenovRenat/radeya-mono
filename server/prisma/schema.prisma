@@ -842,6 +842,16 @@ model Order {
   plannedDeliveryAt DateTime?
   actualDeliveryAt  DateTime?
 
+  /// «Планируемая дата прибытия» — когда заказ должен быть в пункте приёма.
+  /// На карточке поставщику это «Дата сдачи». Только кабинет
+  /// (`delivery.plannedPointDeliveryDate` в GraphQL `getOrderDetails`), в Shop API
+  /// её нет. Меняется кнопкой «Изменить» в кабинете — поэтому перечитывается.
+  plannedPointDeliveryAt DateTime?
+
+  /// Когда последний раз спрашивали кабинет об этом заказе. Пусто — не спрашивали.
+  /// По нему решается, пора ли перечитать: активный заказ — раз в час.
+  cabinetSyncedAt DateTime?
+
   /// Возврат на склад: когда вернулся и до какого срока лежит. Только кабинет.
   returnedToWarehouseAt        DateTime?
   returnedToWarehouseTimeoutAt DateTime?
@@ -993,6 +1003,9 @@ model Order {
   markers  OrderMarker[]
   steps    OrderStep[]
   comments OrderComment[]
+
+  /// Журнал воркера по этому заказу.
+  workerEvents WorkerEvent[]
 
   @@index([status])
   @@index([placedAt])
@@ -1162,6 +1175,103 @@ model Supplier {
 enum Currency {
   KZT
   RUB
+}
+
+/// Состояние воркера. Значения обязаны совпадать с WORKER_STATUSES
+/// в shared/src/constants/workers.ts.
+enum WorkerStatus {
+  STOPPED
+  IDLE
+  RUNNING
+  ERROR
+}
+
+/// Настройки воркера — блок «Воркеры» на странице настроек. Строка на воркер,
+/// ключ из WORKER_KEYS. Воркер читает их из базы перед каждым циклом,
+/// поэтому сохранённое применяется без перезапуска процесса.
+/// Подробности — docs/workers.md.
+model WorkerSettings {
+  key String @id
+
+  enabled         Boolean @default(false)
+  intervalMinutes Int     @default(2)
+  periodMonths    Int     @default(1)
+
+  supplierNotifyEnabled      Boolean @default(false)
+  supplierNotifyDelayMinutes Int     @default(60)
+  /// Дни недели по ISO: 1 — понедельник, 7 — воскресенье.
+  supplierNotifyWeekdays     Int[]   @default([1, 2, 3, 4, 5, 6])
+  /// Точка отсечки: поставщикам уходят только заказы, оформленные после неё.
+  /// Ставится, когда отправку включают, — иначе первый цикл высыпал бы
+  /// поставщикам весь период.
+  supplierNotifyFrom         DateTime?
+
+  devAlertsEnabled Boolean @default(false)
+  devChatId        String?
+
+  updatedAt DateTime @updatedAt
+}
+
+/// Состояние воркера — пишет сам воркер (и наблюдатель в API: `downNotified`).
+/// Отдельно от настроек: настройки меняет человек, состояние — процесс,
+/// и одной строкой они затирали бы друг друга.
+model WorkerState {
+  key String @id
+
+  status WorkerStatus @default(STOPPED)
+
+  /// Пульс процесса раз в 15 секунд. Пусто — процесс остановился штатно.
+  /// Не пусто при старте — прошлый процесс упал.
+  heartbeatAt DateTime?
+
+  runStartedAt        DateTime?
+  lastRunFinishedAt   DateTime?
+  lastRunTookMs       Int?
+  lastSuccessAt       DateTime?
+  lastError           String?
+  consecutiveFailures Int       @default(0)
+  nextRunAt           DateTime?
+  lastRunStats        Json?
+
+  /// Наблюдатель в API уже сообщил «воркер не отвечает» — не повторять
+  /// каждую минуту, пока пульс не вернётся.
+  downNotified Boolean @default(false)
+
+  updatedAt DateTime @updatedAt
+}
+
+/// Журнал воркера: что произошло с заказами и с самим воркером.
+/// Только вставка и чтение. «Цикл прошёл, ничего нового» сюда не пишется.
+///
+/// Номер заказа и даты — копией: журнал должен остаться как был,
+/// даже если заказ потом изменится.
+model WorkerEvent {
+  id String @id @default(uuid()) @db.Uuid
+
+  at        DateTime @default(now())
+  workerKey String
+
+  /// Значение из WORKER_EVENT_TYPES в shared. Строка, а не enum: новый вид
+  /// события не должен требовать миграции.
+  type String
+
+  orderId        String?   @db.Uuid
+  order          Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderCode      String?
+  /// Когда заказ оформлен в Kaspi.
+  orderPlacedAt  DateTime?
+  /// Когда заказ появился у нас.
+  orderCreatedAt DateTime?
+
+  /// Понятная строка для таблицы: «Статус: Упаковка → Отменён».
+  message String
+  /// Подробности: было/стало, счётчики, текст ошибки.
+  details Json?
+
+  @@index([at])
+  @@index([orderId, at])
+  @@index([orderCode])
+  @@index([type, at])
 }
 
 /// Итог последней попытки входа в кабинет Kaspi. Значения обязаны совпадать

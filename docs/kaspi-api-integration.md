@@ -549,11 +549,46 @@ POST https://idmc.shop.kaspi.kz/api/p/login
 реже упирается в код на почту. Сохранение новых данных банку стирает.
 
 **Потребители:** обход каталога (`fetchCabinetCatalog` с `useSession: true`,
-кнопка «Загрузить все товары» на `/dashboard/kaspi-sync`, когда вход работает).
-Ручная кука осталась запасным путём. Следом — поля заказа из GraphQL.
+кнопка «Загрузить все товары» на `/dashboard/kaspi-sync`, когда вход работает);
+«Планируемая дата прибытия» заказов (GraphQL `getOrderDetails`, ниже).
+Ручная кука осталась запасным путём для каталога.
 
 Проверка из интерфейса — `/dashboard/settings`, ответы Kaspi по шагам печатаются
 в консоль браузера.
+
+### Заказ из кабинета — GraphQL `getOrderDetails` (01.10.2026)
+
+Снят пользователем из DevTools на странице заказа кабинета.
+
+```
+POST https://mc.shop.kaspi.kz/mc/facade/graphql?opName=getOrderDetails
+Content-Type: application/json
+Origin: https://kaspi.kz
+Accept: */*
+Cookie: <сессия кабинета>
+
+{ "operationName": "getOrderDetails",
+  "variables": { "merchantUid": "6871008", "orderCode": "1083643687", "skipCustomerPhone": true },
+  "query": "query getOrderDetails(...) { merchant(id: $merchantUid) { orderDetail(code: $orderCode) { ... } } }" }
+```
+
+- Текст запроса храним **слово в слово** как у кабинета
+  (`server/src/modules/kaspi-cabinet/cabinet-orders.client.ts`): внутренний API
+  может принимать только знакомые запросы. Kaspi поменяет — снять заново
+  (DevTools → Payload → view source).
+- `skipCustomerPhone: true` — штатный переключатель запроса: телефоны у нас уже есть.
+- Ответ: `data.merchant.orderDetail`, нужное — `delivery.plannedPointDeliveryDate`
+  («Планируемая дата прибытия», ISO в UTC, по сути конец дня по Астане).
+  Рядом `transmissionPlanningDate`, `plannedDeliveryDate`, `actualDeliveryDate`,
+  `isOrderArrived`, шаги и маркеры — пока только в `Order.rawCabinet`.
+- GraphQL отвечает 200 и при ошибке — она в `errors`. Ловим отдельно
+  (`KASPI_GRAPHQL_ERROR`).
+- Перед ним кабинет шлёт `getOrderState` (state, modificationTime) — нам не нужен:
+  `getOrderDetails` отдаёт то же самое.
+
+**Кто спрашивает** (`order-cabinet.service.ts`): только активные заказы Kaspi,
+новые сразу, остальные раз в час; до 20 за раз, пауза 300 мс. Воркер — шагом
+цикла, кнопка синхронизации — шагами после неё, окно заказа — при открытии.
 
 ### Как отправить свой запрос в кабинет
 
