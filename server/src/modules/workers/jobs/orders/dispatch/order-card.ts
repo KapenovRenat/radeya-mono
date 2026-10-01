@@ -1,7 +1,7 @@
 import { Resvg } from '@resvg/resvg-js';
 import satori from 'satori';
 
-import { loadCardFonts } from './card-fonts';
+import { CARD_FONT_FAMILY, loadCardFonts } from './card-fonts';
 import { loadImageDataUri } from './card-image';
 
 /**
@@ -51,6 +51,8 @@ export interface OrderCardData {
   imageUrl: string | null;
   /** Что сделать получателю — у отмены и возврата: «Складировать», «Принять возврат». */
   action: string | null;
+  /** Тестовая карточка: сверху плашка «ТЕСТ — НЕ ЗАКАЗ», чтобы её не начали собирать. */
+  isTest?: boolean;
 }
 
 const BANNERS: Record<Exclude<OrderCardKind, 'NEW'>, { banner: string; type: string }> = {
@@ -92,9 +94,16 @@ function buildCard(card: OrderCardData, image: string | null): CardNode {
     : card.isPreOrder ? COLORS.preOrderBg : COLORS.inStockBg;
   const shortNumber = card.orderCode.slice(-4);
   const quantity = card.quantity > 1 ? ` × ${card.quantity}` : '';
+  // Тестовая плашка съедает высоту — её отдаёт фото, а не текст заказа.
+  const imageHeight = IMAGE_HEIGHT - (card.isTest ? 48 : 0);
 
   return box(
-    { width: WIDTH, height: HEIGHT, flexDirection: 'column', backgroundColor: background, fontFamily: 'Roboto' },
+    { width: WIDTH, height: HEIGHT, flexDirection: 'column', backgroundColor: background, fontFamily: CARD_FONT_FAMILY },
+
+    card.isTest ? box(
+      { height: 48, backgroundColor: COLORS.action, alignItems: 'center', justifyContent: 'center' },
+      text('ТЕСТ — НЕ ЗАКАЗ', { color: '#000000', fontSize: 28, fontWeight: 900 }),
+    ) : null,
 
     followUp && box(
       { height: 64, backgroundColor: COLORS.banner, alignItems: 'center', justifyContent: 'center' },
@@ -102,10 +111,10 @@ function buildCard(card: OrderCardData, image: string | null): CardNode {
     ),
 
     box(
-      { height: IMAGE_HEIGHT, backgroundColor: COLORS.imageBg, alignItems: 'center', justifyContent: 'center' },
+      { height: imageHeight, backgroundColor: COLORS.imageBg, alignItems: 'center', justifyContent: 'center' },
       image
-        ? { type: 'img', props: { src: image, width: WIDTH, height: IMAGE_HEIGHT,
-          style: { objectFit: 'contain', width: WIDTH, height: IMAGE_HEIGHT } } }
+        ? { type: 'img', props: { src: image, width: WIDTH, height: imageHeight,
+          style: { objectFit: 'contain', width: WIDTH, height: imageHeight } } }
         : text('Нет фото товара', { color: COLORS.muted, fontSize: 26 }),
     ),
 

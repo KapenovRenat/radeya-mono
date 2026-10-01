@@ -261,6 +261,7 @@ Tailwind 4, zod 4. Мажоры свежие — перед написанием
 | `npm install` | Ставит зависимости всех пакетов и связывает `@radeya/shared` |
 | `npm run dev:server` | API на `http://localhost:4000` с автоперезапуском |
 | `npm run dev:front` | Next.js на `http://localhost:3000` |
+| `npm run dev:worker` | Процесс воркеров (все); `npm run dev:worker -- orders` — только выбранные. Нужен `WORKERS_ENABLED=true` в `.env` |
 | `npm run typecheck` | Проверка типов во всех пакетах |
 | `npm run build` | Сборка всех пакетов |
 

@@ -5,11 +5,14 @@ import {
   SUPPLIER_NOTIFY_DELAY_MINUTES,
   SUPPLIER_NOTIFY_FROM_HOUR,
   SUPPLIER_NOTIFY_TO_HOUR,
+  TEST_CARD_KIND_LABELS,
   WEEKDAYS,
   WEEKDAY_LABELS,
   WORKER_INTERVAL_MINUTES,
+  WORKER_KEYS,
   WORKER_ORDER_PERIOD_MONTHS,
   WORKER_STATUS_LABELS,
+  type TestCardKind,
   type WorkerDto,
 } from "@radeya/shared";
 
@@ -18,6 +21,7 @@ import { Checkbox } from "@/components/checkbox";
 import { Dropdown, type DropdownOption } from "@/components/dropdown";
 import { Input } from "@/components/input";
 import { useGetWorkersQuery } from "@/features/workers/workers-api";
+import { useTestCard } from "@/features/workers/use-test-card";
 import { useWorkerSettingsForm } from "@/features/workers/use-worker-settings-form";
 import { apiErrorMessage } from "@/shared/api/error-message";
 import { formatDateTime } from "@/lib/format";
@@ -90,9 +94,16 @@ function WorkerCard({ worker }: { worker: WorkerDto }) {
               {state.lastRunTookMs !== null && `, ${(state.lastRunTookMs / 1000).toFixed(1)} с`}
               {stats && ` · получено ${stats.ordersSeen ?? 0}, новых ${stats.created ?? 0}, `
                 + `смен статуса ${stats.statusChanged ?? 0}, составов ${stats.entriesLoaded ?? 0}, `
-                + `отправлено ${(stats.dispatchSent ?? 0) + (stats.dispatchCancelSent ?? 0) + (stats.dispatchReturnSent ?? 0)}`
-                + (stats.outsideSendWindow ? " (вне часов отправки)" : "")}
+                + `отправлено ${(stats.dispatchSent ?? 0) + (stats.dispatchCancelSent ?? 0) + (stats.dispatchReturnSent ?? 0)}`}
             </dd>
+          </div>
+        )}
+
+        {/* Почему не ушло — пока нет страницы журнала, видно хотя бы здесь. */}
+        {stats && dispatchReasons(stats).length > 0 && (
+          <div>
+            <dt className="inline">Отправка: </dt>
+            <dd className="inline">{dispatchReasons(stats).join(" · ")}</dd>
           </div>
         )}
 
@@ -211,6 +222,93 @@ function WorkerCard({ worker }: { worker: WorkerDto }) {
 
       {form.error && <p role="alert" className="text-sm text-destructive">{form.error}</p>}
       {form.notice && <p role="status" className="text-sm">{form.notice}</p>}
+
+      {worker.key === WORKER_KEYS.ORDERS && <TestCardSection devChatId={worker.settings.devChatId} />}
     </div>
+  );
+}
+
+/** Подписи причин из счётчиков последнего цикла. */
+function dispatchReasons(stats: Record<string, number>): string[] {
+  const reasons: string[] = [];
+
+  if (stats.dispatchBlocked) reasons.push("невозможна — нет токена бота или шрифтов карточки");
+  if (stats.outsideSendWindow) reasons.push("вне часов или дней отправки");
+  if (stats.dispatchWaitingDate) reasons.push(`ждут дату сдачи: ${stats.dispatchWaitingDate}`);
+  if (stats.dispatchNoRecipient) reasons.push(`некому слать (нет Telegram ID или поставщика): ${stats.dispatchNoRecipient}`);
+  if (stats.dispatchSkipped) reasons.push(`закрыты до отправки: ${stats.dispatchSkipped}`);
+  if (stats.dispatchFailed) reasons.push(`не удалось: ${stats.dispatchFailed}`);
+
+  return reasons;
+}
+
+const TEST_KIND_OPTIONS: DropdownOption[] = (Object.keys(TEST_CARD_KIND_LABELS) as TestCardKind[])
+  .map((kind) => ({ value: kind, label: TEST_CARD_KIND_LABELS[kind] }));
+
+/**
+ * Тестовая карточка: выдуманный заказ с диваном из каталога. Проверяет бота,
+ * шрифты, фото и доступ к чату — без живого заказа и без записи в отправки.
+ */
+function TestCardSection({ devChatId }: { devChatId: string | null }) {
+  const test = useTestCard(devChatId);
+  const id = useId();
+
+  return (
+    <fieldset className="space-y-2 border-t pt-3">
+      <legend className="text-sm font-medium">Проверка отправки</legend>
+
+      <p className="text-sm">
+        Выдуманный заказ с диваном из каталога и плашкой «ТЕСТ — НЕ ЗАКАЗ».
+        Ни заказы, ни отправки не трогает. «Всем» — группе Астаны и всем поставщикам
+        с Telegram ID: видно, до кого бот достаёт. Не дошло — ниже ответ Telegram.
+      </p>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <Input
+          id={id + "-chat"}
+          label="Кому (Telegram ID)"
+          value={test.chatId}
+          onChange={(event) => test.setChatId(event.target.value)}
+          inputMode="numeric"
+          autoComplete="off"
+        />
+
+        <Dropdown
+          mode="select"
+          label="Карточка"
+          options={TEST_KIND_OPTIONS}
+          value={test.kind}
+          onChange={(next) => test.setKind(next as TestCardKind)}
+        />
+
+        <Button type="button" disabled={test.isSending} onClick={() => { void test.send("ONE"); }}>
+          {test.isSending ? "Отправляю…" : "Отправить на этот ID"}
+        </Button>
+
+        <Button type="button" disabled={test.isSending} onClick={() => { void test.send("ALL"); }}>
+          Отправить всем с Telegram ID
+        </Button>
+      </div>
+
+      {test.error && <p role="alert" className="text-sm text-destructive">{test.error}</p>}
+
+      {test.result && (
+        <div role="status" className="space-y-1 text-sm">
+          <p>
+            Товар: {test.result.productName} ({test.result.sku})
+            {test.result.hasImage ? "" : " — без фото: у товара его нет"}
+          </p>
+
+          <ul>
+            {test.result.results.map((item) => (
+              <li key={item.chatId} className={item.ok ? "" : "text-destructive"}>
+                {item.ok ? "✓" : "✗"} {item.recipient} ({item.chatId})
+                {item.error && ` — ${item.error}`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </fieldset>
   );
 }

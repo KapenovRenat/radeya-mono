@@ -57,6 +57,14 @@ export const DISPATCH_KINDS = {
 
 export type DispatchKind = (typeof DISPATCH_KINDS)[keyof typeof DISPATCH_KINDS];
 
+/** Подписи видов тестовой карточки — ключи совпадают с TestCardKind в types/workers.ts. */
+export const TEST_CARD_KIND_LABELS = {
+  NEW: 'Новый заказ',
+  CANCEL_BY_CUSTOMER: 'Отмена клиентом',
+  CANCEL_IN_TRANSIT: 'Отмена в пути',
+  RETURN: 'Возврат',
+} as const;
+
 /** Telegram ID: личка — положительное число, группа — отрицательное (`-100…`). */
 export const TELEGRAM_CHAT_ID_PATTERN = /^-?\d{1,20}$/;
 

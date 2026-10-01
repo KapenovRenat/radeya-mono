@@ -15,6 +15,17 @@ const oneOf = (allowed: readonly number[], message: string) =>
 
 export const workerParamsSchema = z.object({ key: z.enum(WORKER_KEYS) });
 
+export const sendTestCardSchema = z.object({
+  target: z.enum(['ONE', 'ALL']),
+  chatId: z.string().trim().regex(TELEGRAM_CHAT_ID_PATTERN, 'Telegram ID — только цифры, у группы с минусом')
+    .nullable(),
+  kind: z.enum(['NEW', 'CANCEL_BY_CUSTOMER', 'CANCEL_IN_TRANSIT', 'RETURN']),
+}).strict()
+  .refine((body) => body.target === 'ALL' || body.chatId !== null, {
+    message: 'Укажите Telegram ID, кому отправить',
+    path: ['chatId'],
+  });
+
 export const updateWorkerSettingsSchema = z.object({
   enabled: z.boolean(),
   intervalMinutes: oneOf(WORKER_INTERVAL_MINUTES, 'Интервал — от 1 до 10 минут'),

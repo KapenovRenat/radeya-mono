@@ -45,3 +45,35 @@ export interface WorkerDto {
 export interface WorkersResponse {
   items: WorkerDto[];
 }
+
+/** Вид тестовой карточки — те же, что уходят по настоящим заказам. */
+export type TestCardKind = 'NEW' | 'CANCEL_BY_CUSTOMER' | 'CANCEL_IN_TRANSIT' | 'RETURN';
+
+/**
+ * Тестовая карточка: выдуманный заказ с диваном из каталога.
+ * `ONE` — на `chatId`; `ALL` — всем, у кого есть Telegram ID: группе Астаны,
+ * активным поставщикам и на `chatId`, если он указан.
+ */
+export interface SendTestCardRequest {
+  target: 'ONE' | 'ALL';
+  chatId: string | null;
+  kind: TestCardKind;
+}
+
+/** Итог по одному получателю тестовой карточки. */
+export interface TestCardResult {
+  recipient: string;
+  chatId: string;
+  ok: boolean;
+  /** Ответ Telegram при отказе: «chat not found» и т.п. */
+  error: string | null;
+}
+
+export interface SendTestCardResponse {
+  /** Какой товар каталога взят для карточки. */
+  sku: string;
+  productName: string;
+  /** Нашли фото товара или карточка ушла с заглушкой. */
+  hasImage: boolean;
+  results: TestCardResult[];
+}

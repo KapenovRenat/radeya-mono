@@ -8,20 +8,26 @@ import { AppError } from '../../../../../lib/errors';
  * (Apache 2.0, лежат в репозитории). Satori не понимает `.woff2` —
  * только `.woff`, `.ttf`, `.otf`.
  *
- * Отдельно латиница и кириллица: Fontsource делит шрифт по наборам символов,
- * а Satori сам берёт недостающий знак из соседнего файла того же шрифта.
+ * Отдельно латиница и кириллица: Fontsource делит шрифт по наборам символов.
+ * **У кириллицы своё имя** — `Roboto Cyrillic`. Из файлов с одним именем
+ * и жирностью Satori берёт только первый, и кириллица выходила квадратами.
+ * С разными именами он берёт недостающий знак из другого шрифта сам.
  *
  * Путь от этого файла: из src/ и из dist/ до папки server одинаково шесть уровней.
  */
 const FONT_DIR = path.resolve(__dirname, '../../../../../../assets/fonts');
 
-const FONT_FILES: { weight: 400 | 700 | 900; file: string }[] = [
-  { weight: 400, file: 'roboto-latin-400.woff' },
-  { weight: 400, file: 'roboto-cyrillic-400.woff' },
-  { weight: 700, file: 'roboto-latin-700.woff' },
-  { weight: 700, file: 'roboto-cyrillic-700.woff' },
-  { weight: 900, file: 'roboto-latin-900.woff' },
-  { weight: 900, file: 'roboto-cyrillic-900.woff' },
+/** Основной шрифт карточки — латиница и цифры; кириллица подставляется из своего. */
+export const CARD_FONT_FAMILY = 'Roboto';
+const CYRILLIC_FONT_FAMILY = 'Roboto Cyrillic';
+
+const FONT_FILES: { name: string; weight: 400 | 700 | 900; file: string }[] = [
+  { name: CARD_FONT_FAMILY, weight: 400, file: 'roboto-latin-400.woff' },
+  { name: CARD_FONT_FAMILY, weight: 700, file: 'roboto-latin-700.woff' },
+  { name: CARD_FONT_FAMILY, weight: 900, file: 'roboto-latin-900.woff' },
+  { name: CYRILLIC_FONT_FAMILY, weight: 400, file: 'roboto-cyrillic-400.woff' },
+  { name: CYRILLIC_FONT_FAMILY, weight: 700, file: 'roboto-cyrillic-700.woff' },
+  { name: CYRILLIC_FONT_FAMILY, weight: 900, file: 'roboto-cyrillic-900.woff' },
 ];
 
 export interface CardFont {
@@ -35,8 +41,8 @@ let loaded: Promise<CardFont[]> | null = null;
 
 /** Шрифты читаются один раз на процесс. Не нашлись — понятная ошибка, а не пустая карточка. */
 export function loadCardFonts(): Promise<CardFont[]> {
-  loaded ??= Promise.all(FONT_FILES.map(async ({ weight, file }) => ({
-    name: 'Roboto',
+  loaded ??= Promise.all(FONT_FILES.map(async ({ name, weight, file }) => ({
+    name,
     data: await readFile(path.join(FONT_DIR, file)),
     weight,
     style: 'normal' as const,

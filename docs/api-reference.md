@@ -1052,6 +1052,25 @@ Email и состояние входа. Пароля в ответе нет ни
   из схемы (выключен, 2 мин, 1 мес, 60 мин, пн–сб).
 - Ошибки: общие 401/403.
 
+### POST /api/workers/orders/test-card
+Тестовая карточка: выдуманный заказ (№1000001234) с диваном из каталога
+и плашкой «ТЕСТ — НЕ ЗАКАЗ». Проверяет бота, шрифты, фото и доступ к каждому чату.
+Заказы и отправки (`OrderDispatch`) не трогает.
+- Auth: `can([ADMIN])`
+- Тело: `{ target: 'ONE' | 'ALL', chatId: string | null, kind: 'NEW' | 'CANCEL_BY_CUSTOMER' | 'CANCEL_IN_TRANSIT' | 'RETURN' }`.
+  `ONE` — на `chatId` (обязателен). `ALL` — группе Астаны, всем активным
+  поставщикам с Telegram ID и на `chatId`, если указан; один чат дважды не получает.
+- Товар: диван с фото, иначе любой товар с фото, иначе любой — самый свежий.
+  Картинка рисуется один раз, рассылка с паузой 1,5 с.
+- Ответ 200: `{ sku, productName, hasImage, results: [{ recipient, chatId, ok, error }] }` —
+  отказ одного получателя (`chat not found` — бот не в группе или ему не нажали
+  «Старт») не останавливает остальных.
+- Ошибки: 400 VALIDATION_ERROR; 400 TEST_NO_RECIPIENTS — ни у кого нет Telegram ID;
+  404 TEST_PRODUCT_NOT_FOUND — каталог пуст; 503 TELEGRAM_TOKEN_MISSING;
+  500 CARD_FONTS_MISSING; общие 401/403.
+- Файл: `server/src/modules/workers/workers.controller.ts` (postTestCard),
+  `jobs/orders/dispatch/test-card.ts`.
+
 ### PUT /api/workers/:key/settings
 Сохранить настройки. Воркер применяет их в течение 15 секунд.
 - Auth: `can([ADMIN])`

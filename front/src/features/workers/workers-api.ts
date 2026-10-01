@@ -1,4 +1,6 @@
 import type {
+  SendTestCardRequest,
+  SendTestCardResponse,
   UpdateWorkerSettingsRequest,
   WorkerDto,
   WorkerKey,
@@ -15,6 +17,11 @@ export const workersApi = baseApi.injectEndpoints({
       providesTags: ["Worker"],
     }),
 
+    /** Тестовая карточка — выдуманный заказ с диваном из каталога на указанный Telegram ID. */
+    sendTestCard: build.mutation<SendTestCardResponse, SendTestCardRequest>({
+      query: (body) => ({ url: "/workers/orders/test-card", method: "POST", body }),
+    }),
+
     /** Сохранить настройки — воркер подхватит их сам, без перезапуска. */
     updateWorkerSettings: build.mutation<WorkerDto, { key: WorkerKey } & UpdateWorkerSettingsRequest>({
       query: ({ key, ...body }) => ({ url: `/workers/${key}/settings`, method: "PUT", body }),
@@ -23,4 +30,4 @@ export const workersApi = baseApi.injectEndpoints({
   }),
 });
 
-export const { useGetWorkersQuery, useUpdateWorkerSettingsMutation } = workersApi;
+export const { useGetWorkersQuery, useUpdateWorkerSettingsMutation, useSendTestCardMutation } = workersApi;
