@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { TELEGRAM_CHAT_ID_PATTERN } from '@radeya/shared';
+import {
+  TELEGRAM_CHAT_ID_PATTERN,
+  WAREHOUSE_KASPI_CODE_PATTERN,
+  WAREHOUSE_NAME_MAX_LENGTH,
+  WAREHOUSE_OWN_CODE_PATTERN,
+} from '@radeya/shared';
 
 /**
  * Импорт складов из выгрузки Kaspi.
@@ -9,9 +14,6 @@ import { TELEGRAM_CHAT_ID_PATTERN } from '@radeya/shared';
  * валидации. Кривой код склада попадёт в справочник навсегда, а на него потом
  * сошлются товары и заказы.
  */
-
-/** Наш короткий код склада: `PP3`. */
-const WAREHOUSE_CODE_PATTERN = /^PP\d{1,4}$/;
 
 /** Идентификатор в Kaspi: `6871008_PP3` — номер продавца и код точки. */
 const KASPI_STORE_ID_PATTERN = /^\d{1,20}_PP\d{1,4}$/;
@@ -32,7 +34,7 @@ export const saveWarehousesSchema = z.object({
         code: z
           .string()
           .trim()
-          .regex(WAREHOUSE_CODE_PATTERN, 'Код склада ожидается в виде PP3'),
+          .regex(WAREHOUSE_KASPI_CODE_PATTERN, 'Код склада ожидается в виде PP3'),
         storeId: z
           .string()
           .trim()
@@ -68,3 +70,17 @@ export const updateWarehouseSchema = z.object({
   ownDeliveryChatId: telegramChatId,
   pickupChatId: telegramChatId,
 }).strict();
+
+/**
+ * Наш склад без Kaspi. Код — заглавными: `ncity` и `NCITY` не должны стать
+ * двумя складами. Код вида `PPn` занят складами Kaspi.
+ */
+export const createWarehouseSchema = z.object({
+  code: z.string().trim().toUpperCase()
+    .regex(WAREHOUSE_OWN_CODE_PATTERN, 'Код — латиница и цифры, от 2 до 16 знаков, первая — буква')
+    .refine((code) => !WAREHOUSE_KASPI_CODE_PATTERN.test(code), 'Коды вида PP3 заняты складами Kaspi'),
+  name: z.string().trim().min(1, 'Введите название склада')
+    .max(WAREHOUSE_NAME_MAX_LENGTH, `Название — не длиннее ${WAREHOUSE_NAME_MAX_LENGTH} символов`),
+}).strict();
+
+export type CreateWarehouseInput = z.infer<typeof createWarehouseSchema>;

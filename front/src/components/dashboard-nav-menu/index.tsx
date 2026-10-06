@@ -6,11 +6,13 @@ import styles from "./style.module.scss";
 import {Button} from "@/components/button";
 import {useAuth, useLogout} from "@/features/auth/use-auth";
 import Link from "next/link";
-import {USER_ROLES} from "@radeya/shared";
+import {STOCK_DOCUMENT_ROLES, USER_ROLES} from "@radeya/shared";
+import {useCan} from "@/features/auth/use-can";
 
 export function DashboardNavMenu({ children, className }: { children?: React.ReactNode, className?: string }) {
     const { logout, isLoading } = useLogout();
     const { user } = useAuth();
+    const can = useCan();
 
     return (
         <div className={cn(styles.DashboardNavMenu, `${className}`)}>
@@ -44,6 +46,14 @@ export function DashboardNavMenu({ children, className }: { children?: React.Rea
                             <p>Товары</p>
                         </Link>
                     </li>
+                    {can(STOCK_DOCUMENT_ROLES) ? <li>
+                        <Link href="/dashboard/products/stock-documents">
+                            <div>
+
+                            </div>
+                            <p>Документы склада</p>
+                        </Link>
+                    </li> : null}
                     {user?.role === USER_ROLES.ADMIN ? <li>
                         <Link href="/dashboard/accounts">
                             <div>

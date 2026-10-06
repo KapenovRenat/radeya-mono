@@ -1112,8 +1112,8 @@ Email и состояние входа. Пароля в ответе нет ни
 
 ## Warehouses
 
-Справочник складов (точек выдачи). Список — любому вошедшему (фильтр и колонки
-каталога), импорт — только `ADMIN`.
+Справочник складов: склады Kaspi из выгрузки и наши склады без Kaspi (шоурум).
+Список — любому вошедшему (фильтр и колонки каталога), импорт и создание — только `ADMIN`.
 
 ### GET /api/warehouses
 
@@ -1123,9 +1123,25 @@ Email и состояние входа. Пароля в ответе нет ни
 - Параметры: нет
 - Ответ 200: `{ "items": WarehouseDto[] }` — `id`, `code`, `kaspiStoreId`,
   `kaspiCityId`, `name`, `isActive`, `kaspiOffersCount`, `kaspiTotalStock`,
-  `kaspiStatsAt`, `kaspiDeliveryChatId`, `ownDeliveryChatId`, `pickupChatId`
+  `kaspiStatsAt`, `kaspiDeliveryChatId`, `ownDeliveryChatId`, `pickupChatId`.
+  `kaspiStoreId: null` — наш склад без Kaspi
 - Ошибки: `401 UNAUTHORIZED`, `403 FORBIDDEN`
 - Файл: `server/src/modules/warehouses/warehouses.routes.ts`
+
+### POST /api/warehouses
+
+Наш склад без Kaspi — шоурум, склад в ТЦ. `kaspiStoreId` пуст: заказы Kaspi
+на него не попадают ([inventory.md](inventory.md), раздел 3).
+
+- Auth: `can([ADMIN])`
+- Тело (`CreateWarehouseRequest`): `{ "code": "NCITY", "name": "Шоурум Астана Ncity" }`.
+  Код приводится к заглавным; латиница, цифры, `_`, `-`, 2–16 знаков, первая — буква;
+  вида `PPn` — нельзя (заняты складами Kaspi). Название — 1–150 символов
+- Ответ 201: `WarehouseDto`
+- Ошибки: `400 VALIDATION_ERROR` — код или название не прошли проверку;
+  `409 CONFLICT` — склад с таким кодом уже есть; общие 401/403
+- Журнал: WAREHOUSE_CREATED — код и название
+- Файл: `server/src/modules/warehouses/warehouses.controller.ts` (postOwnWarehouse)
 
 ### POST /api/warehouses/import-kaspi
 
@@ -1177,6 +1193,111 @@ Email и состояние входа. Пароля в ответе нет ни
 
 > Вся запись идёт одной транзакцией — при сбое на середине справочник не остаётся
 > заполненным наполовину.
+
+---
+
+## Stock Documents — документы склада (06.10.2026)
+
+Оприходование и списание: черновик, проведение, история. Правила —
+[inventory.md](inventory.md), раздел 2.
+
+Весь модуль — `can(STOCK_DOCUMENT_ROLES)` (`ADMIN`, `MANAGER`): в документе видна
+себестоимость. Проведение — галочка «Проведено», `post: true` в POST/PUT; право
+`STOCK_DOCUMENT_POST_ROLES` (`ADMIN`) проверяет контроллер. Роли —
+`shared/src/constants/stock-documents.ts`.
+
+Номер в адресе принимается и как `00128`, и как `128`. Деньги — строками
+с двумя знаками, даты — ISO.
+
+### GET /api/stock-documents
+
+Список документов, свежие сверху.
+
+- Auth: `STOCK_DOCUMENT_ROLES`
+- Query: `page` (с 1), `pageSize` (10/20/50, по умолчанию 20), `type` (`ENTER` | `WRITE_OFF`),
+  `warehouseId` (uuid), `number` (номер целиком). Лишние параметры — 400
+- Ответ 200 (`StockDocumentListResponse`): `{ items, total, page, pageSize, totalPages }`,
+  строка — `StockDocumentListItemDto`: `id`, `number`, `type`, `warehouse { id, code, name }`,
+  `comment`, `totalAmount`, `linesCount`, `postedAt` (null — черновик), `postedBy { id, name }`,
+  `createdBy { id, name }`, `createdAt`, `updatedAt`
+- Ошибки: `400 VALIDATION_ERROR`, общие 401/403
+- Файл: `server/src/modules/stock-documents/stock-documents.controller.ts` (getStockDocuments)
+
+### GET /api/stock-documents/variants
+
+Товары для окна выбора: поиск как в каталоге (артикул, модель, названия Kaspi),
+остаток — на выбранном складе. Снятые с продажи тоже.
+
+- Auth: `STOCK_DOCUMENT_ROLES`
+- Query: `warehouseId` (uuid, обязателен), `search` (до 200 символов), `page`. Страница — 20 товаров
+- Ответ 200 (`StockPickerResponse`): `{ items, total, page, pageSize, totalPages }`, товар —
+  `StockVariantDto`: `id`, `sku`, `name`, `imageUrl`, `costPrice`, `quantity` (остаток на складе; null — нет строки или не указан)
+- Ошибки: `400 VALIDATION_ERROR`, общие 401/403
+- Файл: `server/src/modules/stock-documents/stock-documents.controller.ts` (getStockPickerVariants)
+
+### GET /api/stock-documents/:number
+
+Документ со строками. Остаток в строке — на складе документа сейчас.
+
+- Auth: `STOCK_DOCUMENT_ROLES`
+- Ответ 200: `StockDocumentDto` — поля строки списка + `lines[]`: `{ id, variant: StockVariantDto, quantity, price, amount }`
+- Ошибки: `400` — не номер, `404 NOT_FOUND`, общие 401/403
+- Файл: `server/src/modules/stock-documents/stock-documents.controller.ts` (getStockDocumentByNumber)
+
+### POST /api/stock-documents
+
+Новый документ: черновик, а с `post: true` — сразу проведённый (запись и проведение — одна транзакция:
+не провелось — не записалось ничего).
+
+- Auth: `STOCK_DOCUMENT_ROLES`
+- Тело (`SaveStockDocumentRequest`):
+  `{ "type": "ENTER", "warehouseId": "uuid", "comment": "Ревизия 09.10", "lines": [{ "variantId": "uuid", "quantity": 2, "price": "120000.00" }], "post": false }`.
+  Комментарий **обязателен**, 20–1000 символов («Заполните комментарий осмысленно»).
+  1–500 строк, товар один раз, количество — целое 1–100 000. `price` обязательна
+  у оприходования (до 10 цифр и 2 знаков); у списания сервер её не берёт —
+  цена = себестоимость товара. Склад — только действующий.
+  `post` — необязателен, по умолчанию `false`
+- Ответ 201: `StockDocumentDto`
+- Ошибки: `400 VALIDATION_ERROR` (с `details` по полям: `comment`, `lines.0.price` и т.п.), `404` — склад
+  или товар не найден; `403 FORBIDDEN` — `post: true` без роли `ADMIN`; при `post: true` — ошибки проведения (см. ниже); общие 401
+- Журнал: STOCK_DOCUMENT_CREATED — номер, вид, склад, строк, сумма; при проведении ещё STOCK_DOCUMENT_POSTED
+- Файл: `server/src/modules/stock-documents/stock-documents.controller.ts` (postStockDocumentDraft)
+
+### PUT /api/stock-documents/:number
+
+Правка черновика целиком — шапка и полный список строк; с `post: true` — и проведение
+в той же транзакции. Тело и проверки — как у POST.
+
+- Auth: `STOCK_DOCUMENT_ROLES`
+- Ответ 200: `StockDocumentDto`
+- Ошибки: `404`, `409 CONFLICT` — документ уже проведён, остальное как у POST
+- Журнал: STOCK_DOCUMENT_UPDATED; при проведении ещё STOCK_DOCUMENT_POSTED
+- Файл: `server/src/modules/stock-documents/stock-documents.controller.ts` (putStockDocumentDraft)
+
+### DELETE /api/stock-documents/:number
+
+Удаление черновика вместе со строками. Номер больше не используется.
+
+- Auth: `STOCK_DOCUMENT_ROLES`
+- Ответ 204
+- Ошибки: `404`, `409 CONFLICT` — документ проведён
+- Журнал: STOCK_DOCUMENT_DELETED
+- Файл: `server/src/modules/stock-documents/stock-documents.controller.ts` (deleteStockDocumentDraft)
+
+### Проведение (`post: true` в POST и PUT)
+
+Отдельного эндпоинта нет: галочка «Проведено» уходит вместе с документом.
+Остатки, себестоимость (оприходование), история товара и отметка «проведён» —
+в той же транзакции, что и запись черновика.
+
+- Право: `STOCK_DOCUMENT_POST_ROLES` (`ADMIN`), иначе `403`
+- Ответ: `StockDocumentDto` с `postedAt` и `postedBy`
+- Ошибки: `409 CONFLICT` — списанию не хватает остатка (в сообщении до 10 строк
+  «артикул — есть N, списываете M»); `400` — склад закрыт. Документ при этом
+  не записывается вовсе — ни новый, ни правка черновика
+- История: `STOCK_DOCUMENT_POSTED` у каждого товара — остаток и себестоимость «было → стало»,
+  в контексте склад и номер документа
+- Файл: `server/src/modules/stock-documents/stock-posting.service.ts` (applyPosting)
 
 ---
 
@@ -1295,7 +1416,9 @@ router.post('/', can([ADMIN, MANAGER]), create);     // только эти ро
 | `GET /api/warehouses`, `GET /api/suppliers`, `GET /api/stats/orders` | все вошедшие |
 | `GET /api/dictionaries`, `GET /api/sales-points` | все вошедшие |
 | Справочники: добавить, править | ADMIN, MANAGER |
-| Точки продаж, поставщики, склад (`PATCH /api/warehouses/:id`): создать, править | ADMIN |
+| Точки продаж, поставщики, склад (`POST /api/warehouses`, `PATCH /api/warehouses/:id`): создать, править | ADMIN |
+| Документы склада: список, просмотр, черновики (`/api/stock-documents`) | ADMIN, MANAGER |
+| Проведение документа склада (`post: true` в `POST`/`PUT /api/stock-documents`) | ADMIN |
 | Импорты, МойСклад, `kaspi-catalog`, `products/skus`, `products/import-kaspi`, `warehouses/import-kaspi` | ADMIN |
 | Аккаунты (`/api/users`), журнал (`/api/audit`), кабинет Kaspi (`/api/kaspi-cabinet`), воркеры (`/api/workers`) | ADMIN |
 | `GET /api/auth/me`, `POST /api/auth/logout` | все вошедшие |

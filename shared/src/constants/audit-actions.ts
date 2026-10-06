@@ -40,6 +40,11 @@ export const AUDIT_ACTIONS = {
   KASPI_CABINET_CHECKED: 'KASPI_CABINET_CHECKED',
   WORKER_SETTINGS_UPDATED: 'WORKER_SETTINGS_UPDATED',
   WAREHOUSE_UPDATED: 'WAREHOUSE_UPDATED',
+  WAREHOUSE_CREATED: 'WAREHOUSE_CREATED',
+  STOCK_DOCUMENT_CREATED: 'STOCK_DOCUMENT_CREATED',
+  STOCK_DOCUMENT_UPDATED: 'STOCK_DOCUMENT_UPDATED',
+  STOCK_DOCUMENT_DELETED: 'STOCK_DOCUMENT_DELETED',
+  STOCK_DOCUMENT_POSTED: 'STOCK_DOCUMENT_POSTED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -80,4 +85,9 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   KASPI_CABINET_CHECKED: 'Проверка подключения к кабинету Kaspi',
   WORKER_SETTINGS_UPDATED: 'Изменены настройки воркера',
   WAREHOUSE_UPDATED: 'Изменён склад',
+  WAREHOUSE_CREATED: 'Создан склад',
+  STOCK_DOCUMENT_CREATED: 'Создан документ склада',
+  STOCK_DOCUMENT_UPDATED: 'Изменён черновик документа склада',
+  STOCK_DOCUMENT_DELETED: 'Удалён черновик документа склада',
+  STOCK_DOCUMENT_POSTED: 'Проведён документ склада',
 };

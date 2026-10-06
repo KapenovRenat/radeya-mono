@@ -1,0 +1,30 @@
+/* Плашка статуса. Цвета успеха в темах пока нет — объявлен с запасным
+   значением, как у кружка статуса в каталоге: заведёте --status-success
+   в styles/themes.css, и он подхватится сам. */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.neutral {
+  color: var(--foreground);
+  background: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.success {
+  color: var(--primary-foreground);
+  background: var(--status-success, oklch(0.62 0.17 145));
+}
+
+.danger {
+  color: var(--primary-foreground);
+  background: var(--destructive);
+}

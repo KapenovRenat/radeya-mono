@@ -315,11 +315,23 @@ export async function listOrders(input: OrderListInput): Promise<OrderListRespon
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
 
-/** Справочник складов по идентификатору Kaspi. Читается один раз на вызов. */
+/**
+ * Справочник складов по идентификатору Kaspi. Читается один раз на вызов.
+ * Наши склады без Kaspi (шоурум) в него не входят: заказ площадки с них не едет.
+ */
 async function loadWarehouses(): Promise<Map<string, string>> {
-  const rows = await prisma.warehouse.findMany({ select: { id: true, kaspiStoreId: true } });
+  const rows = await prisma.warehouse.findMany({
+    where: { kaspiStoreId: { not: null } },
+    select: { id: true, kaspiStoreId: true },
+  });
 
-  return new Map(rows.map((row) => [row.kaspiStoreId, row.id]));
+  const byStoreId = new Map<string, string>();
+
+  for (const row of rows) {
+    if (row.kaspiStoreId !== null) byStoreId.set(row.kaspiStoreId, row.id);
+  }
+
+  return byStoreId;
 }
 
 async function saveOrders(

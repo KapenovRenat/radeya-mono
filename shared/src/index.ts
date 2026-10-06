@@ -34,3 +34,6 @@ export * from './types/moysklad';
 export * from './types/stats';
 export * from './constants/workers';
 export * from './types/workers';
+export * from './constants/warehouses';
+export * from './constants/stock-documents';
+export * from './types/stock-documents';

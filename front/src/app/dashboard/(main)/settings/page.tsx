@@ -2,6 +2,7 @@
 
 import { KaspiCabinetBlock } from "./_components/kaspi-cabinet-block";
 import { SupplierTelegramBlock } from "./_components/supplier-telegram-block";
+import { WarehousesBlock } from "./_components/warehouses-block";
 import { WorkersBlock } from "./_components/workers-block";
 
 /**
@@ -16,6 +17,7 @@ export default function SettingsPage() {
       <WorkersBlock />
       {/* Отдельно от воркера: Telegram ID — свойство поставщика, а не настройка отправки. */}
       <SupplierTelegramBlock />
+      <WarehousesBlock />
     </div>
   );
 }

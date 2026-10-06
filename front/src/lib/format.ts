@@ -73,3 +73,18 @@ const moneyFormatter = new Intl.NumberFormat("ru-KZ", {
 export function formatMoney(value: number): string {
   return moneyFormatter.format(value);
 }
+
+const exactMoneyFormatter = new Intl.NumberFormat("ru-KZ", {
+  style: "currency",
+  currency: "KZT",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+/**
+ * Сумма с тиын, если они есть: `814 021,5 ₸`. Для учётных документов —
+ * там сумма должна сходиться с ценой × количество до тиына, а не до тенге.
+ */
+export function formatMoneyExact(value: number): string {
+  return exactMoneyFormatter.format(value);
+}

@@ -458,3 +458,41 @@ page.tsx и style.module.scss. Строки товаров для Tables.childre
 в нём нет. Хранится `VariantStock.receivedAt` = момент отчёта − дни, а дни
 считаются при выдаче каталога. Точный учёт партий (какая посадка ещё лежит)
 появится вместе с посадкой товара.
+
+---
+
+## Документы склада (06.10.2026)
+
+Оприходование и списание — первый модуль складского учёта. Правила — [inventory.md](inventory.md).
+
+- `server/src/modules/stock-documents/`:
+  - `stock-documents.routes.ts` — весь модуль под `can(STOCK_DOCUMENT_ROLES)`, проведение — `STOCK_DOCUMENT_POST_ROLES`;
+  - `stock-documents.schemas.ts` — фильтры списка, номер в адресе, черновик целиком;
+  - `stock-documents.service.ts` — список, документ, черновик (создать, править, удалить), окно выбора, `lockDraft()`;
+  - `stock-posting.service.ts` — `applyPosting()`: проведение внутри транзакции записи черновика
+    (галочка «Проведено»): блокировки, остатки, себестоимость, история;
+  - `stock-document-money.ts` — сумма строки и итог в `Decimal`, цена списания;
+  - `stock-documents.mapper.ts` — выборки и DTO.
+- `server/src/modules/products/variant-search.ts` — `variantSearchWhere()`: поиск товара
+  по тем же полям, что каталог, но для Prisma. Каталогу нужен SQL (сортировка по складам),
+  остальным спискам — этот.
+- `server/src/modules/warehouses/` — `POST /api/warehouses`, `createOwnWarehouse()`: наш склад без Kaspi.
+- `shared/src/constants/stock-documents.ts`, `shared/src/constants/warehouses.ts`,
+  `shared/src/types/stock-documents.ts` — виды, роли, пределы, номер, контракты.
+- Фронт: `features/stock-documents/` (API, список, черновик, окно выбора, деньги в тиын),
+  `components/product-picker/`, `components/badge/`, страницы `products/stock-documents/`.
+
+**Черновик и проведение.** Черновик не трогает остатков, поэтому его правят и удаляют
+свободно. Проведение идёт галочкой вместе с записью — в той же транзакции, поэтому
+неудачное проведение не оставляет полузаписанного документа. Транзакция с `FOR UPDATE` на документе
+и на строках остатка (в порядке id товара, чтобы два документа не поймали взаимную
+блокировку). Оприходованию недостающие строки `VariantStock` заводятся `createMany`
+с `skipDuplicates` до блокировки.
+
+**Номер — `autoincrement` базы**, а не «максимум + 1» в коде: при одновременном
+создании двух документов второй способ выдал бы один номер дважды.
+
+**Деньги считаются на сервере.** Фронт показывает итог черновика, считая в целых тиын,
+но в базу ложится только посчитанное сервером в `Decimal`.
+
+Новых зависимостей нет. Миграция одна — `stock_documents`.

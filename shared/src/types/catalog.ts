@@ -83,8 +83,8 @@ export interface CatalogStockDto {
     id: string;
     code: string;
     name: string | null;
-    /** `6871008_PP3` — по нему матчатся заказы Kaspi. */
-    kaspiStoreId: string;
+    /** `6871008_PP3` — по нему матчатся заказы Kaspi. Пусто — наш склад без Kaspi. */
+    kaspiStoreId: string | null;
     /** Код города по КАТО. У части складов пусто — заполняется руками. */
     kaspiCityId: string | null;
     isActive: boolean;

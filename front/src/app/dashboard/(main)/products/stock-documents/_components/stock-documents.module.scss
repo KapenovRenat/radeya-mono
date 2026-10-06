@@ -1,0 +1,253 @@
+/* Документы склада: список и карточка документа.
+   Цвета только через var(--токен) — подстраивается под тему админки
+   и тёмную схему. Ширины колонок здесь, а не в общем Tables: Tables
+   о документах ничего не знает. */
+
+.row:hover { background: var(--muted); }
+
+.nowrap { white-space: nowrap; }
+
+.muted { color: var(--muted-foreground); }
+
+.numeric {
+  white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Список ─────────────────────────────────────────────── */
+
+.number {
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+}
+
+.link {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:hover { text-decoration-thickness: 2px; }
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 2px; }
+}
+
+/* Комментарии бывают длинными («мальта леон винсент возврат…») — полный в title. */
+.comment {
+  max-width: 18rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.875rem;
+}
+
+/* ── Карточка документа ─────────────────────────────────── */
+
+.meta {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+
+.textarea {
+  display: block;
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  color: var(--foreground);
+  font: inherit;
+  background: var(--background);
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  resize: vertical;
+
+  &::placeholder { color: var(--muted-foreground); }
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  &:read-only { background: var(--muted); }
+}
+
+.empty {
+  padding: 2rem;
+  color: var(--muted-foreground);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+
+  th, td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  th {
+    font-weight: 600;
+    white-space: nowrap;
+    background: var(--muted);
+  }
+
+  tbody tr:last-child td { border-bottom: 0; }
+}
+
+.image,
+.noImage {
+  display: block;
+  width: 3rem;
+  height: 3rem;
+  /* preflight Tailwind ставит img { max-width: 100%; height: auto } —
+     в ужатой ячейке квадрат стал бы полосой. */
+  max-width: none;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius);
+  background: var(--muted);
+}
+
+.image { object-fit: cover; }
+
+.noImage {
+  display: grid;
+  place-items: center;
+  color: var(--muted-foreground);
+  font-size: 0.5625rem;
+  text-align: center;
+}
+
+/* Единственная колонка, которой разрешено переноситься. */
+.name {
+  min-width: 16rem;
+  max-width: 28rem;
+}
+
+.sku {
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.875rem;
+}
+
+/* Поля в ячейках уже обычных: в строке их два, и таблица не должна уезжать вбок. */
+.quantityInput { width: 6rem; margin-left: auto; }
+.priceInput { width: 9rem; margin-left: auto; }
+
+.quantityInput input,
+.priceInput input {
+  height: 2.25rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+
+  &:hover { color: var(--destructive); background: var(--muted); }
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+}
+
+.total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 1.5rem;
+  color: var(--muted-foreground);
+
+  strong {
+    color: var(--foreground);
+    font-size: 1.125rem;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.backLink {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:hover { color: var(--foreground); }
+}
+
+/* Подпись только для скринридера. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── Комментарий: обязателен ────────────────────────────── */
+
+.required { color: var(--destructive); }
+
+/* Пустой комментарий — красная рамка и строка под полем, сразу, а не после
+   попытки сохранить: без пояснения документ не создаётся. */
+.textareaError {
+  border-color: var(--destructive);
+
+  &:focus-visible { outline-color: var(--destructive); }
+}
+
+.fieldError {
+  display: block;
+  color: var(--destructive);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* ── «Проведено» ────────────────────────────────────────── */
+
+/* Галочка в рамке, а не просто в ряду кнопок: она необратимо меняет остатки
+   и должна выделяться. Отмеченная — красная рамка: при сохранении документ
+   проведётся. */
+.postBox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.postBoxActive {
+  border-color: var(--destructive);
+  background: color-mix(in oklch, var(--destructive) 8%, var(--background));
+}
+
+.postNote {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+
+.postBoxActive .postNote { color: var(--destructive); }
+
+/* ── Строка списка: кликабельна целиком ─────────────────── */
+
+.rowLink { cursor: pointer; }
+
+/* Подсказка у подписи колонки — в одну строку с текстом. */
+.headWithHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}

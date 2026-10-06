@@ -108,7 +108,8 @@ export interface SaveWarehousesResponse {
 export interface WarehouseDto {
   id: string;
   code: string;
-  kaspiStoreId: string;
+  /** Пусто — наш склад без Kaspi (шоурум): заказов площадки на нём нет. */
+  kaspiStoreId: string | null;
   kaspiCityId: string | null;
   name: string | null;
   isActive: boolean;
@@ -123,6 +124,12 @@ export interface WarehouseDto {
   kaspiDeliveryChatId: string | null;
   ownDeliveryChatId: string | null;
   pickupChatId: string | null;
+}
+
+/** Наш склад без Kaspi, заводится руками: код `NCITY` и название. */
+export interface CreateWarehouseRequest {
+  code: string;
+  name: string;
 }
 
 /** Правка склада руками — пока только три Telegram-группы. null — снять. */

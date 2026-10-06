@@ -3,8 +3,18 @@ import { AUDIT_ACTIONS } from '@radeya/shared';
 
 import { clientIp, logAction } from '../../lib/audit';
 import { ValidationError } from '../../lib/errors';
-import { saveWarehousesSchema, updateWarehouseSchema, warehouseParamsSchema } from './warehouses.schemas';
-import { listWarehouses, saveKaspiWarehouses, updateWarehouseTelegram } from './warehouses.service';
+import {
+  createWarehouseSchema,
+  saveWarehousesSchema,
+  updateWarehouseSchema,
+  warehouseParamsSchema,
+} from './warehouses.schemas';
+import {
+  createOwnWarehouse,
+  listWarehouses,
+  saveKaspiWarehouses,
+  updateWarehouseTelegram,
+} from './warehouses.service';
 
 /** GET /api/warehouses */
 export const getWarehouses: RequestHandler = async (_req, res) => {
@@ -41,6 +51,27 @@ export const postKaspiWarehouses: RequestHandler = async (req, res) => {
   });
 
   res.json(result);
+};
+
+/** POST /api/warehouses — наш склад без Kaspi: код и название. */
+export const postOwnWarehouse: RequestHandler = async (req, res) => {
+  const parsed = createWarehouseSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    throw new ValidationError(parsed.error.issues[0]?.message ?? 'Проверьте код и название склада');
+  }
+
+  const warehouse = await createOwnWarehouse(parsed.data);
+  const author = req.user!;
+
+  await logAction({
+    userId: author.id, userLogin: author.login, userRole: author.role,
+    action: AUDIT_ACTIONS.WAREHOUSE_CREATED, entityType: 'Warehouse', entityId: warehouse.id,
+    after: { code: warehouse.code, name: warehouse.name },
+    ip: clientIp(req),
+  });
+
+  res.status(201).json(warehouse);
 };
 
 /** PATCH /api/warehouses/:id — Telegram-группы склада: Zammler, своя доставка, самовывоз. */

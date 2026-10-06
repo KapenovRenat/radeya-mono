@@ -45,6 +45,13 @@ shared/    # Общий код: типы контрактов, констант�
 | `PUT /api/workers/:key/settings` | Сохранить настройки воркера; включение отправки ставит точку отсечки | ADMIN | `server/src/modules/workers/workers.controller.ts` |
 | `GET /api/warehouses` | Справочник складов, с Telegram-группой кладовщика | все вошедшие | `server/src/modules/warehouses/warehouses.routes.ts` |
 | `PATCH /api/warehouses/:id` | Три Telegram-группы склада по виду доставки: Zammler, своя доставка, самовывоз | ADMIN | `server/src/modules/warehouses/warehouses.controller.ts` |
+| `POST /api/warehouses` | Наш склад без Kaspi (шоурум): код и название, `kaspiStoreId` пуст | ADMIN | `server/src/modules/warehouses/warehouses.controller.ts` |
+| `GET /api/stock-documents` | Документы склада: страница, фильтры по виду, складу и номеру | ADMIN, MANAGER | `server/src/modules/stock-documents/stock-documents.controller.ts` |
+| `GET /api/stock-documents/variants` | Товары для окна выбора: поиск как в каталоге, остаток на складе документа | ADMIN, MANAGER | `server/src/modules/stock-documents/stock-documents.controller.ts` |
+| `GET /api/stock-documents/:number` | Документ со строками; номер `00128` или `128` | ADMIN, MANAGER | `server/src/modules/stock-documents/stock-documents.controller.ts` |
+| `POST /api/stock-documents` | Новый документ: черновик, с `post: true` — сразу проведённый (только ADMIN); комментарий обязателен | ADMIN, MANAGER | `server/src/modules/stock-documents/stock-documents.controller.ts` |
+| `PUT /api/stock-documents/:number` | Правка черновика целиком, с `post: true` — и проведение; проведённый — 409 | ADMIN, MANAGER | `server/src/modules/stock-documents/stock-documents.controller.ts` |
+| `DELETE /api/stock-documents/:number` | Удаление черновика; проведённый — 409 | ADMIN, MANAGER | `server/src/modules/stock-documents/stock-documents.controller.ts` |
 | `POST /api/warehouses/import-kaspi` | Импорт складов из предпросмотра выгрузки, повторяемый | ADMIN | `server/src/modules/warehouses/warehouses.routes.ts` |
 | `GET /api/products/skus` | Артикулы, уже сохранённые в каталоге | ADMIN | `server/src/modules/products/products.routes.ts` |
 | `POST /api/products/import-kaspi` | Сохранение загруженных товаров в каталог; создаёт только новые | ADMIN | `server/src/modules/products/products.routes.ts` |
@@ -141,6 +148,13 @@ shared/    # Общий код: типы контрактов, констант�
 | — | `sendTelegramPhoto(chatId, png, caption?)` | Готовая PNG-картинка в Telegram (multipart), подпись простым текстом до 1024 знаков, возвращает id сообщения | `server/src/lib/telegram.ts` |
 | products | `largeImageUrl(images)` | Самая крупная картинка товара — для карточки в Telegram | `server/src/modules/products/catalog.mapper.ts` |
 | warehouses | `updateWarehouseTelegram(id, groups)` | Три Telegram-группы склада по виду доставки; было/стало для журнала | `server/src/modules/warehouses/warehouses.service.ts` |
+| warehouses | `createOwnWarehouse(input)` | Наш склад без Kaspi; занятый код — 409 | `server/src/modules/warehouses/warehouses.service.ts` |
+| products | `variantSearchWhere(search)` | Поиск товара для Prisma — те же поля, что у поиска каталога | `server/src/modules/products/variant-search.ts` |
+| stock-documents | `listStockDocuments(input)`, `getStockDocument(number)` | Список и документ со строками; остаток в строке — на складе документа | `server/src/modules/stock-documents/stock-documents.service.ts` |
+| stock-documents | `createStockDocument()`, `updateStockDocument()`, `deleteStockDocument()` | Черновик: цены и суммы строк, только действующий склад; правка и удаление — под `lockDraft()`; `post` — проведение в той же транзакции | `server/src/modules/stock-documents/stock-documents.service.ts` |
+| stock-documents | `listStockPickerVariants(input)` | Товары для окна выбора, по 20 | `server/src/modules/stock-documents/stock-documents.service.ts` |
+| stock-documents | `applyPosting(tx, id, number, meta)` | Проведение внутри транзакции записи: блокировки, остаток, средняя дата поступления, себестоимость, история; списание в минус — 409 | `server/src/modules/stock-documents/stock-posting.service.ts` |
+| stock-documents | `lineAmount()`, `totalAmount()`, `writeOffPrice()` | Деньги документа в Decimal, предел колонок | `server/src/modules/stock-documents/stock-document-money.ts` |
 | workers | `startWorkerMonitor()` | Наблюдатель пульса в API: «не отвечает» / «снова на связи», один раз на смену | `server/src/modules/workers/engine/worker-monitor.ts` |
 | workers | `loadWorkerSettings()`, `loadWorkerState()`, `updateWorkerState()`, `listWorkers()`, `updateWorkerSettings()`, `isHeartbeatFresh()`, `isWeekday()` | Настройки и состояние, DTO, журнал изменений настроек | `server/src/modules/workers/engine/worker-settings.service.ts` |
 | workers | `recordWorkerEvents()`, `recordWorkerEvent()`, `findRecentWorkerEvents()`, `listWorkerEvents()` | Журнал воркера; сбой записи не роняет цикл; «было ли недавно» — повторяющийся сбой раз в час; страница журнала с получателем из `details` | `server/src/modules/workers/engine/worker-events.service.ts` |
@@ -212,12 +226,14 @@ shared/    # Общий код: типы контрактов, констант�
 | `Customer` | Клиент магазина: свой вход, телефон обязателен, email нет | — |
 | `Session` | Сессия сотрудника; в куке только id, состояние в таблице | `user` → `User`, `onDelete: Cascade` |
 | `AuditLog` | Журнал действий и история изменений полей (`source`, `changes`, `context`), только вставка и чтение | связей нет: логин и роль снимком |
-| `Warehouse` | Склад Kaspi: код `PP3`, `kaspiStoreId`, КАТО, наше название, снимок товаров и остатка, три Telegram-группы по виду доставки (`kaspiDeliveryChatId`, `ownDeliveryChatId`, `pickupChatId`) | `stocks` → `VariantStock`, `dispatches` |
+| `Warehouse` | Склад: Kaspi (код `PP3`, `kaspiStoreId`) или наш без Kaspi (`kaspiStoreId` пуст, шоурум), КАТО, наше название, снимок товаров и остатка, три Telegram-группы по виду доставки (`kaspiDeliveryChatId`, `ownDeliveryChatId`, `pickupChatId`) | `stocks` → `VariantStock`, `dispatches`, `stockDocuments` |
 | `Category` | Папка каталога, наше дерево с `path` | self-relation `parent` / `children`, `products` |
 | `Product` | Карточка модели: название, категория, бренд, `kaspiFamilyId` | `category`, `variants` |
 | `Variant` | Артикул: поля кабинета, статус продажи, флаги доставки, закупка с валютой, себестоимость в тенге, поставщик, ткань | `product`, `listings`, `stocks`, `fabric`, `fabricShade`, `supplier` |
 | `Listing` | Размещение на канале: цена, статус, ID площадки | `variant`; `@@unique([variantId, channel])` |
-| `VariantStock` | Артикул на складе: остаток (бывает отрицательным), резерв, ожидание, средняя дата поступления, момент снимка, срок предзаказа | `variant`, `warehouse` |
+| `VariantStock` | Артикул на складе: остаток (бывает отрицательным), резерв, ожидание, предзаказ количеством (`preOrderQuantity`), средняя дата поступления, момент снимка, срок предзаказа в днях | `variant`, `warehouse` |
+| `StockDocument` | Документ склада: оприходование / списание, номер `autoincrement` (`00128`), склад, сумма, черновик или проведён (кто, когда) | `warehouse`, `createdBy`, `postedBy` (`Restrict`), `lines` |
+| `StockDocumentLine` | Строка документа: товар, количество, цена, сумма, порядок; товар в документе один раз | `document` (`Cascade`), `variant` (`Restrict`) |
 | `Fabric` | Ткань обивки: наш справочник, Kaspi её не знает | `shades`, `variants` |
 | `FabricShade` | Оттенок ткани, принадлежит своей ткани | `fabric`, `variants` |
 | `SalesPoint` | Точка продаж: площадки (`KASPI`, `OZON`, `SITE`) и офлайн-точки в одном справочнике. Удаления нет, только закрытие | `orders` → `Order` |
@@ -260,7 +276,9 @@ shared/    # Общий код: типы контрактов, констант�
 | `/dashboard/orders` | Заказы: две кнопки синхронизации с Kaspi, поиск по номеру, точка продаж (по умолчанию Kaspi) задаёт вид таблицы, фильтры справочников только у офлайн-точки, выбор периода, клик по строке — окно заказа. При загрузке печатает сырьё Kaspi в консоль (отладка, убрать после сверки статусов) | `front/src/app/dashboard/(main)/orders/page.tsx` |
 | `/dashboard/imports` | Импорты: блоки «Excel продаж офлайн-точки», «Поставщики из МойСклада», «Товары из МойСклада», «Остатки из МойСклада» (склад, файл, предпросмотр, список на обнуление, запись). Только ADMIN | `front/src/app/dashboard/(main)/imports/page.tsx` |
 | `/dashboard/kaspi-sync` | Синхронизация с Kaspi. Вход по email работает — только «Загрузить все товары» по сессии; нет — ручная кука и XML-выгрузки | `front/src/app/dashboard/(main)/kaspi-sync/page.tsx` |
-| `/dashboard/settings` | Настройки, только ADMIN: «Кабинет Kaspi» (email, пароль, проверка), «Воркеры» (настройки, мгновенная отправка, состояние, причины неотправки, тестовая карточка, история воркера), «Получатели в Telegram» (три группы Астаны по виду доставки, поставщики). Ссылка в меню — за пользователем | `front/src/app/dashboard/(main)/settings/page.tsx` |
+| `/dashboard/products/stock-documents` | Документы склада: список с фильтрами по типу, складу и номеру; ADMIN, MANAGER; ссылка в меню | `front/src/app/dashboard/(main)/products/stock-documents/page.tsx` |
+| `/dashboard/products/stock-documents/new`, `/[number]` | Новый документ и документ по номеру: тип, склад, комментарий, товары из окна выбора, количество и цена, обязательный комментарий, галочка «Проведено» (ADMIN), «Создать», «Сохранить», «Удалить черновик»; проведённый — только чтение | `front/src/app/dashboard/(main)/products/stock-documents/new/page.tsx`, `.../[number]/page.tsx` |
+| `/dashboard/settings` | Настройки, только ADMIN: «Кабинет Kaspi» (email, пароль, проверка), «Воркеры» (настройки, мгновенная отправка, состояние, причины неотправки, тестовая карточка, история воркера), «Получатели в Telegram» (три группы Астаны по виду доставки, поставщики), «Склады» (список, новый склад без Kaspi). Ссылка в меню — за пользователем | `front/src/app/dashboard/(main)/settings/page.tsx` |
 
 **Каталог с деревом папок:** `/dashboard/products` подключён к API; дерево, создание папок, поиск и пагинация готовы. Строки товаров через children добавляет пользователь. Ответ API выводится в консоль браузера. См. [docs/app-structure.md](docs/app-structure.md).
 
@@ -308,6 +326,12 @@ shared/    # Общий код: типы контрактов, констант�
 | `SettingsLayout` | Защита раздела настроек ролью ADMIN | `front/src/app/dashboard/(main)/settings/layout.tsx` |
 | `WorkersBlock` | Блок «Воркеры» в настройках: состояние и настройки каждого воркера, «Сохранить» только при изменениях, галочка «Мгновенная отправка» | `front/src/app/dashboard/(main)/settings/_components/workers-block.tsx` |
 | `WorkerEventsTable` | Таблица «История воркера» в карточке воркера: события, получатель, Telegram ID, фильтры по виду и номеру заказа | `front/src/app/dashboard/(main)/settings/_components/worker-events-table.tsx` |
+| `WarehousesBlock` | Блок «Склады» в настройках: список справочника, форма нового склада без Kaspi | `front/src/app/dashboard/(main)/settings/_components/warehouses-block.tsx` |
+| `ProductPicker` | Окно выбора товаров: поиск, фото, артикул, галки, страницы; данные снаружи — документы склада, позже заказ поставщику | `front/src/components/product-picker/index.tsx` |
+| `Badge` | Плашка статуса: neutral / success / danger | `front/src/components/badge/index.tsx` |
+| `Hint` | Значок «?» с подсказкой по наведению и фокусу | `front/src/components/hint/index.tsx` |
+| `StockDocumentEditor`, `StockDocumentLines` | Документ склада: шапка, строки с количеством и ценой, итог, кнопки, окно выбора, подтверждение удаления | `front/src/app/dashboard/(main)/products/stock-documents/_components/stock-document-editor.tsx`, `stock-document-lines.tsx` |
+| `StockDocumentsTableHead`, `StockDocumentRow`, `DocumentStatus` | Таблица списка документов (строка открывается кликом) и статус «Черновик / Проведён» | `front/src/app/dashboard/(main)/products/stock-documents/_components/stock-documents-table.tsx`, `document-meta.tsx` |
 | `SupplierTelegramBlock` | Блок «Получатели в Telegram»: три поля групп Астаны (Zammler, своя доставка, самовывоз) и выпадашка поставщиков → окно с полем Telegram ID | `front/src/app/dashboard/(main)/settings/_components/supplier-telegram-block.tsx` |
 | `KaspiCabinetBlock` | Блок настроек «Кабинет Kaspi»: состояние входа, email, пароль, «Сохранить», «Проверить подключение»; разметка минимальная | `front/src/app/dashboard/(main)/settings/_components/kaspi-cabinet-block.tsx` |
 | `CatalogSummary` | Счётчики разбора выгрузки над таблицей товаров | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-summary.tsx` |
@@ -431,6 +455,17 @@ shared/    # Общий код: типы контрактов, констант�
 | `useWorkerSettingsForm(worker)` | Черновик настроек воркера: изменения уходят только по «Сохранить», опрос состояния их не затирает | `front/src/features/workers/use-worker-settings-form.ts` |
 | `useAstanaGroupForm()`, `useUpdateWarehouseMutation` | Три группы склада PP3 по виду доставки: черновик, проверка формата, одно сохранение | `front/src/features/warehouses/use-astana-group-form.ts`, `warehouses-api.ts` |
 | `ASTANA_STOCK_WAREHOUSE_CODE`, `WAREHOUSE_TELEGRAM_GROUP_FIELDS`, `WAREHOUSE_TELEGRAM_GROUP_LABELS`, `DISPATCH_KINDS`, `DispatchKind`, `UpdateWarehouseRequest` | Склад Астаны (PP3), поле группы склада и подпись по виду доставки, виды отправки, правка склада | `shared/src/constants/workers.ts`, `shared/src/types/kaspi-catalog.ts` |
+| `useCreateWarehouseForm()` | Форма нового склада без Kaspi: код заглавными, проверка как на сервере | `front/src/features/warehouses/use-create-warehouse-form.ts` |
+| `useStockDocumentsList()` | Список документов склада: страница, фильтры, номер с задержкой 300 мс | `front/src/features/stock-documents/use-stock-documents-list.ts` |
+| `useStockDocumentDraft(document, callbacks)` | Черновик документа: шапка, строки, суммы в тиын, проверка и обязательный комментарий, галочка «Проведено», «Создать»/«Сохранить»/«Удалить» | `front/src/features/stock-documents/use-stock-document-draft.ts` |
+| `useStockPicker(warehouseId, onConfirm)` | Окно выбора товаров: поиск с задержкой, страницы, выбор копится по страницам | `front/src/features/stock-documents/use-stock-picker.ts` |
+| `stockDocumentsApi` (`useGetStockDocumentsQuery` и др.) | RTK Query документов склада; проведение помечает и `Product` | `front/src/features/stock-documents/stock-documents-api.ts` |
+| `priceToTiyn()`, `normalizePrice()`, `tiynToTenge()` | Деньги черновика в целых тиын | `front/src/features/stock-documents/stock-money.ts` |
+| `formatMoneyExact(value)` | Сумма с тиын, если есть: для учётных документов | `front/src/lib/format.ts` |
+| `STOCK_DOCUMENT_TYPES`, `STOCK_DOCUMENT_ROLES`, `STOCK_DOCUMENT_POST_ROLES`, пределы, `formatStockDocumentNumber()`, `parseStockDocumentNumber()` | Виды, роли, номер `00128` | `shared/src/constants/stock-documents.ts` |
+| `WAREHOUSE_KASPI_CODE_PATTERN`, `WAREHOUSE_OWN_CODE_PATTERN`, `WAREHOUSE_NAME_MAX_LENGTH` | Коды складов Kaspi и наших | `shared/src/constants/warehouses.ts` |
+| `StockDocumentDto`, `StockDocumentListItemDto`, `StockVariantDto`, `SaveStockDocumentRequest`, `StockPickerResponse` и др. | Контракты документов склада | `shared/src/types/stock-documents.ts` |
+| `CreateWarehouseRequest` | Тело создания своего склада | `shared/src/types/kaspi-catalog.ts` |
 | `useSupplierTelegramForm(suppliers)` | Окно поставщика с полем Telegram ID, проверка формата | `front/src/features/suppliers/use-supplier-telegram-form.ts` |
 | `useKaspiCabinetSignedIn()` | Работает ли вход в кабинет: данные сохранены и последний вход `OK`; отдельно `isLoading` | `front/src/features/kaspi-cabinet/use-kaspi-cabinet-signed-in.ts` |
 | `KASPI_LOGIN_STATUSES`, `KaspiLoginStatus`, `KASPI_LOGIN_STATUS_LABELS`, `KASPI_CABINET_EMAIL_MAX_LENGTH`, `KASPI_CABINET_PASSWORD_MAX_LENGTH` | Итоги входа в кабинет Kaspi и их подписи, лимиты полей | `shared/src/constants/kaspi-cabinet.ts` |
@@ -514,6 +549,7 @@ shared/    # Общий код: типы контрактов, констант�
 | [analytics-spec.md](docs/analytics-spec.md) | Спецификация аналитического модуля: принципы визуализации (Tufte / Few / Munzner), информационная архитектура из 8 табов, состав графиков и KPI. Источник правды для имплементации дашборда. |
 | [kaspi-api-integration.md](docs/kaspi-api-integration.md) | Kaspi Shop API целиком: авторизация по `X-Auth-Token`, шифрование токена, эндпоинты заказов и позиций, стратегия синхронизации, маппинг полей, статусы заказов, схема БД, грабли. Раздел 10 — каталог товаров: разбор XML-выгрузки и JSON кабинета (`list?m=&p=&l=&a=`), маппинг всех полей, три цены и три идентификатора, картинки, штрихкод. Раздел 11 — дерево папок из `categoryPathCodes` и `familyId`. Раздел 10, «Как заходим» — разведка входа в кабинет (29.09.2026): JSON-вход `idmc.shop.kaspi.kz/api/p/login`, ответы и ошибки, адреса кабинета, GraphQL заказов. Раздел 12 — чек-лист непроверенного. Раздел 13 — обратное направление: наличие товара ведётся у нас и уходит в Kaspi через XML, поля `storeId`/`preOrder`/`stockCount`/`available` и откуда они берутся. |
 | [workers.md](docs/workers.md) | Воркеры — фоновые задачи: решения пользователя (интервал, период, задержка и часы отправки, оповещения), отдельный процесс, цикл без наложений, самовосстановление, журнал, этапы и открытые вопросы этапа 3. |
+| [inventory.md](docs/inventory.md) | Складской учёт: модель остатков (остаток, резерв, предзаказ, ожидание, доступно), документы склада — черновик и проведение, склады без Kaspi, этапы B (резерв по заказам) и C (заказ поставщику, приёмка). |
 | [telegram-bot.md](docs/telegram-bot.md) | Telegram-бот: отправка сообщений и карточек-картинок заказа, маршрутизация получателям (поставщик / склад / доставка), уведомления об отменах и возвратах, cron и расписание, грабли. |
 
 Новые документы создаются в момент первой записи, по правилу «новый код — сразу

@@ -146,15 +146,17 @@
 
 ---
 
-## Warehouse — склад (точка выдачи)
+## Warehouse — склад
 
-Справочник складов Kaspi. Заводится из выгрузки каталога, дальше правится руками.
+Справочник складов, один на всё. Склады Kaspi (точки выдачи) заводятся из выгрузки
+каталога, дальше правятся руками. **Наши склады без Kaspi** (шоурум в ТЦ) заводятся
+руками: код и название, `kaspiStoreId` пуст — см. [inventory.md](inventory.md), раздел 3.
 
 | Поле | Тип | Замечание |
 |---|---|---|
 | `id` | `uuid` | — |
-| `code` | `String @unique` | Наш короткий код: `PP3`. Ключ сверки при повторном импорте |
-| `kaspiStoreId` | `String @unique` | Как в выгрузке и в заказах Kaspi: `6871008_PP3` |
+| `code` | `String @unique` | Наш короткий код: `PP3`, у своих складов — `NCITY`. Ключ сверки при повторном импорте; `PPn` — только у складов Kaspi |
+| `kaspiStoreId` | `String? @unique` | Как в выгрузке и в заказах Kaspi: `6871008_PP3`. Пусто — наш склад без Kaspi: заказы площадки на него не попадают, в XML не уходит |
 | `kaspiCityId` | `String?` | Код города по КАТО. У части складов в выгрузке пусто |
 | `name` | `String?` | **Наше** название точки. В выгрузке его нет |
 | `isActive` | `Boolean @default(true)` | Точку закрыли — отключаем, не удаляем |
@@ -181,7 +183,8 @@
 **Удаления нет.** Склад, пропавший из новой выгрузки, остаётся в справочнике:
 на него ссылаются прошлые заказы.
 
-Импорт — `saveKaspiWarehouses()` в `server/src/modules/warehouses/warehouses.service.ts`,
+Импорт — `saveKaspiWarehouses()`, наш склад — `createOwnWarehouse()`, оба в
+`server/src/modules/warehouses/warehouses.service.ts`,
 контракт эндпоинта — в [api-reference.md](api-reference.md).
 
 ---
@@ -296,8 +299,10 @@ Category ──< Product ──< Variant ──┬──< Listing        (кан
 
 ### VariantStock — остаток на складе
 
-`variantId`, `warehouseId`, `quantity?`, `reserved?`, `expected?`, `receivedAt?`,
-`stockAt?`, `preOrderDays`. `@@unique([variantId, warehouseId])`.
+`variantId`, `warehouseId`, `quantity?`, `reserved?`, `expected?`, `preOrderQuantity`,
+`receivedAt?`, `stockAt?`, `preOrderDays`. `@@unique([variantId, warehouseId])`.
+
+Как эти цифры меняются при заказах и документах — [inventory.md](inventory.md), раздел 1.
 
 Одна строка — один склад товара: у товара на двух складах две строки, у каждой
 свои цифры и свой срок.
@@ -315,6 +320,7 @@ Category ──< Product ──< Variant ──┬──< Listing        (кан
 |---|---|
 | `reserved` | Резерв: обещано по заказам, продать нельзя |
 | `expected` | Ожидание: заказано у поставщика, едет |
+| `preOrderQuantity` | Предзаказ **количеством**: продано под предзаказ, нужно привезти. `Int @default(0)`. Не путать с `preOrderDays` — сроком в днях. Заполнять будет резерв по заказам (этап B) |
 | `receivedAt` | Средняя дата поступления того, что лежит, взвешенная по количеству. «Дней на складе» считается от неё при выдаче |
 | `stockAt` | На какой момент цифры: время отчёта «Остатки» |
 
@@ -335,6 +341,38 @@ Category ──< Product ──< Variant ──┬──< Listing        (кан
 Отсюда следствие для будущей синхронизации: `preOrderDays` **не
 перезаписывается** данными кабинета молча — расхождение показываем, решение
 за человеком.
+
+### StockDocument — документ склада
+
+Оприходование или списание. Подробности и правила — [inventory.md](inventory.md), раздел 2.
+
+| Поле | Тип | Замечание |
+|---|---|---|
+| `id` | `uuid` | — |
+| `number` | `Int @unique @default(autoincrement())` | Номер для людей, на экране `00128`. Выдаёт база, не переиспользуется |
+| `type` | `StockDocumentType` | `ENTER` — оприходование, `WRITE_OFF` — списание |
+| `warehouseId` | `uuid` → `Warehouse` | `onDelete: Restrict` |
+| `comment` | `String?` | До 1000 символов |
+| `totalAmount` | `Decimal(14, 2) @default(0)` | Σ сумм строк. Хранится: у проведённого это факт на момент проведения |
+| `postedAt` | `DateTime?` | Пусто — черновик, остатки не тронуты |
+| `postedById` | `uuid?` → `User` | Кто провёл. `Restrict`: сотрудников не удаляют |
+| `createdById` | `uuid` → `User` | Кто создал. `Restrict` |
+| `createdAt` / `updatedAt` | `DateTime` | — |
+
+Индексы: `createdAt`, `(type, createdAt)`, `warehouseId`.
+
+### StockDocumentLine — строка документа
+
+| Поле | Тип | Замечание |
+|---|---|---|
+| `documentId` | `uuid` → `StockDocument` | `onDelete: Cascade` — строки удаляются вместе с черновиком |
+| `variantId` | `uuid` → `Variant` | `onDelete: Restrict` |
+| `quantity` | `Int` | Больше нуля; знак задаёт вид документа |
+| `price` | `Decimal(12, 2)` | Цена за единицу, тенге. Оприходование — введённая; списание — себестоимость на момент проведения |
+| `amount` | `Decimal(14, 2)` | Количество × цена |
+| `position` | `Int` | Порядок строк, как добавил человек |
+
+`@@unique([documentId, variantId])` — товар в документе один раз; индекс по `variantId`.
 
 ### Fabric и FabricShade — ткани и оттенки
 
@@ -744,6 +782,7 @@ Email, пароль и сессия кабинета продавца. **Зап�
 | `order_planned_point_delivery` | Добавляет в `Order` поля `plannedPointDeliveryAt` («Планируемая дата прибытия» из кабинета) и `cabinetSyncedAt` (когда спрашивали кабинет) |
 | `worker_instant_dispatch` | Добавляет `WorkerSettings.supplierNotifyInstant`; добавляет в enum `DispatchRecipient` значение `DEVELOPER` |
 | `warehouse_delivery_groups` | **Написана руками:** переименовывает `Warehouse.telegramChatId` в `kaspiDeliveryChatId` (вписанная группа сохраняется), добавляет `ownDeliveryChatId` и `pickupChatId` |
+| `stock_documents` | `Warehouse.kaspiStoreId` становится необязательным (наши склады без Kaspi); добавляет `VariantStock.preOrderQuantity`; создаёт `StockDocument`, `StockDocumentLine` и enum `StockDocumentType` |
 
 Файлы миграций коммитятся в git — без них базу не поднять заново.
 

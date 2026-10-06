@@ -29,6 +29,15 @@ front/src/app/
         │   ├── layout.tsx          # RoleGuard: только ADMIN
         │   ├── page.tsx            → /dashboard/accounts
         │   └── _components/        # только для этой страницы
+        ├── products/
+        │   ├── layout.tsx          # RoleGuard: все вошедшие
+        │   ├── page.tsx            → /dashboard/products
+        │   └── stock-documents/
+        │       ├── layout.tsx      # RoleGuard: STOCK_DOCUMENT_ROLES
+        │       ├── page.tsx        → /dashboard/products/stock-documents
+        │       ├── new/page.tsx    → /dashboard/products/stock-documents/new
+        │       ├── [number]/page.tsx → /dashboard/products/stock-documents/00128
+        │       └── _components/
         ├── kaspi-sync/
         │   ├── layout.tsx          # RoleGuard: только ADMIN
         │   ├── page.tsx            → /dashboard/kaspi-sync
@@ -793,6 +802,86 @@ Email и пароль от кабинета продавца и кнопка «�
 - Компонент: `SupplierTelegramBlock` — `.../settings/_components/supplier-telegram-block.tsx`.
 - Хуки: `useAstanaGroupForm()` — `front/src/features/warehouses/use-astana-group-form.ts`,
   `useSupplierTelegramForm(suppliers)` — `front/src/features/suppliers/use-supplier-telegram-form.ts`.
+
+### Блок «Склады»
+
+Список справочника: код, название, плашка «Kaspi» или «наш склад», «закрыт».
+Под ним форма **«Новый склад без Kaspi»**: код (`NCITY`, приводится к заглавным)
+и название → «Создать склад». Для шоурума и других мест хранения без связи
+с Kaspi ([inventory.md](inventory.md), раздел 3). Склады Kaspi здесь не заводятся —
+они приходят из выгрузки на странице синхронизации.
+
+- Данные: `GET /api/warehouses`, `POST /api/warehouses`.
+- Компонент: `WarehousesBlock` — `.../settings/_components/warehouses-block.tsx`.
+- Хук: `useCreateWarehouseForm()` — `front/src/features/warehouses/use-create-warehouse-form.ts`.
+
+---
+
+## /dashboard/products/stock-documents — документы склада
+
+Оприходование и списание ([inventory.md](inventory.md), раздел 2). Раздел —
+только `STOCK_DOCUMENT_ROLES` (`ADMIN`, `MANAGER`): `RoleGuard` в `layout.tsx`,
+остальных уводит в каталог. Ссылка «Документы склада» в меню — тем же ролям.
+
+### /dashboard/products/stock-documents
+Список документов, свежие сверху.
+- Тип: раздел dashboard
+- Данные: `GET /api/stock-documents`, `GET /api/warehouses`
+- Ключевые компоненты: `Tables`, `Dropdown` (фильтры «Тип» и «Склад»), `Input` (номер),
+  `StockDocumentsTableHead`, `StockDocumentRow`, `Badge`. Колонки: №, дата, тип, склад,
+  товаров, сумма, статус (черновик / проведён), комментарий, создал, изменён.
+  Документ открывается кликом по строке (Ctrl/⌘ — в новой вкладке; выделение текста — не переход),
+  номер — ещё и ссылка для клавиатуры; фильтр по номеру — целиком, `128` = `00128`, задержка 300 мс
+- Хук: `useStockDocumentsList()` — `front/src/features/stock-documents/use-stock-documents-list.ts`
+- Файл: `front/src/app/dashboard/(main)/products/stock-documents/page.tsx`
+
+### /dashboard/products/stock-documents/new и /[number]
+Новый документ и документ по номеру — один редактор `StockDocumentEditor`.
+- Тип: страница
+- Данные: `GET /api/stock-documents/:number`, `POST`/`PUT`/`DELETE /api/stock-documents[/:number]`
+  (проведение — `post: true`), `GET /api/stock-documents/variants`, `GET /api/warehouses`
+- Ключевые компоненты: `StockDocumentEditor` (шапка: тип, склад, комментарий; кнопки),
+  `StockDocumentLines` (фото, товар, артикул, остаток на складе, кол-во, цена, сумма, «убрать»),
+  `ProductPicker` (окно выбора), `Modal` (подтверждение удаления)
+- Поведение:
+  - «Добавить товары» — после выбора склада; окно копит выбор по страницам и поискам,
+    уже добавленные отмечены «уже в документе». Цена новой строки — себестоимость;
+  - оприходование — цена правится; списание — колонка «Себестоимость», не правится;
+  - комментарий обязателен (от 20 символов): пустой подсвечен красным
+    «Заполните комментарий ОСМЫСЛЕННО! Ещё символов: N», «Создать»/«Сохранить» неактивны;
+  - галочка «Проведено» (только ADMIN) в рамке; отмеченная — красная рамка
+    и предупреждение. Проводится по «Создать»/«Сохранить» одной транзакцией;
+  - «Создать» — запись и переход на адрес документа; дальше «Сохранить», «Удалить черновик»;
+  - у оприходования рядом с «Цена» — `Hint`: изменение цены перезапишет себестоимость;
+  - проведённый — только чтение, плашка «Проведён», кто и когда провёл;
+  - смена склада прячет остатки в строках до записи: они были по прежнему складу.
+- Хуки: `useStockDocumentDraft(document, callbacks)` — `front/src/features/stock-documents/use-stock-document-draft.ts`,
+  `useStockPicker(warehouseId, onConfirm)` — `front/src/features/stock-documents/use-stock-picker.ts`
+- Файлы: `.../stock-documents/new/page.tsx`, `.../stock-documents/[number]/page.tsx`,
+  `.../stock-documents/_components/` (`stock-document-editor.tsx`, `stock-document-lines.tsx`,
+  `stock-documents-table.tsx`, `document-meta.tsx`, `stock-documents.module.scss`)
+
+---
+
+## ProductPicker — окно выбора товаров
+Переиспользуемый компонент: поиск, список с фото, названием и артикулом, галки,
+страницы, «Выбрано: N», «Добавить». Данных не грузит и маршрута не знает — всё
+управляется снаружи (документ склада, позже заказ поставщику). Справа в строке —
+`aside` от вызывающего (остаток, цена); `disabled` — товар уже добавлен.
+- Тип: переиспользуемый компонент
+- Файл: `front/src/components/product-picker/index.tsx`
+
+## Hint — подсказка «?»
+Значок вопроса с подсказкой по наведению и фокусу с клавиатуры (не `title`: его не видно
+с клавиатуры и на тач-экране). Открывается вниз — вверх в таблице с прокруткой обрезалась бы.
+`align="end"` — у правых колонок.
+- Тип: переиспользуемый компонент
+- Файл: `front/src/components/hint/index.tsx`
+
+## Badge — плашка статуса
+`tone`: `neutral` | `success` | `danger`. Цвет успеха — `--status-success` с запасным значением.
+- Тип: переиспользуемый компонент
+- Файл: `front/src/components/badge/index.tsx`
 
 ---
 

@@ -2,7 +2,7 @@ import type { SaveWarehousesResponse, UpdateWarehouseRequest, WarehouseDto } fro
 
 import { prisma } from '../../db/client';
 import { ConflictError, NotFoundError } from '../../lib/errors';
-import type { SaveWarehousesInput } from './warehouses.schemas';
+import type { CreateWarehouseInput, SaveWarehousesInput } from './warehouses.schemas';
 import type { Warehouse } from '../../generated/prisma/client';
 
 /** DTO наружу — явный набор полей, а не модель целиком. */
@@ -45,6 +45,24 @@ export async function updateWarehouseTelegram(
   });
 
   return { before: toWarehouseDto(current), after: toWarehouseDto(updated) };
+}
+
+/**
+ * Наш склад без Kaspi — шоурум, склад в ТЦ. Связки с площадкой у него нет:
+ * заказы Kaspi на него не попадают, а остатки ведутся документами склада.
+ */
+export async function createOwnWarehouse(input: CreateWarehouseInput): Promise<WarehouseDto> {
+  try {
+    const created = await prisma.warehouse.create({
+      data: { code: input.code, name: input.name, kaspiStoreId: null },
+    });
+
+    return toWarehouseDto(created);
+  } catch (error) {
+    if (isUniqueViolation(error)) throw new ConflictError(`Склад с кодом ${input.code} уже есть`);
+
+    throw error;
+  }
 }
 
 /** Справочник складов, по коду — так их читает человек. */

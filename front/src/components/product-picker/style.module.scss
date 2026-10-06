@@ -1,0 +1,131 @@
+/* Окно выбора товаров. Ширину задаёт сам компонент: окно с одной формой
+   уже, а список с фото и остатком в узкое окно не помещается.
+
+   Класс удвоен, как у окна заказа: у Modal свой max-width той же
+   специфичности, и без удвоения победитель зависел бы от порядка
+   подключения стилей. */
+
+.picker.picker {
+  max-width: min(48rem, calc(100vw - 2rem));
+}
+
+.search {
+  margin-bottom: 0.75rem;
+}
+
+/* Высота списка постоянная: окно не прыгает, пока грузится новая страница. */
+.list {
+  height: min(28rem, 60vh);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.status {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--muted-foreground);
+}
+
+.items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+
+  &:last-child { border-bottom: 0; }
+  &:hover { background: var(--muted); }
+}
+
+.itemSelected { background: var(--accent); }
+
+.image,
+.noImage {
+  flex-shrink: 0;
+  width: 3rem;
+  height: 3rem;
+  /* preflight Tailwind ставит img { max-width: 100%; height: auto } — без этого
+     картинка в узкой строке сплющивается. */
+  max-width: none;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius);
+  background: var(--muted);
+}
+
+.image { object-fit: cover; }
+
+.noImage {
+  display: grid;
+  place-items: center;
+  color: var(--muted-foreground);
+  font-size: 0.5625rem;
+  text-align: center;
+}
+
+.names {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.125rem;
+}
+
+.title {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sku {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8125rem;
+}
+
+.aside {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.pages {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+
+  button {
+    min-width: 2rem;
+    padding: 0.375rem 0.625rem;
+    color: inherit;
+    font: inherit;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+
+    &:hover:not(:disabled) { background: var(--muted); }
+    &:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+}
+
+.selectedCount {
+  margin-right: auto;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+

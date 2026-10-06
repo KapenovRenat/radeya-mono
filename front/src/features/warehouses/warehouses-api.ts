@@ -1,4 +1,5 @@
 import type {
+  CreateWarehouseRequest,
   SaveWarehousesRequest,
   SaveWarehousesResponse,
   UpdateWarehouseRequest,
@@ -30,6 +31,12 @@ export const warehousesApi = baseApi.injectEndpoints({
       invalidatesTags: ["Warehouse"],
     }),
 
+    /** Наш склад без Kaspi: шоурум, склад в ТЦ. */
+    createWarehouse: build.mutation<WarehouseDto, CreateWarehouseRequest>({
+      query: (body) => ({ url: "/warehouses", method: "POST", body }),
+      invalidatesTags: ["Warehouse", "Audit"],
+    }),
+
     /** Telegram-группы склада по виду доставки: Zammler, своя доставка, самовывоз. */
     updateWarehouse: build.mutation<WarehouseDto, { id: string } & UpdateWarehouseRequest>({
       query: ({ id, ...body }) => ({ url: `/warehouses/${id}`, method: "PATCH", body }),
@@ -40,6 +47,7 @@ export const warehousesApi = baseApi.injectEndpoints({
 
 export const {
   useGetWarehousesQuery,
+  useCreateWarehouseMutation,
   useImportKaspiWarehousesMutation,
   useUpdateWarehouseMutation,
 } = warehousesApi;
