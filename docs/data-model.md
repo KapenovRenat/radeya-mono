@@ -41,7 +41,7 @@
 
 ### enum UserRole
 
-`ADMIN` · `MANAGER` · `SELLER` · `VIEWER`
+`ADMIN` · `MANAGER` · `SELLER` · `VIEWER` · `DEVELOPER`
 
 Значения обязаны совпадать с `USER_ROLES` в `shared/src/constants/roles.ts` — там же
 лежат подписи для интерфейса. Новая роль — четыре места: `USER_ROLES`, `USER_ROLE_LABELS`,
@@ -787,6 +787,7 @@ Email, пароль и сессия кабинета продавца. **Зап�
 | `stock_documents` | `Warehouse.kaspiStoreId` становится необязательным (наши склады без Kaspi); добавляет `VariantStock.preOrderQuantity`; создаёт `StockDocument`, `StockDocumentLine` и enum `StockDocumentType` |
 | `user_permissions` | Добавляет `User.permissions`; `OrderComment.authorId`, `Order.sellerId`, `StockDocument.createdById`/`postedById` — `SetNull` вместо `Restrict` (удаление сотрудника) |
 | `user_permissions_backfill` | **Написана руками:** выдаёт текущим сотрудникам права по роли (шаблоны на 07.10.2026), только тем, у кого прав ещё нет; админам не нужно |
+| `role_developer` | Добавляет в enum `UserRole` значение `DEVELOPER` (роль «Разработчик») |
 
 Файлы миграций коммитятся в git — без них базу не поднять заново.
 

@@ -256,7 +256,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `OrderDispatch` | Отправка позиции заказа в Telegram: вид, статус, получатель снимком, попытки; уникальность «позиция + вид» — анти-дубль | `order`, `entry` (`Cascade`), `supplier`, `warehouse` (`SetNull`) |
 | `DispatchKind`, `DispatchStatus`, `DispatchRecipient` (enum) | NEW/CANCEL/RETURN; PENDING/SENT/SKIPPED/FAILED; SUPPLIER/WAREHOUSE/DEVELOPER | — |
 | `KaspiLoginStatus` (enum) | Итог входа в кабинет: OK, CODE_REQUIRED, MERCHANT_CHOICE_REQUIRED, CREDENTIALS_INVALID, BLOCKED, ERROR | — |
-| `UserRole` (enum) | Роли сотрудников: ADMIN, MANAGER, SELLER, VIEWER — совпадает с `USER_ROLES` | — |
+| `UserRole` (enum) | Роли сотрудников: ADMIN, MANAGER, SELLER, VIEWER, DEVELOPER — совпадает с `USER_ROLES` | — |
 | `SalesChannel` (enum) | Каналы продаж: SITE, KASPI, OZON | — |
 | `ListingStatus` (enum) | Статус размещения: ON_SALE, OFF_SALE | — |
 | `ChangeSource` (enum) | Источник записи истории: KASPI_SYNC, MANUAL, IMPORT | — |
@@ -355,7 +355,7 @@ shared/    # Общий код: типы контрактов, констант�
 
 | Имя | Назначение | Файл |
 |---|---|---|
-| `USER_ROLES`, `UserRole` | Роли сотрудников: ADMIN, MANAGER, SELLER, VIEWER. Новая роль — ещё `USER_ROLE_LABELS` и enum в `schema.prisma` | `shared/src/constants/roles.ts` |
+| `USER_ROLES`, `UserRole` | Роли сотрудников: ADMIN, MANAGER, SELLER, VIEWER, DEVELOPER. Новая роль — ещё `USER_ROLE_LABELS` и enum в `schema.prisma` | `shared/src/constants/roles.ts` |
 | `PERMISSIONS`, `PERMISSION_INFO`, `PERMISSION_GROUPS`, `ROLE_PERMISSION_TEMPLATES`, `hasPermission()`, `normalizePermissions()` | Права-галочки: список, подписи, шаблоны ролей, одна проверка для сервера и фронта (админу — всё) | `shared/src/constants/permissions.ts` |
 | `DELETED_USER_NAME` | Подпись вместо удалённого сотрудника | `shared/src/constants/roles.ts` |
 | `SETTINGS_PERMISSIONS`, `SETTINGS_BLOCK_PERMISSIONS` | Права блоков настроек — для layout, страницы и меню | `front/src/features/settings/settings-permissions.ts` |
