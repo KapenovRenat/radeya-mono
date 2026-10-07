@@ -1,13 +1,12 @@
 import express, { Router } from 'express';
-import { USER_ROLES } from '@radeya/shared';
+import { PERMISSIONS } from '@radeya/shared';
 
 import { can } from '../../middlewares/require-auth';
 import { commitOfflineOrders, previewOfflineOrders } from './imports.controller';
 
-const { ADMIN } = USER_ROLES;
 
 /**
- * Импорт данных из файлов. Только ADMIN: это запись в заказы пачкой,
+ * Импорт данных из файлов. Право IMPORTS: это запись в заказы пачкой,
  * и ошибка здесь стоит дороже, чем в любой форме.
  */
 export const importsRouter = Router();
@@ -25,7 +24,7 @@ importsRouter.use(can());
  */
 importsRouter.post(
   '/offline-orders/preview',
-  can([ADMIN]),
+  can(PERMISSIONS.IMPORTS),
   express.raw({ type: '*/*', limit: '25mb' }),
   previewOfflineOrders,
 );
@@ -33,7 +32,7 @@ importsRouter.post(
 /** Запись: здесь тело обычный JSON — строки, которые человек увидел в предпросмотре. */
 importsRouter.post(
   '/offline-orders/commit',
-  can([ADMIN]),
+  can(PERMISSIONS.IMPORTS),
   express.json({ limit: '25mb' }),
   commitOfflineOrders,
 );

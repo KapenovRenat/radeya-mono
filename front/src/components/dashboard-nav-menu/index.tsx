@@ -6,8 +6,9 @@ import styles from "./style.module.scss";
 import {Button} from "@/components/button";
 import {useAuth, useLogout} from "@/features/auth/use-auth";
 import Link from "next/link";
-import {STOCK_DOCUMENT_ROLES, USER_ROLES} from "@radeya/shared";
+import {PERMISSIONS} from "@radeya/shared";
 import {useCan} from "@/features/auth/use-can";
+import {SETTINGS_PERMISSIONS} from "@/features/settings/settings-permissions";
 
 export function DashboardNavMenu({ children, className }: { children?: React.ReactNode, className?: string }) {
     const { logout, isLoading } = useLogout();
@@ -30,23 +31,23 @@ export function DashboardNavMenu({ children, className }: { children?: React.Rea
                             <p>Статистика</p>
                         </Link>
                     </li>
-                    <li>
+                    {can(PERMISSIONS.ORDERS_VIEW) ? <li>
                         <Link href="/dashboard/orders">
                             <div>
 
                             </div>
                             <p>Заказы</p>
                         </Link>
-                    </li>
-                    <li>
+                    </li> : null}
+                    {can(PERMISSIONS.CATALOG_VIEW) ? <li>
                         <Link href="/dashboard/products">
                             <div>
 
                             </div>
                             <p>Товары</p>
                         </Link>
-                    </li>
-                    {can(STOCK_DOCUMENT_ROLES) ? <li>
+                    </li> : null}
+                    {can(PERMISSIONS.STOCK_DOCUMENTS_VIEW) ? <li>
                         <Link href="/dashboard/products/stock-documents">
                             <div>
 
@@ -54,7 +55,7 @@ export function DashboardNavMenu({ children, className }: { children?: React.Rea
                             <p>Документы склада</p>
                         </Link>
                     </li> : null}
-                    {user?.role === USER_ROLES.ADMIN ? <li>
+                    {can([PERMISSIONS.USERS_MANAGE, PERMISSIONS.AUDIT_VIEW]) ? <li>
                         <Link href="/dashboard/accounts">
                             <div>
 
@@ -63,7 +64,7 @@ export function DashboardNavMenu({ children, className }: { children?: React.Rea
                         </Link>
                     </li> : null}
 
-                    {user?.role === USER_ROLES.ADMIN ? <li>
+                    {can(PERMISSIONS.IMPORTS) ? <li>
                         <Link href="/dashboard/imports">
                             <div>
 
@@ -72,7 +73,7 @@ export function DashboardNavMenu({ children, className }: { children?: React.Rea
                         </Link>
                     </li> : null}
 
-                    {user?.role === USER_ROLES.ADMIN ? <li>
+                    {can(PERMISSIONS.KASPI_SYNC) ? <li>
                         <Link href="/dashboard/kaspi-sync">
                             <div>
 
@@ -81,7 +82,7 @@ export function DashboardNavMenu({ children, className }: { children?: React.Rea
                         </Link>
                     </li> : null}
 
-                    {user?.role === USER_ROLES.ADMIN ? <li>
+                    {can(SETTINGS_PERMISSIONS) ? <li>
                         <Link href="/dashboard/settings">
                             <div>
 

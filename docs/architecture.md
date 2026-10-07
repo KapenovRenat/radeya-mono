@@ -466,7 +466,7 @@ page.tsx и style.module.scss. Строки товаров для Tables.childre
 Оприходование и списание — первый модуль складского учёта. Правила — [inventory.md](inventory.md).
 
 - `server/src/modules/stock-documents/`:
-  - `stock-documents.routes.ts` — весь модуль под `can(STOCK_DOCUMENT_ROLES)`, проведение — `STOCK_DOCUMENT_POST_ROLES`;
+  - `stock-documents.routes.ts` — права `STOCK_DOCUMENTS_VIEW` / `STOCK_DOCUMENTS_EDIT`, проведение — `STOCK_DOCUMENTS_POST` (контроллер);
   - `stock-documents.schemas.ts` — фильтры списка, номер в адресе, черновик целиком;
   - `stock-documents.service.ts` — список, документ, черновик (создать, править, удалить), окно выбора, `lockDraft()`;
   - `stock-posting.service.ts` — `applyPosting()`: проведение внутри транзакции записи черновика

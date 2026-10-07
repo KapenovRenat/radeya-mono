@@ -1,9 +1,8 @@
 import { useMemo, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Pencil } from "lucide-react";
 import {
-  CATALOG_COST_ROLES,
-  CATALOG_PURCHASE_ROLES,
   CATALOG_SORT_KEYS,
+  PERMISSIONS,
   CURRENCY_LABELS,
   LISTING_STATUSES,
   LISTING_STATUS_LABELS,
@@ -13,8 +12,8 @@ import {
   variantDisplayName,
   type CatalogRowDto,
   type CatalogSortKey,
+  type Permission,
   type SortOrder,
-  type UserRole,
 } from "@radeya/shared";
 
 import { Checkbox } from "@/components/checkbox";
@@ -28,8 +27,8 @@ import styles from "./catalog-row.module.scss";
  * Колонки с подписями. Класс колонки задаётся здесь один раз и применяется
  * и к шапке, и к ячейке — иначе ширина и выравнивание разъезжаются.
  *
- * `roles` — кому колонка видна; не указано — всем. Для денег роли берутся
- * из shared: по тем же константам сервер не отдаёт сами значения.
+ * `permission` — кому колонка видна; не указано — всем. Для денег — те же
+ * права, по которым сервер не отдаёт сами значения.
  *
  * Галка выделения и меню действий в этот список не входят: подписей у них нет,
  * и разметка у них своя.
@@ -38,7 +37,7 @@ const COLUMNS: {
   title: string;
   className: string;
   sort?: CatalogSortKey;
-  roles?: readonly UserRole[];
+  permission?: Permission;
 }[] = [
   { title: "Статус", className: styles.colStatus },
   { title: "Фото", className: styles.colImage },
@@ -50,9 +49,9 @@ const COLUMNS: {
   // Закупка и поставщик приезжают из МойСклада. Валюта у закупки своя
   // и в подпись колонки не выносится: у соседних строк она разная.
   { title: "Закупка", className: styles.colPurchase, sort: CATALOG_SORT_KEYS.PURCHASE_PRICE,
-    roles: CATALOG_PURCHASE_ROLES },
+    permission: PERMISSIONS.CATALOG_VIEW_PURCHASE },
   // Себестоимость всегда в тенге — символ стоит у суммы, как у закупки.
-  { title: "Себестоимость", className: styles.colPurchase, roles: CATALOG_COST_ROLES },
+  { title: "Себестоимость", className: styles.colPurchase, permission: PERMISSIONS.CATALOG_VIEW_COST },
   { title: "Поставщик", className: styles.colSupplier },
   // Склад и его цифры — отдельными колонками, но строки внутри ячеек идут
   // в одном порядке: первая строка каждой колонки — первый склад.
@@ -98,7 +97,7 @@ function count(value: number | null) {
 function useCatalogColumns() {
   const can = useCan();
 
-  return useMemo(() => COLUMNS.filter((column) => can(column.roles)), [can]);
+  return useMemo(() => COLUMNS.filter((column) => can(column.permission)), [can]);
 }
 
 /** Видимые подписанные колонки плюс галка и меню. Tables считает этим colSpan пустого состояния. */
@@ -276,8 +275,8 @@ export function CatalogRow({ item, selected, onSelectedChange, disabled = false 
         )}
       </td>
 
-      {/* Роли — те же, что у колонки в COLUMNS: иначе ячейки съедут под чужие подписи. */}
-      {can(CATALOG_PURCHASE_ROLES) && (
+      {/* Права — те же, что у колонки в COLUMNS: иначе ячейки съедут под чужие подписи. */}
+      {can(PERMISSIONS.CATALOG_VIEW_PURCHASE) && (
         <td className={styles.colPurchase}>
           {item.purchasePrice === null ? (
             <span className={styles.muted}>—</span>
@@ -293,7 +292,7 @@ export function CatalogRow({ item, selected, onSelectedChange, disabled = false 
         </td>
       )}
 
-      {can(CATALOG_COST_ROLES) && (
+      {can(PERMISSIONS.CATALOG_VIEW_COST) && (
         <td className={styles.colPurchase}>
           {item.costPrice === null
             ? <span className={styles.muted}>—</span>

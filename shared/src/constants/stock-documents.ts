@@ -1,5 +1,3 @@
-import { USER_ROLES, type UserRole } from './roles';
-
 /**
  * Документы склада: оприходование и списание. Подробности — docs/inventory.md.
  *
@@ -17,17 +15,8 @@ export const STOCK_DOCUMENT_TYPE_LABELS: Record<StockDocumentType, string> = {
   WRITE_OFF: 'Списание',
 };
 
-/**
- * Кто видит документы, создаёт, правит и удаляет черновики.
- *
- * Шире каталожных CATALOG_COST_ROLES намеренно: в документе видна
- * себестоимость, а в оприходовании её правят руками — решение пользователя
- * (06.10.2026). Продавец и смотрящий документов не видят.
- */
-export const STOCK_DOCUMENT_ROLES: readonly UserRole[] = [USER_ROLES.ADMIN, USER_ROLES.MANAGER];
-
-/** Кто проводит документ — меняет остатки. Сейчас только админ. */
-export const STOCK_DOCUMENT_POST_ROLES: readonly UserRole[] = [USER_ROLES.ADMIN];
+// Кто видит, правит и проводит документы — права STOCK_DOCUMENTS_VIEW,
+// STOCK_DOCUMENTS_EDIT, STOCK_DOCUMENTS_POST (constants/permissions.ts).
 
 /** Сколько цифр в номере на экране: `00128`. Больше 99 999 — станет шестизначным. */
 export const STOCK_DOCUMENT_NUMBER_DIGITS = 5;

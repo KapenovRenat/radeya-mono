@@ -26,29 +26,29 @@ front/src/app/
         ├── layout.tsx              # сайдбар и рабочая область
         ├── page.tsx                → /dashboard
         ├── accounts/
-        │   ├── layout.tsx          # RoleGuard: только ADMIN
+        │   ├── layout.tsx          # PermissionGuard: USERS_MANAGE или AUDIT_VIEW
         │   ├── page.tsx            → /dashboard/accounts
         │   └── _components/        # только для этой страницы
         ├── products/
-        │   ├── layout.tsx          # RoleGuard: все вошедшие
-        │   ├── page.tsx            → /dashboard/products
+        │   ├── layout.tsx          # PermissionGuard: CATALOG_VIEW или STOCK_DOCUMENTS_VIEW
+        │   ├── page.tsx            → /dashboard/products (сам каталог — CATALOG_VIEW)
         │   └── stock-documents/
-        │       ├── layout.tsx      # RoleGuard: STOCK_DOCUMENT_ROLES
+        │       ├── layout.tsx      # PermissionGuard: STOCK_DOCUMENTS_VIEW
         │       ├── page.tsx        → /dashboard/products/stock-documents
         │       ├── new/page.tsx    → /dashboard/products/stock-documents/new
         │       ├── [number]/page.tsx → /dashboard/products/stock-documents/00128
         │       └── _components/
         ├── kaspi-sync/
-        │   ├── layout.tsx          # RoleGuard: только ADMIN
+        │   ├── layout.tsx          # PermissionGuard: KASPI_SYNC
         │   ├── page.tsx            → /dashboard/kaspi-sync
         │   └── _components/
         └── settings/
-            ├── layout.tsx          # RoleGuard: только ADMIN
+            ├── layout.tsx          # PermissionGuard: право хотя бы на один блок
             ├── page.tsx            → /dashboard/settings
             └── _components/
 ```
 
-Ограничение по ролям стоит в `layout.tsx` раздела, а не на странице: так оно
+Ограничение по правам (`PermissionGuard`, [permissions.md](permissions.md)) стоит в `layout.tsx` раздела, а не на странице: так оно
 накроет все будущие подстраницы, и его нельзя будет забыть на новой.
 
 Папка с префиксом `_` исключена из роутинга: в неё складываются компоненты,
@@ -188,7 +188,7 @@ className={cn(styles.button, styles[variant])}
 
 ## /dashboard/orders — заказы
 
-- Тип: страница dashboard, только ADMIN (`OrdersLayout` с `RoleGuard`).
+- Тип: страница dashboard, право `ORDERS_VIEW` (`OrdersLayout` с `PermissionGuard`); кнопки синхронизации — `ORDERS_SYNC`.
 - Данные: `GET /api/orders` (список), `POST /api/orders/sync` (синхронизация),
   `GET /api/sales-points`, `GET /api/orders/:id` и `POST /api/orders/:id/entries/sync`
   (окно заказа), `GET`/`POST /api/orders/:id/comments`.
@@ -333,7 +333,7 @@ Kaspi — сообщение и «Повторить» в блоке, повто
 
 ## /dashboard/products — каталог с деревом папок
 
-- Тип: страница dashboard, только ADMIN (существующий ProductsLayout с RoleGuard).
+- Тип: страница dashboard, право `CATALOG_VIEW` (`PermissionGuard` на странице); деньги — `CATALOG_VIEW_PURCHASE` / `CATALOG_VIEW_COST`.
 - Данные: GET/POST /api/categories, PATCH/DELETE /api/categories/:id, GET /api/products/variants.
 - Ключевые компоненты: TreeFolder, Tables, Loader, CatalogRow; хуки useProductCatalog
   и useCreateCategoryForm.
@@ -609,6 +609,27 @@ table или tbody. Проверка загрузки, ошибки, пусто�
 
 ---
 
+## /dashboard/accounts — аккаунты и история
+
+Вкладки по правам: «Аккаунты» — `USERS_MANAGE`, «История» — `AUDIT_VIEW`.
+- Тип: раздел dashboard
+- Данные: `GET/POST /api/users`, `PATCH/DELETE /api/users/:id`, `GET /api/audit`
+- Ключевые компоненты:
+  - `UsersTable` — логин, имя, должность, роль, права («N из M», у админа «все»), создан;
+    строка подсвечивается при наведении, клик или Enter — окно сотрудника;
+  - `UserDialog` — окно сотрудника: имя, логин (только у нового), пароль (у существующего —
+    «Новый пароль», пусто — не менять), должность, роль-шаблон, `PermissionsChecklist`,
+    «Удалить» с подтверждением «Удалить насовсем»;
+  - `PermissionsChecklist` — галочки по группам из `PERMISSION_INFO` с пояснениями.
+- Поведение: выбор роли проставляет галочки шаблоном; у админа галочки стоят и не снимаются;
+  свои роль и права заблокированы; не-админ не видит роли «Админ» в списке, может менять
+  только свои права, карточка админа у него только для чтения ([permissions.md](permissions.md)).
+- Хук: `useUserForm()` — `front/src/features/users/use-user-form.ts`
+- Файлы: `front/src/app/dashboard/(main)/accounts/page.tsx`, `_components/users-table.tsx`,
+  `user-dialog.tsx`, `permissions-checklist.tsx`, `accounts.module.scss`
+
+---
+
 ## /dashboard/imports — импорты
 
 Набор независимых блоков, по одному на источник данных. Разделение блоками,
@@ -727,8 +748,9 @@ table или tbody. Проверка загрузки, ошибки, пусто�
 
 ## /dashboard/settings — настройки
 
-Ключи от внешних систем, блоками — по одному на систему. Только ADMIN
-(`RoleGuard` в `layout.tsx`).
+Ключи от внешних систем, блоками — по одному на систему. Каждый блок — по своему
+праву (`SETTINGS_BLOCK_PERMISSIONS` в `front/src/features/settings/settings-permissions.ts`),
+раздел и ссылка в меню видны, если открыт хотя бы один блок.
 - Тип: раздел dashboard
 - Файл: `front/src/app/dashboard/(main)/settings/page.tsx`
 
@@ -820,8 +842,8 @@ Email и пароль от кабинета продавца и кнопка «�
 ## /dashboard/products/stock-documents — документы склада
 
 Оприходование и списание ([inventory.md](inventory.md), раздел 2). Раздел —
-только `STOCK_DOCUMENT_ROLES` (`ADMIN`, `MANAGER`): `RoleGuard` в `layout.tsx`,
-остальных уводит в каталог. Ссылка «Документы склада» в меню — тем же ролям.
+право `STOCK_DOCUMENTS_VIEW` (`PermissionGuard` в `layout.tsx`), черновики —
+`STOCK_DOCUMENTS_EDIT`, галочка «Проведено» — `STOCK_DOCUMENTS_POST`. Ссылка в меню — по тому же праву.
 
 ### /dashboard/products/stock-documents
 Список документов, свежие сверху.

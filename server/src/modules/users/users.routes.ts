@@ -1,22 +1,21 @@
 import { Router } from 'express';
-import { USER_ROLES } from '@radeya/shared';
+import { PERMISSIONS } from '@radeya/shared';
 
 import { can } from '../../middlewares/require-auth';
-import { getUsers, postUser } from './users.controller';
-
-const { ADMIN } = USER_ROLES;
+import { getUsers, patchUser, postUser, removeUser } from './users.controller';
 
 /**
- * Раздел «Аккаунты» — только админ.
+ * Сотрудники и их права — право USERS_MANAGE (админу — всегда).
  *
- * Заводить сотрудников иначе нельзя: менеджер выпишет себе роль ADMIN
- * и обойдёт любые ограничения. Список закрыт по тому же принципу —
- * состав команды с ролями и должностями рядовому сотруднику знать незачем.
+ * Это ключ от всей системы: кто раздаёт права, тот может раздать их и себе
+ * через сообщника. Поэтому не-админ с этим правом ограничен в сервисе —
+ * выдаёт только свои права и не трогает админов (users.service.ts).
  */
 export const usersRouter = Router();
 
-// Весь модуль — только вошедшим. Маршрут без своего can() не станет публичным.
-usersRouter.use(can());
+usersRouter.use(can(PERMISSIONS.USERS_MANAGE));
 
-usersRouter.get('/', can([ADMIN]), getUsers);
-usersRouter.post('/', can([ADMIN]), postUser);
+usersRouter.get('/', can(PERMISSIONS.USERS_MANAGE), getUsers);
+usersRouter.post('/', can(PERMISSIONS.USERS_MANAGE), postUser);
+usersRouter.patch('/:id', can(PERMISSIONS.USERS_MANAGE), patchUser);
+usersRouter.delete('/:id', can(PERMISSIONS.USERS_MANAGE), removeUser);

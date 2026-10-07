@@ -2,9 +2,9 @@ import type { Request, RequestHandler } from 'express';
 import {
   AUDIT_ACTIONS,
   HISTORY_SOURCES,
-  STOCK_DOCUMENT_POST_ROLES,
+  PERMISSIONS,
   formatStockDocumentNumber,
-  hasRole,
+  hasPermission,
   type AuditAction,
   type StockDocumentDto,
 } from '@radeya/shared';
@@ -105,8 +105,8 @@ function readDocument(req: Request) {
 
   // Галочка «Проведено» меняет остатки — право проверяется здесь, на сервере:
   // спрятанная на фронте галочка ничего не закрывает.
-  if (parsed.data.post && !hasRole(req.user!.role, STOCK_DOCUMENT_POST_ROLES)) {
-    throw new ForbiddenError('Проводить документы может только администратор');
+  if (parsed.data.post && !hasPermission(req.user, PERMISSIONS.STOCK_DOCUMENTS_POST)) {
+    throw new ForbiddenError('Нет права проводить документы склада');
   }
 
   return parsed.data;

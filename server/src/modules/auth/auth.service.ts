@@ -1,5 +1,5 @@
 import { hash, verify } from '@node-rs/argon2';
-import type { AuthUser } from '@radeya/shared';
+import { normalizePermissions, type AuthUser } from '@radeya/shared';
 
 import { prisma } from '../../db/client';
 import { UnauthorizedError } from '../../lib/errors';
@@ -26,6 +26,8 @@ export function toAuthUser(user: User): AuthUser {
     name: user.name,
     position: user.position,
     role: user.role,
+    // Только известные права: удалённое из списка в коде молча отпадает.
+    permissions: normalizePermissions(user.permissions),
   };
 }
 

@@ -1,11 +1,10 @@
 import {
-  CATALOG_COST_ROLES,
-  CATALOG_PURCHASE_ROLES,
-  hasRole,
+  PERMISSIONS,
+  hasPermission,
   type CatalogImageDto,
   type CatalogResponse,
   type CatalogRowDto,
-  type UserRole,
+  type PermissionHolder,
 } from '@radeya/shared';
 import type { Prisma } from '../../generated/prisma/client';
 
@@ -131,13 +130,13 @@ function daysSince(from: Date | null, now: Date): number | null {
 }
 
 /**
- * Закупка и себестоимость — только ролям из CATALOG_PURCHASE_ROLES /
- * CATALOG_COST_ROLES. Остальным поля приходят пустыми: спрятать столбец
+ * Закупка и себестоимость — только с правами CATALOG_VIEW_PURCHASE /
+ * CATALOG_VIEW_COST. Остальным поля приходят пустыми: спрятать столбец
  * на фронте мало, данные всё равно были бы в ответе.
  */
-export function hideCatalogMoney(page: CatalogResponse, role: UserRole): CatalogResponse {
-  const seesPurchase = hasRole(role, CATALOG_PURCHASE_ROLES);
-  const seesCost = hasRole(role, CATALOG_COST_ROLES);
+export function hideCatalogMoney(page: CatalogResponse, user: PermissionHolder): CatalogResponse {
+  const seesPurchase = hasPermission(user, PERMISSIONS.CATALOG_VIEW_PURCHASE);
+  const seesCost = hasPermission(user, PERMISSIONS.CATALOG_VIEW_COST);
 
   if (seesPurchase && seesCost) return page;
 

@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CATALOG_NO_SUPPLIER, CATEGORY_NAME_MAX_LENGTH, CATALOG_SEARCH_MAX_LENGTH,
+import { CATALOG_NO_SUPPLIER, PERMISSIONS, CATEGORY_NAME_MAX_LENGTH, CATALOG_SEARCH_MAX_LENGTH,
   type CatalogResponse } from "@radeya/shared";
 import { Button } from "@/components/button";
+import { PermissionGuard } from "@/features/auth/permission-guard";
 import { Dropdown, type DropdownOption } from "@/components/dropdown";
 import { Loader } from "@/components/loader";
 import { Tables } from "@/components/tables";
@@ -16,7 +17,19 @@ import { useGetWarehousesQuery } from "@/features/warehouses/warehouses-api";
 import { CatalogRow, CatalogTableHead, useCatalogColumnCount } from "./_components/catalog-row";
 import { MoveToCategoryDialog } from "./_components/move-to-category-dialog";
 
+/**
+ * Каталог — право CATALOG_VIEW. Проверка здесь, а не в layout: layout раздела
+ * пускает и тех, у кого есть только документы склада (они вложены в /products).
+ */
 export default function ProductsPage() {
+  return (
+    <PermissionGuard permission={PERMISSIONS.CATALOG_VIEW}>
+      <ProductsCatalog />
+    </PermissionGuard>
+  );
+}
+
+function ProductsCatalog() {
   const catalog = useProductCatalog();
   // Денежные колонки видны не всем — число колонок зависит от роли.
   const columnCount = useCatalogColumnCount();

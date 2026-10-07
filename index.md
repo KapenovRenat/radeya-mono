@@ -25,69 +25,71 @@ shared/    # Общий код: типы контрактов, констант�
 
 Базовый префикс — `/api`.
 
-| Метод и путь | Назначение | Auth | Файл |
+| Метод и путь | Назначение | Право ([permissions.md](docs/permissions.md)) | Файл |
 |---|---|---|---|
 | `GET /api/health` | Сервер жив + база отвечает (503 при недоступной базе) | нет | `server/src/modules/health/health.routes.ts` |
 | `POST /api/auth/login` | Вход по логину и паролю, ставит httpOnly-куку сессии | нет | `server/src/modules/auth/auth.routes.ts` |
-| `POST /api/auth/logout` | Завершение сессии, удаление куки | да | `server/src/modules/auth/auth.routes.ts` |
-| `GET /api/auth/me` | Текущий пользователь | да | `server/src/modules/auth/auth.routes.ts` |
-| `GET /api/users` | Список сотрудников | ADMIN | `server/src/modules/users/users.routes.ts` |
-| `POST /api/users` | Создание сотрудника | ADMIN | `server/src/modules/users/users.routes.ts` |
-| `GET /api/audit` | Журнал действий и история изменений, постранично; фильтры по сущности (`entityType` + `entityId`) и типу (`action`) | ADMIN | `server/src/modules/audit/audit.controller.ts` |
-| `POST /api/kaspi-catalog/preview` | Разбор выгрузок ACTIVE/ARCHIVE, без записи в БД | ADMIN | `server/src/modules/kaspi-catalog/kaspi-catalog.routes.ts` |
-| `POST /api/kaspi-catalog/fetch` | Обход каталога в кабинете Kaspi: товары и сводка складов, без записи в БД. По ручной куке или `useSession: true` — сессия входа по email | ADMIN | `server/src/modules/kaspi-catalog/kaspi-catalog.routes.ts` |
-| `GET /api/kaspi-cabinet/account` | Email и состояние входа в кабинет Kaspi, без пароля | ADMIN | `server/src/modules/kaspi-cabinet/kaspi-cabinet.controller.ts` |
-| `PUT /api/kaspi-cabinet/account` | Сохранить email и пароль кабинета (шифруются); входа нет, сессия сбрасывается | ADMIN | `server/src/modules/kaspi-cabinet/kaspi-cabinet.controller.ts` |
-| `POST /api/kaspi-cabinet/check` | Проверка подключения: жива сессия — без входа, иначе вход; трасса ответов Kaspi для консоли | ADMIN | `server/src/modules/kaspi-cabinet/kaspi-cabinet.controller.ts` |
-| `GET /api/workers` | Настройки и состояние воркеров, пульс, задан ли токен бота | ADMIN | `server/src/modules/workers/workers.controller.ts` |
-| `GET /api/workers/:key/events` | Журнал воркера для таблицы «История воркера»: страница, вид события, номер заказа; получатель и Telegram ID | ADMIN | `server/src/modules/workers/workers.controller.ts` |
-| `POST /api/workers/orders/test-card` | Тестовая карточка «ТЕСТ — НЕ ЗАКАЗ» с диваном из каталога: на один ID или всем с Telegram ID, итог по каждому | ADMIN | `server/src/modules/workers/workers.controller.ts` |
-| `PUT /api/workers/:key/settings` | Сохранить настройки воркера; включение отправки ставит точку отсечки | ADMIN | `server/src/modules/workers/workers.controller.ts` |
+| `POST /api/auth/logout` | Завершение сессии, удаление куки | все вошедшие | `server/src/modules/auth/auth.routes.ts` |
+| `GET /api/auth/me` | Текущий пользователь | все вошедшие | `server/src/modules/auth/auth.routes.ts` |
+| `GET /api/users` | Список сотрудников | `USERS_MANAGE` | `server/src/modules/users/users.routes.ts` |
+| `POST /api/users` | Создание сотрудника с правами-галочками | `USERS_MANAGE` | `server/src/modules/users/users.routes.ts` |
+| `PATCH /api/users/:id` | Карточка сотрудника: имя, должность, роль, права, новый пароль (гасит сессии) | `USERS_MANAGE` | `server/src/modules/users/users.controller.ts` |
+| `DELETE /api/users/:id` | Удаление сотрудника насовсем; себя и последнего админа — нельзя | `USERS_MANAGE` | `server/src/modules/users/users.controller.ts` |
+| `GET /api/audit` | Журнал действий и история изменений, постранично; фильтры по сущности (`entityType` + `entityId`) и типу (`action`) | `AUDIT_VIEW` | `server/src/modules/audit/audit.controller.ts` |
+| `POST /api/kaspi-catalog/preview` | Разбор выгрузок ACTIVE/ARCHIVE, без записи в БД | `KASPI_SYNC` | `server/src/modules/kaspi-catalog/kaspi-catalog.routes.ts` |
+| `POST /api/kaspi-catalog/fetch` | Обход каталога в кабинете Kaspi: товары и сводка складов, без записи в БД. По ручной куке или `useSession: true` — сессия входа по email | `KASPI_SYNC` | `server/src/modules/kaspi-catalog/kaspi-catalog.routes.ts` |
+| `GET /api/kaspi-cabinet/account` | Email и состояние входа в кабинет Kaspi, без пароля | `KASPI_CABINET_MANAGE` | `server/src/modules/kaspi-cabinet/kaspi-cabinet.controller.ts` |
+| `PUT /api/kaspi-cabinet/account` | Сохранить email и пароль кабинета (шифруются); входа нет, сессия сбрасывается | `KASPI_CABINET_MANAGE` | `server/src/modules/kaspi-cabinet/kaspi-cabinet.controller.ts` |
+| `POST /api/kaspi-cabinet/check` | Проверка подключения: жива сессия — без входа, иначе вход; трасса ответов Kaspi для консоли | `KASPI_CABINET_MANAGE` | `server/src/modules/kaspi-cabinet/kaspi-cabinet.controller.ts` |
+| `GET /api/workers` | Настройки и состояние воркеров, пульс, задан ли токен бота | `WORKERS_MANAGE` | `server/src/modules/workers/workers.controller.ts` |
+| `GET /api/workers/:key/events` | Журнал воркера для таблицы «История воркера»: страница, вид события, номер заказа; получатель и Telegram ID | `WORKERS_MANAGE` | `server/src/modules/workers/workers.controller.ts` |
+| `POST /api/workers/orders/test-card` | Тестовая карточка «ТЕСТ — НЕ ЗАКАЗ» с диваном из каталога: на один ID или всем с Telegram ID, итог по каждому | `WORKERS_MANAGE` | `server/src/modules/workers/workers.controller.ts` |
+| `PUT /api/workers/:key/settings` | Сохранить настройки воркера; включение отправки ставит точку отсечки | `WORKERS_MANAGE` | `server/src/modules/workers/workers.controller.ts` |
 | `GET /api/warehouses` | Справочник складов, с Telegram-группой кладовщика | все вошедшие | `server/src/modules/warehouses/warehouses.routes.ts` |
-| `PATCH /api/warehouses/:id` | Три Telegram-группы склада по виду доставки: Zammler, своя доставка, самовывоз | ADMIN | `server/src/modules/warehouses/warehouses.controller.ts` |
-| `POST /api/warehouses` | Наш склад без Kaspi (шоурум): код и название, `kaspiStoreId` пуст | ADMIN | `server/src/modules/warehouses/warehouses.controller.ts` |
-| `GET /api/stock-documents` | Документы склада: страница, фильтры по виду, складу и номеру | ADMIN, MANAGER | `server/src/modules/stock-documents/stock-documents.controller.ts` |
-| `GET /api/stock-documents/variants` | Товары для окна выбора: поиск как в каталоге, остаток на складе документа | ADMIN, MANAGER | `server/src/modules/stock-documents/stock-documents.controller.ts` |
-| `GET /api/stock-documents/:number` | Документ со строками; номер `00128` или `128` | ADMIN, MANAGER | `server/src/modules/stock-documents/stock-documents.controller.ts` |
-| `POST /api/stock-documents` | Новый документ: черновик, с `post: true` — сразу проведённый (только ADMIN); комментарий обязателен | ADMIN, MANAGER | `server/src/modules/stock-documents/stock-documents.controller.ts` |
-| `PUT /api/stock-documents/:number` | Правка черновика целиком, с `post: true` — и проведение; проведённый — 409 | ADMIN, MANAGER | `server/src/modules/stock-documents/stock-documents.controller.ts` |
-| `DELETE /api/stock-documents/:number` | Удаление черновика; проведённый — 409 | ADMIN, MANAGER | `server/src/modules/stock-documents/stock-documents.controller.ts` |
-| `POST /api/warehouses/import-kaspi` | Импорт складов из предпросмотра выгрузки, повторяемый | ADMIN | `server/src/modules/warehouses/warehouses.routes.ts` |
-| `GET /api/products/skus` | Артикулы, уже сохранённые в каталоге | ADMIN | `server/src/modules/products/products.routes.ts` |
-| `POST /api/products/import-kaspi` | Сохранение загруженных товаров в каталог; создаёт только новые | ADMIN | `server/src/modules/products/products.routes.ts` |
-| `GET /api/categories` | Дерево ручных папок и служебный пункт «Все товары» | ADMIN | `server/src/modules/categories/categories.controller.ts` |
-| `POST /api/categories` | Создать корневую папку или подпапку | ADMIN | `server/src/modules/categories/categories.controller.ts` |
-| `PATCH /api/categories/order` | Порядок папок одного уровня: полный список id, пишет `sortOrder` | ADMIN | `server/src/modules/categories/categories.controller.ts` |
-| `PATCH /api/categories/:id` | Переименовать папку, сохраняя родителя | ADMIN | `server/src/modules/categories/categories.controller.ts` |
-| `DELETE /api/categories/:id` | Удалить только пустую папку | ADMIN | `server/src/modules/categories/categories.controller.ts` |
-| `GET /api/products/variants` | Серверный поиск, поддерево категории, фильтры по складам и поставщикам, сортировка по одной колонке, страницы 10/20/50; в строке все поля товара, включая закупку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
-| `PATCH /api/products/category` | Перенести товары со всеми модификациями в папку | ADMIN | `server/src/modules/products/catalog.controller.ts` |
-| `POST /api/products/moysklad/preview` | Разбор выгрузки МойСклада: закупка, поставщик, сроки предзаказа по складам; без записи | ADMIN | `server/src/modules/products/moysklad.controller.ts` |
-| `POST /api/products/moysklad/commit` | Запись закупки, поставщика и сроков предзаказа в найденные артикулы; новых товаров не заводит; история по каждому товару | ADMIN | `server/src/modules/products/moysklad.controller.ts` |
-| `POST /api/products/moysklad/stock/preview` | Разбор отчёта «Остатки» для склада из `?warehouseId=`: остаток, резерв, ожидание, себестоимость, дни; список на обнуление; без записи | ADMIN | `server/src/modules/products/moysklad.controller.ts` |
-| `POST /api/products/moysklad/stock/commit` | Запись остатков в выбранный склад, себестоимости в товар, обнуление того, чего нет в отчёте; история по каждому товару | ADMIN | `server/src/modules/products/moysklad.controller.ts` |
-| `GET /api/stats/orders` | Сводка по заказам за период в разрезе точек: заказы, возвраты, выручка | ADMIN | `server/src/modules/stats/stats.controller.ts` |
-| `POST /api/imports/offline-orders/preview` | Разбор листа книги Excel, без записи; без `?sheet=` — только список листов | ADMIN | `server/src/modules/imports/imports.controller.ts` |
-| `POST /api/imports/offline-orders/commit` | Запись разобранных строк в заказы офлайн-точки | ADMIN | `server/src/modules/imports/imports.controller.ts` |
-| `GET /api/suppliers` | Справочник поставщиков целиком, без пагинации | ADMIN | `server/src/modules/suppliers/suppliers.controller.ts` |
-| `POST /api/suppliers/import/preview` | Разбор выгрузки контрагентов МойСклада: только группа «поставщики», без записи | ADMIN | `server/src/modules/suppliers/suppliers.controller.ts` |
-| `POST /api/suppliers/import/commit` | Запись поставщиков: upsert по `externalId`, заполненное не перезаписывает | ADMIN | `server/src/modules/suppliers/suppliers.controller.ts` |
-| `PATCH /api/suppliers/:id` | Правка карточки руками, прежде всего `telegramId`; удаления нет, только закрытие | ADMIN | `server/src/modules/suppliers/suppliers.controller.ts` |
-| `GET /api/dictionaries` | Пополняемые списки: все четыре разом либо один по `?kind=` | любой вошедший | `server/src/modules/dictionaries/dictionaries.controller.ts` |
-| `POST /api/dictionaries` | Добавить значение в список | ADMIN, MANAGER | `server/src/modules/dictionaries/dictionaries.controller.ts` |
-| `PATCH /api/dictionaries/:id` | Переименовать или закрыть значение; удаления нет | ADMIN, MANAGER | `server/src/modules/dictionaries/dictionaries.controller.ts` |
-| `GET /api/sales-points` | Справочник точек продаж: площадки и офлайн-точки | любой вошедший | `server/src/modules/sales-points/sales-points.controller.ts` |
-| `POST /api/sales-points` | Создать офлайн-точку; код и тип ставит сервер | ADMIN | `server/src/modules/sales-points/sales-points.controller.ts` |
-| `PATCH /api/sales-points/:id` | Переименовать, закрыть или открыть точку; удаления нет | ADMIN | `server/src/modules/sales-points/sales-points.controller.ts` |
-| `GET /api/orders` | Страница заказов из нашей базы: поиск по номеру, период, точки продаж и продавцы | ADMIN | `server/src/modules/orders/orders.controller.ts` |
-| `GET /api/orders/:id` | Заказ целиком для окна: поля строки, адрес, даты, деньги, состав с нашим товаром по артикулу | ADMIN | `server/src/modules/orders/orders.controller.ts` |
-| `POST /api/orders/:id/cabinet/sync` | «Планируемая дата прибытия» одного заказа из кабинета — окно заказа, когда пора перечитать | все вошедшие | `server/src/modules/orders/orders.controller.ts` |
-| `POST /api/orders/cabinet/sync` | Шаг дат прибытия для активных заказов после синхронизации кнопкой: до 20, `remaining` | ADMIN, MANAGER | `server/src/modules/orders/orders.controller.ts` |
-| `POST /api/orders/:id/entries/sync` | Состав заказа Kaspi с площадки при первом открытии; уже есть — Kaspi не трогает | ADMIN | `server/src/modules/orders/orders.controller.ts` |
-| `GET /api/orders/:id/comments` | Лента комментариев заказа, старые сверху | ADMIN | `server/src/modules/orders/orders.controller.ts` |
-| `POST /api/orders/:id/comments` | Новый комментарий; автор из сессии, правок и удалений нет | ADMIN | `server/src/modules/orders/orders.controller.ts` |
-| `GET /api/orders/kaspi` | Страница заказов Kaspi, разобранная в нашу модель; без записи в БД | ADMIN | `server/src/modules/orders/orders.controller.ts` |
-| `POST /api/orders/sync` | Шаг синхронизации заказов: чанки по 3 дня, курсор, запись в БД; под общей с воркером блокировкой, занято — 409 | ADMIN, MANAGER | `server/src/modules/orders/orders.controller.ts` |
+| `PATCH /api/warehouses/:id` | Три Telegram-группы склада по виду доставки: Zammler, своя доставка, самовывоз | `WAREHOUSES_MANAGE` | `server/src/modules/warehouses/warehouses.controller.ts` |
+| `POST /api/warehouses` | Наш склад без Kaspi (шоурум): код и название, `kaspiStoreId` пуст | `WAREHOUSES_MANAGE` | `server/src/modules/warehouses/warehouses.controller.ts` |
+| `GET /api/stock-documents` | Документы склада: страница, фильтры по виду, складу и номеру | `STOCK_DOCUMENTS_VIEW` | `server/src/modules/stock-documents/stock-documents.controller.ts` |
+| `GET /api/stock-documents/variants` | Товары для окна выбора: поиск как в каталоге, остаток на складе документа | `STOCK_DOCUMENTS_EDIT` | `server/src/modules/stock-documents/stock-documents.controller.ts` |
+| `GET /api/stock-documents/:number` | Документ со строками; номер `00128` или `128` | `STOCK_DOCUMENTS_VIEW` | `server/src/modules/stock-documents/stock-documents.controller.ts` |
+| `POST /api/stock-documents` | Новый документ: черновик, с `post: true` — сразу проведённый (только ADMIN); комментарий обязателен | `STOCK_DOCUMENTS_EDIT` | `server/src/modules/stock-documents/stock-documents.controller.ts` |
+| `PUT /api/stock-documents/:number` | Правка черновика целиком, с `post: true` — и проведение; проведённый — 409 | `STOCK_DOCUMENTS_EDIT` | `server/src/modules/stock-documents/stock-documents.controller.ts` |
+| `DELETE /api/stock-documents/:number` | Удаление черновика; проведённый — 409 | `STOCK_DOCUMENTS_EDIT` | `server/src/modules/stock-documents/stock-documents.controller.ts` |
+| `POST /api/warehouses/import-kaspi` | Импорт складов из предпросмотра выгрузки, повторяемый | `KASPI_SYNC` | `server/src/modules/warehouses/warehouses.routes.ts` |
+| `GET /api/products/skus` | Артикулы, уже сохранённые в каталоге | `KASPI_SYNC` | `server/src/modules/products/products.routes.ts` |
+| `POST /api/products/import-kaspi` | Сохранение загруженных товаров в каталог; создаёт только новые | `KASPI_SYNC` | `server/src/modules/products/products.routes.ts` |
+| `GET /api/categories` | Дерево ручных папок и служебный пункт «Все товары» | `CATALOG_VIEW` | `server/src/modules/categories/categories.controller.ts` |
+| `POST /api/categories` | Создать корневую папку или подпапку | `CATALOG_EDIT_FOLDERS` | `server/src/modules/categories/categories.controller.ts` |
+| `PATCH /api/categories/order` | Порядок папок одного уровня: полный список id, пишет `sortOrder` | `CATALOG_EDIT_FOLDERS` | `server/src/modules/categories/categories.controller.ts` |
+| `PATCH /api/categories/:id` | Переименовать папку, сохраняя родителя | `CATALOG_EDIT_FOLDERS` | `server/src/modules/categories/categories.controller.ts` |
+| `DELETE /api/categories/:id` | Удалить только пустую папку | `CATALOG_EDIT_FOLDERS` | `server/src/modules/categories/categories.controller.ts` |
+| `GET /api/products/variants` | Серверный поиск, поддерево категории, фильтры по складам и поставщикам, сортировка по одной колонке, страницы 10/20/50; в строке все поля товара, включая закупку | `CATALOG_VIEW` | `server/src/modules/products/catalog.controller.ts` |
+| `PATCH /api/products/category` | Перенести товары со всеми модификациями в папку | `CATALOG_EDIT_FOLDERS` | `server/src/modules/products/catalog.controller.ts` |
+| `POST /api/products/moysklad/preview` | Разбор выгрузки МойСклада: закупка, поставщик, сроки предзаказа по складам; без записи | `IMPORTS` | `server/src/modules/products/moysklad.controller.ts` |
+| `POST /api/products/moysklad/commit` | Запись закупки, поставщика и сроков предзаказа в найденные артикулы; новых товаров не заводит; история по каждому товару | `IMPORTS` | `server/src/modules/products/moysklad.controller.ts` |
+| `POST /api/products/moysklad/stock/preview` | Разбор отчёта «Остатки» для склада из `?warehouseId=`: остаток, резерв, ожидание, себестоимость, дни; список на обнуление; без записи | `IMPORTS` | `server/src/modules/products/moysklad.controller.ts` |
+| `POST /api/products/moysklad/stock/commit` | Запись остатков в выбранный склад, себестоимости в товар, обнуление того, чего нет в отчёте; история по каждому товару | `IMPORTS` | `server/src/modules/products/moysklad.controller.ts` |
+| `GET /api/stats/orders` | Сводка по заказам за период в разрезе точек: заказы, возвраты, выручка | `STATS_VIEW` | `server/src/modules/stats/stats.controller.ts` |
+| `POST /api/imports/offline-orders/preview` | Разбор листа книги Excel, без записи; без `?sheet=` — только список листов | `IMPORTS` | `server/src/modules/imports/imports.controller.ts` |
+| `POST /api/imports/offline-orders/commit` | Запись разобранных строк в заказы офлайн-точки | `IMPORTS` | `server/src/modules/imports/imports.controller.ts` |
+| `GET /api/suppliers` | Справочник поставщиков целиком, без пагинации | все вошедшие | `server/src/modules/suppliers/suppliers.controller.ts` |
+| `POST /api/suppliers/import/preview` | Разбор выгрузки контрагентов МойСклада: только группа «поставщики», без записи | `IMPORTS` | `server/src/modules/suppliers/suppliers.controller.ts` |
+| `POST /api/suppliers/import/commit` | Запись поставщиков: upsert по `externalId`, заполненное не перезаписывает | `IMPORTS` | `server/src/modules/suppliers/suppliers.controller.ts` |
+| `PATCH /api/suppliers/:id` | Правка карточки руками, прежде всего `telegramId`; удаления нет, только закрытие | `SUPPLIERS_EDIT` | `server/src/modules/suppliers/suppliers.controller.ts` |
+| `GET /api/dictionaries` | Пополняемые списки: все четыре разом либо один по `?kind=` | все вошедшие | `server/src/modules/dictionaries/dictionaries.controller.ts` |
+| `POST /api/dictionaries` | Добавить значение в список | `DICTIONARIES_EDIT` | `server/src/modules/dictionaries/dictionaries.controller.ts` |
+| `PATCH /api/dictionaries/:id` | Переименовать или закрыть значение; удаления нет | `DICTIONARIES_EDIT` | `server/src/modules/dictionaries/dictionaries.controller.ts` |
+| `GET /api/sales-points` | Справочник точек продаж: площадки и офлайн-точки | все вошедшие | `server/src/modules/sales-points/sales-points.controller.ts` |
+| `POST /api/sales-points` | Создать офлайн-точку; код и тип ставит сервер | `SALES_POINTS_MANAGE` | `server/src/modules/sales-points/sales-points.controller.ts` |
+| `PATCH /api/sales-points/:id` | Переименовать, закрыть или открыть точку; удаления нет | `SALES_POINTS_MANAGE` | `server/src/modules/sales-points/sales-points.controller.ts` |
+| `GET /api/orders` | Страница заказов из нашей базы: поиск по номеру, период, точки продаж и продавцы | `ORDERS_VIEW` | `server/src/modules/orders/orders.controller.ts` |
+| `GET /api/orders/:id` | Заказ целиком для окна: поля строки, адрес, даты, деньги, состав с нашим товаром по артикулу | `ORDERS_VIEW` | `server/src/modules/orders/orders.controller.ts` |
+| `POST /api/orders/:id/cabinet/sync` | «Планируемая дата прибытия» одного заказа из кабинета — окно заказа, когда пора перечитать | `ORDERS_VIEW` | `server/src/modules/orders/orders.controller.ts` |
+| `POST /api/orders/cabinet/sync` | Шаг дат прибытия для активных заказов после синхронизации кнопкой: до 20, `remaining` | `ORDERS_SYNC` | `server/src/modules/orders/orders.controller.ts` |
+| `POST /api/orders/:id/entries/sync` | Состав заказа Kaspi с площадки при первом открытии; уже есть — Kaspi не трогает | `ORDERS_VIEW` | `server/src/modules/orders/orders.controller.ts` |
+| `GET /api/orders/:id/comments` | Лента комментариев заказа, старые сверху | `ORDERS_VIEW` | `server/src/modules/orders/orders.controller.ts` |
+| `POST /api/orders/:id/comments` | Новый комментарий; автор из сессии, правок и удалений нет | `ORDERS_COMMENT` | `server/src/modules/orders/orders.controller.ts` |
+| `GET /api/orders/kaspi` | Страница заказов Kaspi, разобранная в нашу модель; без записи в БД | `ORDERS_KASPI_DEBUG` | `server/src/modules/orders/orders.controller.ts` |
+| `POST /api/orders/sync` | Шаг синхронизации заказов: чанки по 3 дня, курсор, запись в БД; под общей с воркером блокировкой, занято — 409 | `ORDERS_SYNC` | `server/src/modules/orders/orders.controller.ts` |
 
 Подробные контракты — в [docs/api-reference.md](docs/api-reference.md).
 
@@ -106,7 +108,8 @@ shared/    # Общий код: типы контрактов, констант�
 | history | `recordHistory(tx, meta, entries)` | История изменений: в транзакции изменения, запись на сущность, пустые не пишет | `server/src/lib/history.ts` |
 | history | `diffFields(entityType, before, after)`, `historyValue(value)` | Список изменившихся полей «было → стало»; значение строкой, Decimal с двумя знаками | `server/src/lib/history.ts` |
 | users | `listUsers()` | Сотрудники, свежие сверху | `server/src/modules/users/users.service.ts` |
-| users | `createUser(input, createdById)` | Создание; дубль логина → 409 | `server/src/modules/users/users.service.ts` |
+| users | `createUser(input, actor)` | Создание с правами; дубль логина → 409; не-админ выдаёт только свои права | `server/src/modules/users/users.service.ts` |
+| users | `updateUser(id, input, actor)`, `deleteUser(id, actor)` | Правка карточки и удаление под блокировкой: не трогать админов не-админу, не менять себе права, не оставить систему без админа | `server/src/modules/users/users.service.ts` |
 | users | `toUserListItem(user)` | DTO наружу без `passwordHash` | `server/src/modules/users/users.service.ts` |
 | audit | `listAuditLog(input)` | Страница журнала по 50 записей, фильтры по сущности и типу; `changes` и `context` из Json с проверкой формы | `server/src/modules/audit/audit.service.ts` |
 | kaspi-catalog | `parseKaspiCatalog(xml, status)` | Разбор выгрузки Kaspi в список товаров; явные типы массивов складов и цен | `server/src/modules/kaspi-catalog/kaspi-catalog.parser.ts` |
@@ -222,7 +225,7 @@ shared/    # Общий код: типы контрактов, констант�
 
 | Модель | Назначение | Связи |
 |---|---|---|
-| `User` | Сотрудник: вход в дашборд по логину, роль, должность | `createdBy` / `createdUsers` — self-relation «кто завёл» |
+| `User` | Сотрудник: вход в дашборд по логину, роль (шаблон), права-галочки `permissions`, должность; удаляется насовсем | `createdBy` / `createdUsers` — self-relation «кто завёл» |
 | `Customer` | Клиент магазина: свой вход, телефон обязателен, email нет | — |
 | `Session` | Сессия сотрудника; в куке только id, состояние в таблице | `user` → `User`, `onDelete: Cascade` |
 | `AuditLog` | Журнал действий и история изменений полей (`source`, `changes`, `context`), только вставка и чтение | связей нет: логин и роль снимком |
@@ -298,8 +301,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `PriceTag` | Ценник товара; образец SCSS-модуля с токенами темы | `front/src/components/price-tag/` |
 | `TreeFolder` | Два уровня папок: поиск, выбор, раскрытие; действия папки — в меню `Dropdown` (подпапка, переименовать, выше/ниже, удалить) | `front/src/components/tree-folder/page.tsx`, `front/src/components/tree-folder/style.module.scss` |
 | `Tables` | Таблица с children-строками, head и серверной пагинацией 10/20/50 | `front/src/components/tables/page.tsx`, `front/src/components/tables/style.module.scss` |
-| `ProductsLayout` | Раздел товаров — всем вошедшим (`RoleGuard` без ролей); денежные колонки — по ролям | `front/src/app/dashboard/(main)/products/layout.tsx` |
-| `OrdersLayout` | Раздел заказов — всем вошедшим (`RoleGuard` без ролей) | `front/src/app/dashboard/(main)/orders/layout.tsx` |
+| `ProductsLayout` | Раздел товаров — `CATALOG_VIEW` или `STOCK_DOCUMENTS_VIEW`; каталог — `CATALOG_VIEW` на странице, деньги — по правам | `front/src/app/dashboard/(main)/products/layout.tsx` |
+| `OrdersLayout` | Раздел заказов — `ORDERS_VIEW` | `front/src/app/dashboard/(main)/orders/layout.tsx` |
 | `Loader` | Сегментное кольцо #f23428; size задаёт диаметр, hideLabel скрывает текст; label по умолчанию «Загрузка ...», подсветка букв каждые 160 мс | `front/src/components/loader/tree-list.tsx`, `front/src/components/loader/style.module.scss` |
 | `Dropdown` | Два режима через проп `mode`: `menu` — меню на три точки (пункты в `items`), `select` — выбор значения (варианты в `options`, `value`/`onChange`, галочка у выбранного, пометка «закрыто»). `multiple` — мультивыбор: `value: string[]`, список не закрывается, «Выбрано: N · Сбросить». Проп `searchable` включает поиск по списку. Клик вне, Escape, стрелки; из поля поиска стрелки уводят в список. Список в портале с `position: fixed`, закрывается при прокрутке | `front/src/components/dropdown/index.tsx`, `front/src/components/dropdown/style.module.scss` |
 | `Checkbox` | Чекбокс поверх нативного input, с частичным состоянием (`indeterminate`) | `front/src/components/checkbox/` |
@@ -308,10 +311,10 @@ shared/    # Общий код: типы контрактов, констант�
 | `Input` | Поле ввода: подпись, ошибка, нативные пропсы | `front/src/components/input/` |
 | `Button` | Кнопка: варианты через классы, нативные пропсы | `front/src/components/button/` |
 | `AuthGuard` | Пускает в разделы админки только вошедших | `front/src/features/auth/auth-guard.tsx` |
-| `RoleGuard` | Ограничение раздела по ролям с редиректом; `roles` не указаны — всем вошедшим | `front/src/features/auth/role-guard.tsx` |
-| `UsersTable` | Таблица сотрудников | `front/src/app/dashboard/(main)/accounts/_components/users-table.tsx` |
+| `PermissionGuard` | Ограничение раздела по праву (массив — любое из) с редиректом; без права — всем вошедшим | `front/src/features/auth/permission-guard.tsx` |
+| `UsersTable` | Таблица сотрудников: число прав, подсветка строки, клик — окно сотрудника | `front/src/app/dashboard/(main)/accounts/_components/users-table.tsx` |
 | `AuditTable` | Таблица журнала действий | `front/src/app/dashboard/(main)/accounts/_components/audit-table.tsx` |
-| `CreateUserDialog` | Модалка создания сотрудника на нативном `<dialog>` | `front/src/app/dashboard/(main)/accounts/_components/create-user-dialog.tsx` |
+| `UserDialog`, `PermissionsChecklist` | Окно сотрудника (создание и правка, роль-шаблон, удаление) и галочки прав по группам | `front/src/app/dashboard/(main)/accounts/_components/user-dialog.tsx`, `permissions-checklist.tsx` |
 | `CreateSalesPointDialog` | Модалка новой офлайн-точки на общем `Modal`: одно поле «Название», код и тип ставит сервер | `front/src/app/dashboard/(main)/_components/create-sales-point-dialog.tsx` |
 | `StatsBlock`, `StatsCards` | Сводка на «Статистике»: период (текущий/прошлый месяц, календарь), итог и блок плашек на каждую точку продаж | `front/src/app/dashboard/(main)/_components/stats-block.tsx` |
 | `OfflineOrdersImport` | Блок импорта продаж: выбор точки и листа, счётчики разбора, значения не из справочников, кнопка записи | `front/src/app/dashboard/(main)/imports/_components/offline-orders-import.tsx` |
@@ -322,8 +325,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `MoyskladStockPreviewTable`, `StockZeroTable` | Таблица строк отчёта остатков (пропущенные подсвечены, замечания строкой) и таблица того, что обнулится | `front/src/app/dashboard/(main)/imports/_components/moysklad-stock-preview-table.tsx` |
 | `SuppliersImport` | Блок импорта поставщиков: файл, счётчики (в файле / не поставщики / новых / уже в базе), таблица, запись. Лист выбирается только когда их в книге несколько | `front/src/app/dashboard/(main)/imports/_components/suppliers-import.tsx` |
 | `SupplierPreviewTable` | Таблица разобранных контрагентов: непригодные подсвечены, расхождения с нашими данными и замечания — строками под записью | `front/src/app/dashboard/(main)/imports/_components/supplier-preview-table.tsx` |
-| `ImportsLayout` | Защита раздела импортов ролью ADMIN | `front/src/app/dashboard/(main)/imports/layout.tsx` |
-| `SettingsLayout` | Защита раздела настроек ролью ADMIN | `front/src/app/dashboard/(main)/settings/layout.tsx` |
+| `ImportsLayout` | Защита раздела импортов правом `IMPORTS` | `front/src/app/dashboard/(main)/imports/layout.tsx` |
+| `SettingsLayout` | Раздел настроек — право хотя бы на один блок (`SETTINGS_PERMISSIONS`) | `front/src/app/dashboard/(main)/settings/layout.tsx` |
 | `WorkersBlock` | Блок «Воркеры» в настройках: состояние и настройки каждого воркера, «Сохранить» только при изменениях, галочка «Мгновенная отправка» | `front/src/app/dashboard/(main)/settings/_components/workers-block.tsx` |
 | `WorkerEventsTable` | Таблица «История воркера» в карточке воркера: события, получатель, Telegram ID, фильтры по виду и номеру заказа | `front/src/app/dashboard/(main)/settings/_components/worker-events-table.tsx` |
 | `WarehousesBlock` | Блок «Склады» в настройках: список справочника, форма нового склада без Kaspi | `front/src/app/dashboard/(main)/settings/_components/warehouses-block.tsx` |
@@ -341,7 +344,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `CatalogPagination` | Панель пагинации под таблицей: размер страницы, номера, диапазон | `front/src/app/dashboard/(main)/kaspi-sync/_components/catalog-pagination.tsx` |
 | `CabinetFetch` | Запуск загрузки из кабинета (поле куки — только если вход по email не работает), счётчики, склады, фильтр и таблица | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-fetch.tsx` |
 | `CabinetTable` | Таблица товаров из кабинета: картинка, штрихкод, цены со скидкой, размер | `front/src/app/dashboard/(main)/kaspi-sync/_components/cabinet-table.tsx` |
-| `CatalogRow`, `CatalogTableHead`, `useCatalogColumnCount()` (закупка и себестоимость — только ролям из `CATALOG_PURCHASE_ROLES` / `CATALOG_COST_ROLES`) | Строка и шапка таблицы каталога: галка выделения, кружок статуса, квадратное фото, два названия, цена Kaspi в две строки со скидкой, закупка с валютой, себестоимость в ₸, поставщик, склады чипами «код · название», затем колонки Остаток, Резерв, Ожидание, Доступно, Предзаказ, Дней на складе — строкой на склад в том же порядке, закреплённое меню действий. Стили — `catalog-row.module.scss` | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
+| `CatalogRow`, `CatalogTableHead`, `useCatalogColumnCount()` (закупка и себестоимость — по правам `CATALOG_VIEW_PURCHASE` / `CATALOG_VIEW_COST`) | Строка и шапка таблицы каталога: галка выделения, кружок статуса, квадратное фото, два названия, цена Kaspi в две строки со скидкой, закупка с валютой, себестоимость в ₸, поставщик, склады чипами «код · название», затем колонки Остаток, Резерв, Ожидание, Доступно, Предзаказ, Дней на складе — строкой на склад в том же порядке, закреплённое меню действий. Стили — `catalog-row.module.scss` | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
 | `MoveToCategoryDialog` | Модалка переноса выбранных товаров: дерево папок с поиском, затем подтверждение | `front/src/app/dashboard/(main)/products/_components/move-to-category-dialog.tsx` |
 | `OrderDictionaryFilters` | Четыре выпадашки под кнопками синхронизации: статус доставки, оплата, откуда товар, откуда клиент. Общий `Dropdown` в режиме `select` с поиском; закрытые значения остаются в списке с пометкой | `front/src/app/dashboard/(main)/orders/_components/order-dictionary-filters.tsx` |
 | `OrderRow`, `OrderTableHead`, `orderColumnCount(kind)`, `OrderTableKind`, `statusDotClass()` (свой цвет у каждой из 13 стадий, словарь `STATUS_DOT`) | Строка и шапка таблицы заказов. Вид `marketplace` (Kaspi): дата, статус, номер, покупатель, город, склад, доставка, сумма, планируемая доставка. Вид `offline`: вместо склада «кто создал» и ещё восемь офлайновых. Колонки — словарь `COLUMNS`, наборы — `TABLE_COLUMNS`. Клик по строке и кнопка-номер открывают заказ. Стили — `order-row.module.scss` | `front/src/app/dashboard/(main)/orders/_components/order-row.tsx` |
@@ -353,10 +356,11 @@ shared/    # Общий код: типы контрактов, констант�
 | Имя | Назначение | Файл |
 |---|---|---|
 | `USER_ROLES`, `UserRole` | Роли сотрудников: ADMIN, MANAGER, SELLER, VIEWER. Новая роль — ещё `USER_ROLE_LABELS` и enum в `schema.prisma` | `shared/src/constants/roles.ts` |
-| `hasRole(role, roles?)` | Есть ли у роли доступ; пустой список — все вошедшие. Одна проверка для `can()` сервера и `useCan()` фронта | `shared/src/constants/roles.ts` |
+| `PERMISSIONS`, `PERMISSION_INFO`, `PERMISSION_GROUPS`, `ROLE_PERMISSION_TEMPLATES`, `hasPermission()`, `normalizePermissions()` | Права-галочки: список, подписи, шаблоны ролей, одна проверка для сервера и фронта (админу — всё) | `shared/src/constants/permissions.ts` |
+| `DELETED_USER_NAME` | Подпись вместо удалённого сотрудника | `shared/src/constants/roles.ts` |
+| `SETTINGS_PERMISSIONS`, `SETTINGS_BLOCK_PERMISSIONS` | Права блоков настроек — для layout, страницы и меню | `front/src/features/settings/settings-permissions.ts` |
 | `variantDisplayName(masterTitle, name)` | Название товара для показа: карточка Kaspi, иначе название модели. Одно правило на каталог и состав заказа | `shared/src/constants/catalog.ts` |
-| `CATALOG_PURCHASE_ROLES`, `CATALOG_COST_ROLES` | Кто видит закупку и себестоимость в каталоге: сервер срезает поля, фронт прячет столбцы | `shared/src/constants/catalog.ts` |
-| `useCan()` | Фронт: `can()` — любой вошедший, `can([ADMIN])` — только эти роли. Удобство, не защита | `front/src/features/auth/use-can.ts` |
+| `useCan()` | Фронт: `can()` — любой вошедший, `can(PERMISSIONS.X)` — есть право, массив — любое. Удобство, не защита | `front/src/features/auth/use-can.ts` |
 | `useCatalogColumnCount()` | Число видимых колонок каталога с учётом ролей — для colSpan пустой таблицы | `front/src/app/dashboard/(main)/products/_components/catalog-row.tsx` |
 | `USER_ROLE_LABELS` | Подписи ролей для интерфейса | `shared/src/constants/roles.ts` |
 | `AUDIT_ACTIONS`, `AUDIT_ACTION_LABELS` | Действия для журнала и их подписи | `shared/src/constants/audit-actions.ts` |
@@ -368,7 +372,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `auditQuerySchema` | Проверка фильтров журнала: сущность только парой, тип из `AUDIT_ACTIONS` | `server/src/modules/audit/audit.schemas.ts` |
 | `LOGIN_PATTERN`, `PASSWORD_PATTERN`, `normalizeLogin()` | Правила логина и пароля, общие для сервера и формы | `shared/src/constants/credentials.ts` |
 | `LoginRequest`, `AuthUser`, `AuthResponse` | Контракты входа | `shared/src/types/auth.ts` |
-| `can(roles?)`, `requireAuth` | Доступ к маршруту: `can()` — любой вошедший, `can([ADMIN, MANAGER])` — только эти роли; ставится у каждого маршрута, плюс `router.use(can())` на модуль. `requireAuth` — проверка сессии, повторно в базу не ходит | `server/src/middlewares/require-auth.ts` |
+| `can(permission?)`, `requireAuth` | Доступ к маршруту: `can()` — любой вошедший, `can(PERMISSIONS.X)` — по праву, права из базы на каждом запросе; ставится у каждого маршрута, плюс `router.use(can())` на модуль. `requireAuth` — проверка сессии, повторно в базу не ходит | `server/src/middlewares/require-auth.ts` |
 | `hideCatalogMoney(page, role)` | Срез закупки и себестоимости в ответе каталога по ролям | `server/src/modules/products/catalog.mapper.ts` |
 | `SESSION_COOKIE_NAME`, `sessionCookieOptions` | Настройки куки сессии | `server/src/config/session.ts` |
 | `SALES_POINT_TYPES`, `SALES_POINT_TYPE_LABELS`, `isSystemSalesPointType()` | Виды точек продаж: KASPI, OZON, SITE, OFFLINE | `shared/src/constants/sales-points.ts` |
@@ -431,8 +435,8 @@ shared/    # Общий код: типы контрактов, констант�
 | `useLoginForm()` | Состояние формы входа, отправка, текст ошибки | `front/src/features/auth/use-login-form.ts` |
 | `apiErrorMessage(error, fallback)` | Текст ошибки из ответа RTK Query | `front/src/shared/api/error-message.ts` |
 | `apiFieldErrors(error)` | Ошибки по полям из `VALIDATION_ERROR` | `front/src/shared/api/error-message.ts` |
-| `useGetUsersQuery`, `useCreateUserMutation` | Сотрудники; тег `User` обновляет таблицу после создания | `front/src/features/users/users-api.ts` |
-| `useCreateUserForm(onSuccess)` | Состояние формы создания сотрудника | `front/src/features/users/use-create-user-form.ts` |
+| `useGetUsersQuery`, `useCreateUserMutation`, `useUpdateUserMutation`, `useDeleteUserMutation` | Сотрудники; тег `User` обновляет таблицу, правка — ещё и свою карточку (`Auth`) | `front/src/features/users/users-api.ts` |
+| `useUserForm()` | Окно сотрудника: создание и правка, роль-шаблон, галочки (не-админ — только свои), удаление | `front/src/features/users/use-user-form.ts` |
 | `useGetAuditLogQuery` | Журнал действий | `front/src/features/audit/audit-api.ts` |
 | `formatDateTime(iso)` | Дата и время в часовом поясе пользователя | `front/src/lib/format.ts` |
 | `moneyToNumber(value)` | Цена из API (строка `"48230.00"`) в число для показа; пусто → null, не 0 | `front/src/lib/format.ts` |
@@ -462,7 +466,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `stockDocumentsApi` (`useGetStockDocumentsQuery` и др.) | RTK Query документов склада; проведение помечает и `Product` | `front/src/features/stock-documents/stock-documents-api.ts` |
 | `priceToTiyn()`, `normalizePrice()`, `tiynToTenge()` | Деньги черновика в целых тиын | `front/src/features/stock-documents/stock-money.ts` |
 | `formatMoneyExact(value)` | Сумма с тиын, если есть: для учётных документов | `front/src/lib/format.ts` |
-| `STOCK_DOCUMENT_TYPES`, `STOCK_DOCUMENT_ROLES`, `STOCK_DOCUMENT_POST_ROLES`, пределы, `formatStockDocumentNumber()`, `parseStockDocumentNumber()` | Виды, роли, номер `00128` | `shared/src/constants/stock-documents.ts` |
+| `STOCK_DOCUMENT_TYPES`, пределы, `formatStockDocumentNumber()`, `parseStockDocumentNumber()` | Виды, номер `00128` | `shared/src/constants/stock-documents.ts` |
 | `WAREHOUSE_KASPI_CODE_PATTERN`, `WAREHOUSE_OWN_CODE_PATTERN`, `WAREHOUSE_NAME_MAX_LENGTH` | Коды складов Kaspi и наших | `shared/src/constants/warehouses.ts` |
 | `StockDocumentDto`, `StockDocumentListItemDto`, `StockVariantDto`, `SaveStockDocumentRequest`, `StockPickerResponse` и др. | Контракты документов склада | `shared/src/types/stock-documents.ts` |
 | `CreateWarehouseRequest` | Тело создания своего склада | `shared/src/types/kaspi-catalog.ts` |
@@ -549,6 +553,7 @@ shared/    # Общий код: типы контрактов, констант�
 | [analytics-spec.md](docs/analytics-spec.md) | Спецификация аналитического модуля: принципы визуализации (Tufte / Few / Munzner), информационная архитектура из 8 табов, состав графиков и KPI. Источник правды для имплементации дашборда. |
 | [kaspi-api-integration.md](docs/kaspi-api-integration.md) | Kaspi Shop API целиком: авторизация по `X-Auth-Token`, шифрование токена, эндпоинты заказов и позиций, стратегия синхронизации, маппинг полей, статусы заказов, схема БД, грабли. Раздел 10 — каталог товаров: разбор XML-выгрузки и JSON кабинета (`list?m=&p=&l=&a=`), маппинг всех полей, три цены и три идентификатора, картинки, штрихкод. Раздел 11 — дерево папок из `categoryPathCodes` и `familyId`. Раздел 10, «Как заходим» — разведка входа в кабинет (29.09.2026): JSON-вход `idmc.shop.kaspi.kz/api/p/login`, ответы и ошибки, адреса кабинета, GraphQL заказов. Раздел 12 — чек-лист непроверенного. Раздел 13 — обратное направление: наличие товара ведётся у нас и уходит в Kaspi через XML, поля `storeId`/`preOrder`/`stockCount`/`available` и откуда они берутся. |
 | [workers.md](docs/workers.md) | Воркеры — фоновые задачи: решения пользователя (интервал, период, задержка и часы отправки, оповещения), отдельный процесс, цикл без наложений, самовосстановление, журнал, этапы и открытые вопросы этапа 3. |
+| [permissions.md](docs/permissions.md) | Права сотрудников: галочки, роль-шаблон, админу — всё, кто раздаёт права, удаление сотрудника, таблица «право → что открывает», как добавить право. |
 | [inventory.md](docs/inventory.md) | Складской учёт: модель остатков (остаток, резерв, предзаказ, ожидание, доступно), документы склада — черновик и проведение, склады без Kaspi, этапы B (резерв по заказам) и C (заказ поставщику, приёмка). |
 | [telegram-bot.md](docs/telegram-bot.md) | Telegram-бот: отправка сообщений и карточек-картинок заказа, маршрутизация получателям (поставщик / склад / доставка), уведомления об отменах и возвратах, cron и расписание, грабли. |
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CATALOG_SEARCH_MAX_LENGTH, KASPI_ORDER_PERIODS,
-  KASPI_ORDER_PERIOD_LABELS, SALES_POINT_TYPES, USER_ROLES } from "@radeya/shared";
+  KASPI_ORDER_PERIOD_LABELS, PERMISSIONS, SALES_POINT_TYPES } from "@radeya/shared";
 
 import { Button } from "@/components/button";
 import { DateRangePicker } from "@/components/date-range-picker";
@@ -58,10 +58,10 @@ export default function OrdersPage() {
 
   // Сырьё прямо из Kaspi — для разбора расхождений со складом. Запрос идёт
   // на площадку при каждой загрузке страницы, поэтому период короткий.
-  // Только админу: маршрут закрыт can([ADMIN]), остальным прилетел бы 403.
+  // Только с правом отладки: без него маршрут ответил бы 403.
   const kaspi = useGetKaspiOrdersQuery(
     { days: RAW_DAYS, raw: 1 },
-    { skip: !can([USER_ROLES.ADMIN]) },
+    { skip: !can(PERMISSIONS.ORDERS_KASPI_DEBUG) },
   );
 
   useEffect(() => {
@@ -77,7 +77,8 @@ export default function OrdersPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Заказы</h1>
 
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Синхронизация — по праву ORDERS_SYNC: без него сервер ответит 403. */}
+      {can(PERMISSIONS.ORDERS_SYNC) && <div className="flex flex-wrap items-center gap-2">
         <Button className="" type="button" disabled={sync.isRunning}
           onClick={() => void sync.start(KASPI_ORDER_PERIODS.LAST_2_YEARS)}>
           {KASPI_ORDER_PERIOD_LABELS[KASPI_ORDER_PERIODS.LAST_2_YEARS]}
@@ -104,7 +105,7 @@ export default function OrdersPage() {
             пропущено {sync.totals.skipped}
           </span>
         )}
-      </div>
+      </div>}
 
       {/* Фильтры по спискам — только у офлайн-точки: у заказов площадки эти
           поля всегда пустые, и любой выбор давал бы пустую таблицу. */}

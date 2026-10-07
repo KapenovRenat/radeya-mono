@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { USER_ROLES } from '@radeya/shared';
+import { PERMISSIONS } from '@radeya/shared';
 
 import { can } from '../../middlewares/require-auth';
 import { getAuditLog } from './audit.controller';
 
-const { ADMIN } = USER_ROLES;
 
 /**
  * Журнал действий. Только чтение и только для админа: по записям видно,
@@ -18,4 +17,4 @@ export const auditRouter = Router();
 // Весь модуль — только вошедшим. Маршрут без своего can() не станет публичным.
 auditRouter.use(can());
 
-auditRouter.get('/', can([ADMIN]), getAuditLog);
+auditRouter.get('/', can(PERMISSIONS.AUDIT_VIEW), getAuditLog);

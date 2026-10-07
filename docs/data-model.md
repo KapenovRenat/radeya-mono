@@ -31,8 +31,9 @@
 | `passwordHash` | `String` | argon2id. Наружу не отдаётся никогда |
 | `name` | `String` | Имя сотрудника |
 | `position` | `String` | Должность, произвольный текст. Заполняет админ при создании |
-| `role` | `UserRole` | Без значения по умолчанию — выбирается явно |
-| `isActive` | `Boolean` = `true` | Отключение вместо удаления |
+| `role` | `UserRole` | Без значения по умолчанию — выбирается явно. Шаблон галочек; особенная только `ADMIN` — может всё |
+| `permissions` | `String[]` = `[]` | Выданные права — ключи `PERMISSIONS` ([permissions.md](permissions.md)). Строками: новое право без миграции |
+| `isActive` | `Boolean` = `true` | Отключённый не входит. Удалить можно и насовсем — ссылки на него пустеют (`SetNull`) |
 | `createdAt` / `updatedAt` | `DateTime` | |
 | `createdById` | `String?` UUID | Кто завёл. Self-relation `UserCreatedBy`, `onDelete: SetNull`. У первого админа пусто |
 
@@ -43,10 +44,9 @@
 `ADMIN` · `MANAGER` · `SELLER` · `VIEWER`
 
 Значения обязаны совпадать с `USER_ROLES` в `shared/src/constants/roles.ts` — там же
-лежат подписи для интерфейса. Новая роль — три места: `USER_ROLES`, `USER_ROLE_LABELS`
-и этот enum, плюс миграция. Роль проверяется на сервере (`can()` у маршрута); скрытая
-кнопка в интерфейсе защитой не является. Кто что может — «Права и роли»
-в [api-reference.md](api-reference.md).
+лежат подписи для интерфейса. Новая роль — четыре места: `USER_ROLES`, `USER_ROLE_LABELS`,
+шаблон галочек в `ROLE_PERMISSION_TEMPLATES` и этот enum, плюс миграция. Доступ решает
+не роль, а права-галочки — [permissions.md](permissions.md).
 
 ---
 
@@ -355,8 +355,8 @@ Category ──< Product ──< Variant ──┬──< Listing        (кан
 | `comment` | `String?` | До 1000 символов |
 | `totalAmount` | `Decimal(14, 2) @default(0)` | Σ сумм строк. Хранится: у проведённого это факт на момент проведения |
 | `postedAt` | `DateTime?` | Пусто — черновик, остатки не тронуты |
-| `postedById` | `uuid?` → `User` | Кто провёл. `Restrict`: сотрудников не удаляют |
-| `createdById` | `uuid` → `User` | Кто создал. `Restrict` |
+| `postedById` | `uuid?` → `User` | Кто провёл. `SetNull`: удалили сотрудника — документ остаётся |
+| `createdById` | `uuid?` → `User` | Кто создал. `SetNull`, как и выше |
 | `createdAt` / `updatedAt` | `DateTime` | — |
 
 Индексы: `createdAt`, `(type, createdAt)`, `warehouseId`.
@@ -480,6 +480,8 @@ WB убран по решению от 16.09.2026 — вернуть его бу
   менеджером, а «это писал продавец» часть смысла записи.
 - **Имя читается по связи** с `User`, а не снимком: переименовали сотрудника —
   поправилось во всех его комментариях. Тот редкий случай, когда снимок вреден.
+- **Автор может пустеть** (`authorId?`, `SetNull`): сотрудника удалили — комментарий
+  остаётся с подписью «Удалённый сотрудник» (`DELETED_USER_NAME`), роль снимком сохраняется.
 - **В журнал действий комментарии не дублируются:** в самой записи уже есть автор,
   роль и время, а удалить её нельзя.
 
@@ -509,8 +511,8 @@ WB убран по решению от 16.09.2026 — вернуть его бу
   однажды разошлось бы с первым.
 - **`sellerId` — кто завёл заказ**, пусто у заказов площадки: их никто не заводил
   руками. Отдельного поля «кто создал» для интерфейса не нужно: пусто — показываем
-  название точки, заполнено — имя сотрудника. `Restrict`: сотрудника не удаляют,
-  а отключают, и заказ обязан остаться с подписью.
+  название точки, заполнено — имя сотрудника. `SetNull`: удалили сотрудника —
+  заказ остаётся, продавец пустеет (решение 07.10.2026).
 - **`placedAt`, а не `createdAtKaspi`.** Дата оформления: у Kaspi это
   `creationDate`, у офлайн-точки — момент ввода продавцом. Имя нейтральное
   намеренно — статистика за период обязана считать все источники по одной дате,
@@ -783,6 +785,8 @@ Email, пароль и сессия кабинета продавца. **Зап�
 | `worker_instant_dispatch` | Добавляет `WorkerSettings.supplierNotifyInstant`; добавляет в enum `DispatchRecipient` значение `DEVELOPER` |
 | `warehouse_delivery_groups` | **Написана руками:** переименовывает `Warehouse.telegramChatId` в `kaspiDeliveryChatId` (вписанная группа сохраняется), добавляет `ownDeliveryChatId` и `pickupChatId` |
 | `stock_documents` | `Warehouse.kaspiStoreId` становится необязательным (наши склады без Kaspi); добавляет `VariantStock.preOrderQuantity`; создаёт `StockDocument`, `StockDocumentLine` и enum `StockDocumentType` |
+| `user_permissions` | Добавляет `User.permissions`; `OrderComment.authorId`, `Order.sellerId`, `StockDocument.createdById`/`postedById` — `SetNull` вместо `Restrict` (удаление сотрудника) |
+| `user_permissions_backfill` | **Написана руками:** выдаёт текущим сотрудникам права по роли (шаблоны на 07.10.2026), только тем, у кого прав ещё нет; админам не нужно |
 
 Файлы миграций коммитятся в git — без них базу не поднять заново.
 

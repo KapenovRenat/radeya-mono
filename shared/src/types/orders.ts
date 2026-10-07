@@ -388,7 +388,9 @@ export interface SyncOrderEntriesResponse {
 export interface OrderCommentDto {
   id: string;
   orderId: string;
-  authorId: string;
+  /** Пусто — сотрудника удалили. */
+  authorId: string | null;
+  /** Имя автора; удалён — DELETED_USER_NAME. */
   authorName: string;
   authorRole: UserRole;
   text: string;

@@ -1,3 +1,4 @@
+import type { Permission } from '../constants/permissions';
 import type { UserRole } from '../constants/roles';
 
 /**
@@ -22,6 +23,8 @@ export interface AuthUser {
   name: string;
   position: string;
   role: UserRole;
+  /** Выданные права. У админа может быть пустым — ему можно всё (hasPermission). */
+  permissions: Permission[];
 }
 
 /** Ответ POST /api/auth/login и GET /api/auth/me. */

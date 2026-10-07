@@ -1,12 +1,5 @@
-import { USER_ROLES, type UserRole } from './roles';
-
-/**
- * Кто видит деньги в каталоге. Одна константа на сервер и фронт: сервер без
- * этой роли отдаёт поле пустым, фронт прячет столбец. Спрятать только
- * на фронте мало — данные всё равно приходили бы в ответе.
- */
-export const CATALOG_PURCHASE_ROLES: readonly UserRole[] = [USER_ROLES.ADMIN];
-export const CATALOG_COST_ROLES: readonly UserRole[] = [USER_ROLES.ADMIN];
+// Кто видит деньги в каталоге — права CATALOG_VIEW_PURCHASE и CATALOG_VIEW_COST
+// (constants/permissions.ts): сервер без права отдаёт поле пустым, фронт прячет столбец.
 
 /**
  * Название товара для показа: карточка Kaspi, иначе наше название модели.

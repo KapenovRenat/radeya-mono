@@ -15,6 +15,11 @@ export interface AnchoredPanel {
   panelRef: RefObject<HTMLDivElement | null>;
   /** Координаты для `position: fixed`. null — ещё не посчитаны. */
   position: { top: number; left: number } | null;
+  /**
+   * Куда рисовать портал: открытый `<dialog>`, в котором стоит кнопка, иначе `body`.
+   * null — панель закрыта.
+   */
+  container: Element | null;
 }
 
 /**
@@ -28,12 +33,18 @@ export interface AnchoredPanel {
  * и смене размера окна она закрывается. Пересчитывать положение на каждый
  * кадр дороже, чем закрыть.
  *
+ * Внутри модального окна портал идёт в сам `<dialog>`, а не в `body`: модальный
+ * диалог браузер выносит в верхний слой и делает остальную страницу неактивной —
+ * панель в `body` оказалась бы под окном и не нажималась. `fixed` внутри диалога
+ * по-прежнему считается от экрана: у диалога нет transform.
+ *
  * Общий хук, а не копия в каждом компоненте: этим пользуются и меню на три
  * точки, и календарь, и всё, что появится дальше.
  */
 export function useAnchoredPanel(align: "start" | "end" = "end"): AnchoredPanel {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [container, setContainer] = useState<Element | null>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -45,7 +56,11 @@ export function useAnchoredPanel(align: "start" | "end" = "end"): AnchoredPanel 
     if (returnFocus) anchorRef.current?.querySelector("button")?.focus();
   }, []);
 
-  const toggle = useCallback(() => setIsOpen((open) => !open), []);
+  const toggle = useCallback(() => {
+    // Место для портала выбирается в момент открытия: кнопка уже в документе.
+    setContainer(anchorRef.current?.closest("dialog[open]") ?? document.body);
+    setIsOpen((open) => !open);
+  }, []);
 
   // Положение считается после отрисовки панели: нужны её настоящие размеры,
   // чтобы понять, разворачивать вверх или вниз. Обычный useEffect, а не
@@ -113,5 +128,5 @@ export function useAnchoredPanel(align: "start" | "end" = "end"): AnchoredPanel 
     };
   }, [isOpen, close]);
 
-  return { isOpen, toggle, close, anchorRef, panelRef, position };
+  return { isOpen, toggle, close, anchorRef, panelRef, position, container: isOpen ? container : null };
 }

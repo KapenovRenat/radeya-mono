@@ -39,9 +39,18 @@ model User {
   position String
 
   /// Без значения по умолчанию: роль всегда выбирается явно при создании.
+  /// С 07.10.2026 роль — шаблон галочек, доступ решает `permissions`.
+  /// Особенная только ADMIN: ему можно всё без галочек.
   role UserRole
 
-  /// Уволенного сотрудника отключаем, а не удаляем — иначе поедут ссылки в журнале действий.
+  /// Выданные права — ключи PERMISSIONS из shared/src/constants/permissions.ts.
+  /// Строками, а не enum: новое право в коде не требует миграции, а у всех
+  /// сотрудников оно просто снято, пока его не поставят.
+  permissions String[] @default([])
+
+  /// Отключённый не входит. Сотрудника можно и удалить совсем (решение
+  /// пользователя 07.10.2026): его комментарии, заказы и документы остаются
+  /// без автора (SetNull), журнал хранит логин снимком.
   isActive Boolean @default(true)
 
   createdAt DateTime @default(now())
@@ -747,10 +756,10 @@ model OrderComment {
   orderId String @db.Uuid
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  /// Автор. Restrict: сотрудника не удаляют, а отключают, и комментарий обязан
-  /// остаться с подписью.
-  authorId String @db.Uuid
-  author   User   @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  /// Автор. Пусто — сотрудника удалили: комментарий остаётся, подпись
+  /// «удалённый сотрудник», роль снимком ниже сохраняется.
+  authorId String? @db.Uuid
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
   /// Роль снимком — на момент написания. Продавец мог стать менеджером, а «это
   /// писал продавец» — часть смысла записи. Имя, наоборот, берётся из `User`
@@ -778,7 +787,8 @@ model Order {
   /// Отдельного поля «источник» для интерфейса не нужно: пусто — показываем
   /// название точки продаж, заполнено — имя сотрудника.
   sellerId String? @db.Uuid
-  seller   User?   @relation("OrderSeller", fields: [sellerId], references: [id], onDelete: Restrict)
+  /// SetNull: удалили сотрудника — заказ остаётся, продавец пустеет.
+  seller   User?   @relation("OrderSeller", fields: [sellerId], references: [id], onDelete: SetNull)
 
   /// Номер, записанный руками у офлайн-точки. Не ключ и не уникален: в таблице
   /// продаж один и тот же номер стоит у десятков разных клиентов. Хранится
@@ -1464,11 +1474,11 @@ model StockDocument {
   /// Когда и кем проведён. Пусто — черновик.
   postedAt   DateTime?
   postedById String?   @db.Uuid
-  postedBy   User?     @relation("StockDocumentPostedBy", fields: [postedById], references: [id], onDelete: Restrict)
+  postedBy   User?     @relation("StockDocumentPostedBy", fields: [postedById], references: [id], onDelete: SetNull)
 
-  /// Сотрудников не удаляют, только отключают — поэтому Restrict, а не SetNull.
-  createdById String @db.Uuid
-  createdBy   User   @relation("StockDocumentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  /// Пусто — сотрудника удалили; документ остаётся. Журнал хранит логин снимком.
+  createdById String? @db.Uuid
+  createdBy   User?   @relation("StockDocumentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

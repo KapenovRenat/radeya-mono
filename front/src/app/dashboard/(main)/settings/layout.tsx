@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
-import { USER_ROLES } from "@radeya/shared";
 
-import { RoleGuard } from "@/features/auth/role-guard";
+import { PermissionGuard } from "@/features/auth/permission-guard";
+import { SETTINGS_PERMISSIONS } from "@/features/settings/settings-permissions";
 
 /**
- * Раздел «Настройки» — только ADMIN: здесь ключи от внешних систем.
- * Проверка в layout, чтобы накрыть и будущие блоки раздела.
+ * Раздел «Настройки» — с правом хотя бы на один блок; блоки внутри
+ * показываются каждый по своему праву (page.tsx).
  */
 export default function SettingsLayout({ children }: { children: ReactNode }) {
-  return <RoleGuard roles={[USER_ROLES.ADMIN]}>{children}</RoleGuard>;
+  return <PermissionGuard permission={SETTINGS_PERMISSIONS}>{children}</PermissionGuard>;
 }

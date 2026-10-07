@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import { hasRole, type UserRole } from '@radeya/shared';
+import { hasPermission, type Permission } from '@radeya/shared';
 
 import { SESSION_COOKIE_NAME } from '../config/session';
 import { ForbiddenError, UnauthorizedError } from '../lib/errors';
@@ -38,16 +38,19 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
 };
 
 /**
- * Кто может вызвать маршрут. Ставится у каждого маршрута явно — по строке
- * видно, кому она открыта:
+ * Кто может вызвать маршрут — по праву-галочке сотрудника. Ставится у каждого
+ * маршрута явно — по строке видно, кому она открыта:
  *
- *   router.get('/', can(), getList);                          // все вошедшие
- *   router.post('/', can([USER_ROLES.ADMIN, USER_ROLES.MANAGER]), create);
+ *   router.get('/', can(), getList);                                // все вошедшие
+ *   router.post('/', can(PERMISSIONS.STOCK_DOCUMENTS_EDIT), create);
+ *
+ * Админ проходит любую проверку (hasPermission). Права читаются из базы
+ * на каждом запросе: сняли галочку — закрылось сразу, без повторного входа.
  *
  * Вход проверяет сам. Права всегда проверяются здесь, на сервере: спрятанная
  * кнопка в интерфейсе защитой не является, запрос можно отправить и без неё.
  */
-export function can(roles: readonly UserRole[] = []): RequestHandler[] {
+export function can(permission?: Permission): RequestHandler[] {
   return [
     requireAuth,
     (req, _res, next) => {
@@ -55,7 +58,7 @@ export function can(roles: readonly UserRole[] = []): RequestHandler[] {
         throw new UnauthorizedError();
       }
 
-      if (!hasRole(req.user.role, roles)) {
+      if (!hasPermission(req.user, permission)) {
         throw new ForbiddenError();
       }
 

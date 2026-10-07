@@ -1,4 +1,4 @@
-import type { AuthUser, OrderCommentDto, OrderCommentsResponse } from '@radeya/shared';
+import { DELETED_USER_NAME, type AuthUser, type OrderCommentDto, type OrderCommentsResponse } from '@radeya/shared';
 
 import { Prisma } from '../../generated/prisma/client';
 import { prisma } from '../../db/client';
@@ -31,7 +31,7 @@ function toDto(row: CommentRow): OrderCommentDto {
     id: row.id,
     orderId: row.orderId,
     authorId: row.authorId,
-    authorName: row.author.name,
+    authorName: row.author?.name ?? DELETED_USER_NAME,
     authorRole: row.authorRole,
     text: row.text,
     createdAt: row.createdAt.toISOString(),

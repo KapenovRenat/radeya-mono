@@ -32,7 +32,8 @@ export interface StockDocumentListItemDto {
   /** Пусто — черновик: остатки не тронуты. */
   postedAt: string | null;
   postedBy: StockDocumentPersonDto | null;
-  createdBy: StockDocumentPersonDto;
+  /** Пусто — сотрудника удалили. */
+  createdBy: StockDocumentPersonDto | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -90,7 +91,7 @@ export interface StockDocumentLineInput {
 /**
  * Создание и правка черновика: документ целиком, строки — полным списком.
  * `post: true` — галочка «Проведено»: записать и провести одной транзакцией
- * (только STOCK_DOCUMENT_POST_ROLES).
+ * (право STOCK_DOCUMENTS_POST).
  */
 export interface SaveStockDocumentRequest {
   type: StockDocumentType;

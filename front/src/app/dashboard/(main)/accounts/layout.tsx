@@ -1,14 +1,15 @@
 import type { ReactNode } from "react";
-import { USER_ROLES } from "@radeya/shared";
+import { PERMISSIONS } from "@radeya/shared";
 
-import { RoleGuard } from "@/features/auth/role-guard";
+import { PermissionGuard } from "@/features/auth/permission-guard";
 
 /**
- * Раздел «Аккаунты и История» — только для админа.
+ * Раздел «Аккаунты и История» — с правом на сотрудников или на журнал:
+ * вкладки внутри показываются каждая по своему праву.
  *
  * Проверка стоит в layout, а не на странице: так она автоматически накроет
  * все будущие подстраницы раздела, и её нельзя будет забыть на новой.
  */
 export default function AccountsLayout({ children }: { children: ReactNode }) {
-  return <RoleGuard roles={[USER_ROLES.ADMIN]}>{children}</RoleGuard>;
+  return <PermissionGuard permission={[PERMISSIONS.USERS_MANAGE, PERMISSIONS.AUDIT_VIEW]}>{children}</PermissionGuard>;
 }

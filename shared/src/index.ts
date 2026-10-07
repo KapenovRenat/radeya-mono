@@ -2,6 +2,7 @@
 // Добавил файл в constants/ или types/ — не забудь реэкспортировать здесь.
 
 export * from './constants/roles';
+export * from './constants/permissions';
 export * from './constants/sales-points';
 export * from './constants/order-statuses';
 export * from './constants/kaspi-orders';

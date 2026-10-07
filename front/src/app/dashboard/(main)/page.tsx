@@ -1,5 +1,8 @@
 "use client";
 
+import { PERMISSIONS } from "@radeya/shared";
+
+import { useCan } from "@/features/auth/use-can";
 import { useGetHealthQuery } from "@/features/health/health-api";
 import { useCreateSalesPointForm } from "@/features/sales-points/use-create-sales-point-form";
 import {Button} from "@/components/button";
@@ -13,20 +16,21 @@ import { StatsBlock } from "./_components/stats-block";
 export default function DashboardPage() {
   const { data, isLoading, isError } = useGetHealthQuery();
   const salesPointForm = useCreateSalesPointForm();
+  const can = useCan();
 
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Dashboard</h1>
 
-        <div>
+        {can(PERMISSIONS.SALES_POINTS_MANAGE) && <div>
             <Button onClick={salesPointForm.open}>
                 Создать Офлайн точку продажи
             </Button>
-        </div>
+        </div>}
 
         <CreateSalesPointDialog form={salesPointForm} />
 
-        <StatsBlock />
+        {can(PERMISSIONS.STATS_VIEW) && <StatsBlock />}
 
       <div className="rounded-lg border p-4 text-sm">
         <div className="mb-2 font-medium">Связь с API</div>

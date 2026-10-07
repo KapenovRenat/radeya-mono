@@ -1,14 +1,13 @@
 import express, { Router } from 'express';
-import { USER_ROLES } from '@radeya/shared';
+import { PERMISSIONS } from '@radeya/shared';
 
 import { can } from '../../middlewares/require-auth';
 import { commitSuppliers, getSuppliers, patchSupplier, previewSuppliers } from './suppliers.controller';
 
-const { ADMIN } = USER_ROLES;
 
 /**
  * Поставщики. Список — всем вошедшим: он нужен фильтру каталога. Импорт
- * и правка — только ADMIN: это закупочная сторона дела и запись пачкой.
+ * и правка — права IMPORTS и SUPPLIERS_EDIT: это закупочная сторона дела и запись пачкой.
  */
 export const suppliersRouter = Router();
 
@@ -27,7 +26,7 @@ suppliersRouter.get('/', can(), getSuppliers);
  */
 suppliersRouter.post(
   '/import/preview',
-  can([ADMIN]),
+  can(PERMISSIONS.IMPORTS),
   express.raw({ type: '*/*', limit: '25mb' }),
   previewSuppliers,
 );
@@ -35,9 +34,9 @@ suppliersRouter.post(
 /** Запись: тело обычный JSON — строки, которые человек увидел в предпросмотре. */
 suppliersRouter.post(
   '/import/commit',
-  can([ADMIN]),
+  can(PERMISSIONS.IMPORTS),
   express.json({ limit: '5mb' }),
   commitSuppliers,
 );
 
-suppliersRouter.patch('/:id', can([ADMIN]), patchSupplier);
+suppliersRouter.patch('/:id', can(PERMISSIONS.SUPPLIERS_EDIT), patchSupplier);

@@ -259,7 +259,7 @@ function DropdownView({
           : <MoreVertical size={16} aria-hidden="true" />)}
       </button>
 
-      {isOpen && createPortal(
+      {isOpen && panel.container && createPortal(
         <div
           ref={list}
           // Пока позиция не посчитана, список невидим: иначе он на кадр
@@ -360,7 +360,7 @@ function DropdownView({
             ))}
           </div>
         </div>,
-        document.body,
+        panel.container,
       )}
     </div>
   );

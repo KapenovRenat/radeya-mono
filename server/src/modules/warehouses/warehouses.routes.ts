@@ -1,14 +1,13 @@
 import { Router } from 'express';
-import { USER_ROLES } from '@radeya/shared';
+import { PERMISSIONS } from '@radeya/shared';
 
 import { can } from '../../middlewares/require-auth';
 import { getWarehouses, patchWarehouse, postKaspiWarehouses, postOwnWarehouse } from './warehouses.controller';
 
-const { ADMIN } = USER_ROLES;
 
 /**
  * Справочник складов. Список нужен всем — фильтр каталога и колонки складов.
- * Импорт — только ADMIN: это настройка учёта, ошибка тихо разъедется
+ * Импорт — право KASPI_SYNC, свои склады — WAREHOUSES_MANAGE: ошибка тихо разъедется
  * по товарам и заказам.
  */
 export const warehousesRouter = Router();
@@ -17,6 +16,6 @@ export const warehousesRouter = Router();
 warehousesRouter.use(can());
 
 warehousesRouter.get('/', can(), getWarehouses);
-warehousesRouter.post('/', can([ADMIN]), postOwnWarehouse);
-warehousesRouter.post('/import-kaspi', can([ADMIN]), postKaspiWarehouses);
-warehousesRouter.patch('/:id', can([ADMIN]), patchWarehouse);
+warehousesRouter.post('/', can(PERMISSIONS.WAREHOUSES_MANAGE), postOwnWarehouse);
+warehousesRouter.post('/import-kaspi', can(PERMISSIONS.KASPI_SYNC), postKaspiWarehouses);
+warehousesRouter.patch('/:id', can(PERMISSIONS.WAREHOUSES_MANAGE), patchWarehouse);

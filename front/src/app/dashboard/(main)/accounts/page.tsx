@@ -1,26 +1,31 @@
 "use client";
 
 import { useState } from "react";
+import { PERMISSIONS } from "@radeya/shared";
 
 import { Button } from "@/components/button";
+import { useCan } from "@/features/auth/use-can";
+import { useUserForm } from "@/features/users/use-user-form";
 import { cn } from "@/lib/utils";
 import { AuditTable } from "./_components/audit-table";
-import { CreateUserDialog } from "./_components/create-user-dialog";
+import { UserDialog } from "./_components/user-dialog";
 import { UsersTable } from "./_components/users-table";
-import {useAuth} from "@/features/auth/use-auth";
-import {USER_ROLES} from "@radeya/shared";
 
+/** Вкладки — каждая по своему праву: сотрудники и журнал раздаются отдельно. */
 const TABS = [
-  { id: "accounts", label: "Аккаунты" },
-  { id: "history", label: "История" },
+  { id: "accounts", label: "Аккаунты", permission: PERMISSIONS.USERS_MANAGE },
+  { id: "history", label: "История", permission: PERMISSIONS.AUDIT_VIEW },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
 
 export default function AccountsPage() {
-  const [tab, setTab] = useState<TabId>("accounts");
-  const [isDialogOpen, setDialogOpen] = useState(false);
-  const { user } = useAuth();
+  const can = useCan();
+  const tabs = TABS.filter((item) => can(item.permission));
+  const [selected, setTab] = useState<TabId | null>(null);
+  // Выбранная вкладка могла стать недоступной — тогда первая доступная.
+  const tab = tabs.find((item) => item.id === selected)?.id ?? tabs[0]?.id;
+  const userForm = useUserForm();
 
   return (
     <div className="space-y-4">
@@ -29,7 +34,7 @@ export default function AccountsPage() {
       {/* role="tablist" и клавиатурная навигация появятся, когда табы станут
           общим компонентом. Пока это разметка под доработку вёрстки. */}
       <div className="flex gap-2 border-b">
-        {TABS.map((item) => (
+        {tabs.map((item) => (
           <button
             key={item.id}
             type="button"
@@ -48,16 +53,13 @@ export default function AccountsPage() {
 
       {tab === "accounts" && (
         <div className="space-y-4">
-            {user?.role === USER_ROLES.ADMIN ? <Button type="button" onClick={() => setDialogOpen(true)}>
+          <Button type="button" onClick={userForm.openCreate}>
             Добавить аккаунт
-          </Button> : null}
+          </Button>
 
-          <UsersTable />
+          <UsersTable onOpen={userForm.openEdit} />
 
-          <CreateUserDialog
-            open={isDialogOpen}
-            onClose={() => setDialogOpen(false)}
-          />
+          <UserDialog form={userForm} />
         </div>
       )}
 

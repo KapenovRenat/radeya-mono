@@ -116,17 +116,17 @@
 
 ## Users
 
-Раздел «Аккаунты» — **целиком для роли `ADMIN`**. Иначе менеджер выпишет себе
-роль `ADMIN` и обойдёт любые ограничения; список закрыт по тому же принципу —
-состав команды с ролями рядовому сотруднику знать незачем.
+Раздел «Аккаунты» — право `USERS_MANAGE` (админу — всегда). Не-админ с этим правом
+выдаёт и снимает только свои права, не трогает админов и не меняет свои роль
+и права — [permissions.md](permissions.md), раздел 3.
 
 ### GET /api/users
 
 Список сотрудников, свежие сверху.
 
-- Auth: требуется, роль `ADMIN`
+- Auth: `can(USERS_MANAGE)` — право `USERS_MANAGE`
 - Параметры: нет
-- Ответ 200: `{ "items": [ { "id", "login", "name", "position", "role", "isActive", "createdAt" } ] }`
+- Ответ 200: `{ "items": [ { "id", "login", "name", "position", "role", "permissions", "isActive", "createdAt" } ] }`
 - Ошибки: `401 UNAUTHORIZED`, `403 FORBIDDEN`
 - Файл: `server/src/modules/users/users.routes.ts`
 
@@ -134,19 +134,46 @@
 
 Создание сотрудника. Пароль задаёт админ.
 
-- Auth: требуется, роль `ADMIN`
-- Тело: `{ "login", "password", "name", "position", "role" }` (тип `CreateUserRequest` в `shared`)
+- Auth: `can(USERS_MANAGE)` — право `USERS_MANAGE`
+- Тело: `{ "login", "password", "name", "position", "role", "permissions": ["STATS_VIEW", …] }`
+  (тип `CreateUserRequest`). Права — только ключи `PERMISSIONS`, незнакомый — 400; лишние поля — 400
 - Ответ 201: созданный сотрудник в форме `UserListItem`
 - Ошибки:
   - `400 VALIDATION_ERROR` — с `details`: поле → список претензий, форма показывает их под полями
   - `409 CONFLICT` — логин занят
-  - `403 FORBIDDEN` — роль ниже `ADMIN`
+  - `403 FORBIDDEN` — нет `USERS_MANAGE`; не-админ назначает админа или выдаёт чужое ему право
 - Файл: `server/src/modules/users/users.routes.ts`
 
 > Уникальность логина проверяет база, а не предварительный запрос: два одновременных
 > запроса прошли бы такую проверку оба. Ошибка уникального индекса переводится в 409.
 
 > Создание пишется в журнал действий. Пароль и его хеш в журнал не попадают.
+
+### PATCH /api/users/:id
+
+Карточка сотрудника целиком: имя, должность, роль, права, новый пароль.
+Логин не меняется.
+
+- Auth: `can(USERS_MANAGE)` — право `USERS_MANAGE`
+- Тело (`UpdateUserRequest`): `{ "name", "position", "role", "permissions": [...], "password"?: "…" }`.
+  `password` не передан — прежний; передан — новый, и **все сессии сотрудника гаснут**
+- Ответ 200: `UserListItem`
+- Ошибки: `400`, `404`; `403` — правит админа не админ, назначает админа не админ,
+  меняет чужие ему права, меняет **свои** роль или права (так нельзя никому);
+  `409` — снять роль с последнего админа
+- Журнал: USER_UPDATED — карточка до и после (с правами), факт смены пароля без самого пароля
+- Файл: `server/src/modules/users/users.controller.ts` (patchUser)
+
+### DELETE /api/users/:id
+
+Удаление насовсем. Сессии удаляются, комментарии, заказы и документы склада остаются
+без автора — [permissions.md](permissions.md), раздел 4.
+
+- Auth: `can(USERS_MANAGE)` — право `USERS_MANAGE`
+- Ответ 204
+- Ошибки: `404`; `403` — удалить себя, не админ удаляет админа; `409` — последний админ
+- Журнал: USER_DELETED — карточка снимком
+- Файл: `server/src/modules/users/users.controller.ts` (removeUser)
 
 ---
 
@@ -157,7 +184,7 @@
 Журнал действий и история изменений, новые сверху. Постранично по 50 записей.
 С фильтром по сущности — история одного товара для его карточки.
 
-- Auth: требуется, роль `ADMIN`
+- Auth: `can(AUDIT_VIEW)` — право `AUDIT_VIEW`
 - Параметры (query, все необязательные): `page` — целое ≥ 1, по умолчанию 1;
   `entityType` + `entityId` — только парой: имя модели (`Variant`, `Product`,
   `Supplier`) и UUID; `action` — значение из `AUDIT_ACTIONS`. Неизвестный
@@ -235,7 +262,7 @@
 
 ### GET /api/orders/kaspi
 Одна страница заказов Kaspi, разобранная в нашу модель. **В базу не пишет.**
-- Auth: `can([ADMIN])` — отладка сверки статусов, не рабочий экран. Фронт
+- Auth: `can(ORDERS_KASPI_DEBUG)` — право `ORDERS_KASPI_DEBUG` — отладка сверки статусов, не рабочий экран. Фронт
   вызывает его только у админа.
 - Query (все необязательные): `days` — за сколько дней назад от текущего
   момента, 1–730, по умолчанию 14; `page` — страница Kaspi с нуля, по умолчанию 0;
@@ -276,7 +303,7 @@
 
 ### POST /api/orders/sync
 Шаг синхронизации заказов: читает из Kaspi и **пишет в базу**.
-- Auth: `can([ADMIN, MANAGER])`.
+- Auth: `can(ORDERS_SYNC)` — право `ORDERS_SYNC`.
 - Блокировка: та же, что у воркера заказов (`LOCKS.KASPI_ORDERS_SYNC`). Воркер
   в цикле — сразу 409 CONFLICT «повторите через минуту», без ожидания.
 - Body: `{ period: '3m' | '2y', to?: string, cursor?: string, maxChunks?: number }`.
@@ -393,7 +420,7 @@
 
 ### POST /api/orders/cabinet/sync
 Шаг дат прибытия для активных заказов — после синхронизации кнопкой.
-- Auth: `can([ADMIN, MANAGER])`.
+- Auth: `can(ORDERS_SYNC)` — право `ORDERS_SYNC`.
 - Тела нет. Под общей с воркером блокировкой: занято — 409.
 - Берёт до 20 активных заказов Kaspi, которым пора (не спрашивали или больше
   часа назад), новые первыми. Ответ 200: `{ processed, changed, remaining }` —
@@ -867,7 +894,7 @@ ADMIN и MANAGER: список пополняется по ходу работы
 Разбор выгрузок каталога из кабинета Kaspi. **В базу ничего не пишет** — только
 показывает, что получилось.
 
-- Auth: требуется, роль `ADMIN`
+- Auth: `can(KASPI_SYNC)` — право `KASPI_SYNC`
 - Тело: `{ "active": "<xml>", "archive": "<xml>" }` — содержимое файлов текстом,
   оба поля необязательные, но хотя бы одно должно быть (тип `KaspiCatalogPreviewRequest`)
 - Ответ 200: `{ "offers": [...], "summary": {...}, "parsedAt": "..." }` (тип `KaspiCatalogPreview`)
@@ -891,7 +918,7 @@ ADMIN и MANAGER: список пополняется по ходу работы
 товары в продаже и снятые с продажи за один вызов. Товары возвращаются сырыми,
 как их отдал кабинет, — состав нашего DTO ещё не определён. **В базу не пишет.**
 
-- Auth: требуется, роль `ADMIN`
+- Auth: `can(KASPI_SYNC)` — право `KASPI_SYNC`
 - Тело: `{ "cookie": "...", "remember": false }` либо `{ "useSession": true }`
   (тип `KaspiCabinetFetchRequest`), все поля необязательные; пустая `cookie` —
   берётся запомненная. `useSession: true` — сессия входа по email и паролю через
@@ -1043,7 +1070,7 @@ Email и состояние входа. Пароля в ответе нет ни
 
 ### GET /api/workers
 Все воркеры: настройки, состояние, задан ли токен бота.
-- Auth: `can([ADMIN])`
+- Auth: `can(WORKERS_MANAGE)` — право `WORKERS_MANAGE`
 - Ответ 200: `WorkersResponse` — `{ items: WorkerDto[] }`. `WorkerDto`: `key`, `title`,
   `settings` (`WorkerSettingsDto`), `state` (`WorkerStateDto`: `status`, `alive` —
   пульс свежее 2 минут, времена последнего цикла, `lastError`,
@@ -1056,7 +1083,7 @@ Email и состояние входа. Пароля в ответе нет ни
 Тестовая карточка: выдуманный заказ (№1000001234) с диваном из каталога
 и плашкой «ТЕСТ — НЕ ЗАКАЗ». Проверяет бота, шрифты, фото и доступ к каждому чату.
 Заказы и отправки (`OrderDispatch`) не трогает.
-- Auth: `can([ADMIN])`
+- Auth: `can(WORKERS_MANAGE)` — право `WORKERS_MANAGE`
 - Тело: `{ target: 'ONE' | 'ALL', chatId: string | null, kind: 'NEW' | 'CANCEL_BY_CUSTOMER' | 'CANCEL_IN_TRANSIT' | 'RETURN' }`.
   `ONE` — на `chatId` (обязателен). `ALL` — трём группам Астаны, всем активным
   поставщикам с Telegram ID и на `chatId`, если указан; один чат дважды не получает.
@@ -1073,7 +1100,7 @@ Email и состояние входа. Пароля в ответе нет ни
 
 ### GET /api/workers/:key/events
 Журнал воркера (`WorkerEvent`): что сделал и кому отправил. Свежие сверху.
-- Auth: `can([ADMIN])`
+- Auth: `can(WORKERS_MANAGE)` — право `WORKERS_MANAGE`
 - Path: `key` из `WORKER_KEYS` (`ORDERS`).
 - Query: `page` (≥1, по умолчанию 1), `pageSize` (10, 20, 50; по умолчанию 20),
   `type` — значение `WORKER_EVENT_TYPES` (необязательно), `orderCode` — цифры,
@@ -1090,7 +1117,7 @@ Email и состояние входа. Пароля в ответе нет ни
 
 ### PUT /api/workers/:key/settings
 Сохранить настройки. Воркер применяет их в течение 15 секунд.
-- Auth: `can([ADMIN])`
+- Auth: `can(WORKERS_MANAGE)` — право `WORKERS_MANAGE`
 - Path: `key` из `WORKER_KEYS` (`ORDERS`).
 - Тело (`UpdateWorkerSettingsRequest`), все поля обязательны: `enabled`,
   `intervalMinutes` (1–10), `periodMonths` (1, 2, 3), `supplierNotifyEnabled`,
@@ -1133,7 +1160,7 @@ Email и состояние входа. Пароля в ответе нет ни
 Наш склад без Kaspi — шоурум, склад в ТЦ. `kaspiStoreId` пуст: заказы Kaspi
 на него не попадают ([inventory.md](inventory.md), раздел 3).
 
-- Auth: `can([ADMIN])`
+- Auth: `can(WAREHOUSES_MANAGE)` — право `WAREHOUSES_MANAGE`
 - Тело (`CreateWarehouseRequest`): `{ "code": "NCITY", "name": "Шоурум Астана Ncity" }`.
   Код приводится к заглавным; латиница, цифры, `_`, `-`, 2–16 знаков, первая — буква;
   вида `PPn` — нельзя (заняты складами Kaspi). Название — 1–150 символов
@@ -1148,7 +1175,7 @@ Email и состояние входа. Пароля в ответе нет ни
 Заводит склады из предпросмотра выгрузки Kaspi. Операция повторяемая:
 сверка идёт по `code`, дубликаты не создаются.
 
-- Auth: требуется, роль `ADMIN`
+- Auth: `can(KASPI_SYNC)` — право `KASPI_SYNC`
 - Тело: `{ "warehouses": [{ "code": "PP3", "storeId": "6871008_PP3", "cityId": "710000000" | null }] }`
   (тип `SaveWarehousesRequest`), от 1 до 500 записей
 - Ответ 200: `{ "created": 33, "updated": 0, "unchanged": 0 }` (тип `SaveWarehousesResponse`)
@@ -1164,7 +1191,7 @@ Email и состояние входа. Пароля в ответе нет ни
 Три Telegram-группы склада по виду доставки — «Из наличия в Астане» в настройках.
 Туда воркер шлёт заказы в наличии с этого склада ([workers.md](workers.md)).
 
-- Auth: `can([ADMIN])`
+- Auth: `can(WAREHOUSES_MANAGE)` — право `WAREHOUSES_MANAGE`
 - Тело (`UpdateWarehouseRequest`), все три поля обязательны:
   `{ "kaspiDeliveryChatId": "-100…" | null, "ownDeliveryChatId": … | null, "pickupChatId": … | null }` —
   Kaspi Доставка (отгрузки на Zammler), своя доставка, самовывоз. Цифры, у группы
@@ -1201,10 +1228,9 @@ Email и состояние входа. Пароля в ответе нет ни
 Оприходование и списание: черновик, проведение, история. Правила —
 [inventory.md](inventory.md), раздел 2.
 
-Весь модуль — `can(STOCK_DOCUMENT_ROLES)` (`ADMIN`, `MANAGER`): в документе видна
+Весь модуль — `can(STOCK_DOCUMENTS_VIEW)`, черновики — `STOCK_DOCUMENTS_EDIT`: в документе видна
 себестоимость. Проведение — галочка «Проведено», `post: true` в POST/PUT; право
-`STOCK_DOCUMENT_POST_ROLES` (`ADMIN`) проверяет контроллер. Роли —
-`shared/src/constants/stock-documents.ts`.
+`STOCK_DOCUMENTS_POST` проверяет контроллер. Права — [permissions.md](permissions.md).
 
 Номер в адресе принимается и как `00128`, и как `128`. Деньги — строками
 с двумя знаками, даты — ISO.
@@ -1213,7 +1239,7 @@ Email и состояние входа. Пароля в ответе нет ни
 
 Список документов, свежие сверху.
 
-- Auth: `STOCK_DOCUMENT_ROLES`
+- Auth: `can(STOCK_DOCUMENTS_VIEW)` — право `STOCK_DOCUMENTS_VIEW`
 - Query: `page` (с 1), `pageSize` (10/20/50, по умолчанию 20), `type` (`ENTER` | `WRITE_OFF`),
   `warehouseId` (uuid), `number` (номер целиком). Лишние параметры — 400
 - Ответ 200 (`StockDocumentListResponse`): `{ items, total, page, pageSize, totalPages }`,
@@ -1228,7 +1254,7 @@ Email и состояние входа. Пароля в ответе нет ни
 Товары для окна выбора: поиск как в каталоге (артикул, модель, названия Kaspi),
 остаток — на выбранном складе. Снятые с продажи тоже.
 
-- Auth: `STOCK_DOCUMENT_ROLES`
+- Auth: `can(STOCK_DOCUMENTS_EDIT)` — право `STOCK_DOCUMENTS_EDIT`
 - Query: `warehouseId` (uuid, обязателен), `search` (до 200 символов), `page`. Страница — 20 товаров
 - Ответ 200 (`StockPickerResponse`): `{ items, total, page, pageSize, totalPages }`, товар —
   `StockVariantDto`: `id`, `sku`, `name`, `imageUrl`, `costPrice`, `quantity` (остаток на складе; null — нет строки или не указан)
@@ -1239,7 +1265,7 @@ Email и состояние входа. Пароля в ответе нет ни
 
 Документ со строками. Остаток в строке — на складе документа сейчас.
 
-- Auth: `STOCK_DOCUMENT_ROLES`
+- Auth: `can(STOCK_DOCUMENTS_VIEW)` — право `STOCK_DOCUMENTS_VIEW`
 - Ответ 200: `StockDocumentDto` — поля строки списка + `lines[]`: `{ id, variant: StockVariantDto, quantity, price, amount }`
 - Ошибки: `400` — не номер, `404 NOT_FOUND`, общие 401/403
 - Файл: `server/src/modules/stock-documents/stock-documents.controller.ts` (getStockDocumentByNumber)
@@ -1249,7 +1275,7 @@ Email и состояние входа. Пароля в ответе нет ни
 Новый документ: черновик, а с `post: true` — сразу проведённый (запись и проведение — одна транзакция:
 не провелось — не записалось ничего).
 
-- Auth: `STOCK_DOCUMENT_ROLES`
+- Auth: `can(STOCK_DOCUMENTS_EDIT)` — право `STOCK_DOCUMENTS_EDIT`
 - Тело (`SaveStockDocumentRequest`):
   `{ "type": "ENTER", "warehouseId": "uuid", "comment": "Ревизия 09.10", "lines": [{ "variantId": "uuid", "quantity": 2, "price": "120000.00" }], "post": false }`.
   Комментарий **обязателен**, 20–1000 символов («Заполните комментарий осмысленно»).
@@ -1268,7 +1294,7 @@ Email и состояние входа. Пароля в ответе нет ни
 Правка черновика целиком — шапка и полный список строк; с `post: true` — и проведение
 в той же транзакции. Тело и проверки — как у POST.
 
-- Auth: `STOCK_DOCUMENT_ROLES`
+- Auth: `can(STOCK_DOCUMENTS_EDIT)` — право `STOCK_DOCUMENTS_EDIT`
 - Ответ 200: `StockDocumentDto`
 - Ошибки: `404`, `409 CONFLICT` — документ уже проведён, остальное как у POST
 - Журнал: STOCK_DOCUMENT_UPDATED; при проведении ещё STOCK_DOCUMENT_POSTED
@@ -1278,7 +1304,7 @@ Email и состояние входа. Пароля в ответе нет ни
 
 Удаление черновика вместе со строками. Номер больше не используется.
 
-- Auth: `STOCK_DOCUMENT_ROLES`
+- Auth: `can(STOCK_DOCUMENTS_EDIT)` — право `STOCK_DOCUMENTS_EDIT`
 - Ответ 204
 - Ошибки: `404`, `409 CONFLICT` — документ проведён
 - Журнал: STOCK_DOCUMENT_DELETED
@@ -1290,7 +1316,7 @@ Email и состояние входа. Пароля в ответе нет ни
 Остатки, себестоимость (оприходование), история товара и отметка «проведён» —
 в той же транзакции, что и запись черновика.
 
-- Право: `STOCK_DOCUMENT_POST_ROLES` (`ADMIN`), иначе `403`
+- Право: `STOCK_DOCUMENTS_POST`, иначе `403`
 - Ответ: `StockDocumentDto` с `postedAt` и `postedBy`
 - Ошибки: `409 CONFLICT` — списанию не хватает остатка (в сообщении до 10 строк
   «артикул — есть N, списываете M»); `400` — склад закрыт. Документ при этом
@@ -1312,7 +1338,7 @@ Email и состояние входа. Пароля в ответе нет ни
 Артикулы, которые уже лежат в базе. По ним страница синхронизации прячет из
 таблицы то, что сохранено ранее.
 
-- Auth: требуется, роль `ADMIN`
+- Auth: `can(KASPI_SYNC)` — право `KASPI_SYNC`
 - Параметры: нет
 - Ответ 200: `{ "skus": string[] }` (тип `KnownSkusResponse`)
 - Ошибки: `401 UNAUTHORIZED`, `403 FORBIDDEN`
@@ -1326,7 +1352,7 @@ Email и состояние входа. Пароля в ответе нет ни
 Заводит в каталоге товары, загруженные из кабинета. Создаёт `Product`, `Variant`,
 `Listing(KASPI)` и остатки по складам одной вложенной вставкой на товар.
 
-- Auth: требуется, роль `ADMIN`
+- Auth: `can(KASPI_SYNC)` — право `KASPI_SYNC`
 - Тело: `{ "offers": CabinetOffer[] }` (тип `ImportKaspiProductsRequest`),
   не больше 5000 позиций
 - Ответ 200: `{ "created", "skipped", "failed": [{ "sku", "reason" }], "missingWarehouses": string[] }`
@@ -1365,63 +1391,23 @@ Email и состояние входа. Пароля в ответе нет ни
 
 ---
 
-## Права и роли (30.09.2026)
+## Права (07.10.2026)
 
-Роли — `USER_ROLES` в `shared/src/constants/roles.ts`, общие для сервера
-и фронта: `ADMIN`, `MANAGER`, `SELLER`, `VIEWER`. Должность сотрудника
-(«Дизайнер») — просто подпись, доступ решает только роль.
+Доступ — **права-галочки у каждого сотрудника**, роль — шаблон галочек, админу — всё.
+Устройство, как добавить право и полная таблица «право → что открывает» —
+[permissions.md](permissions.md).
 
-**Сервер** — `can(roles?)` в `server/src/middlewares/require-auth.ts`,
-у **каждого маршрута явно**:
+**Сервер** — `can(PERMISSIONS.X)` у **каждого маршрута явно**
+(`server/src/middlewares/require-auth.ts`); `can()` без права — любой вошедший.
+`router.use(can(...))` в начале модуля — страховка: маршрут без своего `can()` не станет
+шире. Нет сессии — 401, нет права — 403. В строках «Auth» выше указано право маршрута.
 
-```ts
-const { ADMIN, MANAGER } = USER_ROLES;
+**Поля по правам.** Закупка (`purchasePrice`, `purchaseCurrency`) и себестоимость
+(`costPrice`) в `GET /api/products/variants` приходят `null` без `CATALOG_VIEW_PURCHASE` /
+`CATALOG_VIEW_COST`. Сортировка по закупке без права — 403: порядок строк выдал бы её саму.
 
-router.use(can());                                   // весь модуль — только вошедшим
-router.get('/', can(), getList);                     // любой вошедший
-router.post('/', can([ADMIN, MANAGER]), create);     // только эти роли
-```
-
-- `can()` без ролей — любой вошедший; со списком — только эти роли.
-- `can()` сам проверяет вход. `router.use(can())` в начале модуля — страховка:
-  маршрут, у которого забыли `can()`, всё равно не станет публичным. Повторный
-  поход в базу за сессией при этом не делается.
-- Проверка — функция `hasRole(role, roles)` из shared, та же, что на фронте.
-- Нет сессии — 401 UNAUTHORIZED, нет роли — 403 FORBIDDEN.
-
-**Поля по ролям.** Закупка (`purchasePrice`, `purchaseCurrency`) и себестоимость
-(`costPrice`) в `GET /api/products/variants` приходят `null`, если роли нет
-в `CATALOG_PURCHASE_ROLES` / `CATALOG_COST_ROLES` (`shared/src/constants/catalog.ts`).
-Сортировка по закупке без доступа — 403: порядок строк выдал бы её саму.
-Фронт прячет эти столбцы по тем же константам.
-
-**Фронт** — `useCan()` и `RoleGuard`, та же проверка. Это удобство, а не защита:
-спрятанная кнопка ничего не закрывает, закрывает `can()` на сервере. Поэтому
-роли у кнопки и у маршрута должны совпадать.
-
-**Новая роль:** `USER_ROLES` и `USER_ROLE_LABELS` в shared + значение в
-`enum UserRole` в `schema.prisma` + миграция. Проверка роли при создании
-сотрудника берёт весь `USER_ROLES` и правки не требует.
-
-Кто что может сейчас:
-
-| Маршруты | Кто |
-|---|---|
-| Заказы: список, окно, состав Kaspi, комментарии (чтение и запись) | все вошедшие |
-| `POST /api/orders/sync`, `POST /api/orders/cabinet/sync` | ADMIN, MANAGER |
-| `POST /api/orders/:id/cabinet/sync` (дата прибытия при открытии заказа) | все вошедшие |
-| `GET /api/orders/kaspi` (отладка) | ADMIN |
-| Каталог `GET /api/products/variants`, папки `GET /api/categories` | все вошедшие |
-| Папки: создать, переименовать, порядок, удалить; `PATCH /api/products/category` | ADMIN, MANAGER |
-| `GET /api/warehouses`, `GET /api/suppliers`, `GET /api/stats/orders` | все вошедшие |
-| `GET /api/dictionaries`, `GET /api/sales-points` | все вошедшие |
-| Справочники: добавить, править | ADMIN, MANAGER |
-| Точки продаж, поставщики, склад (`POST /api/warehouses`, `PATCH /api/warehouses/:id`): создать, править | ADMIN |
-| Документы склада: список, просмотр, черновики (`/api/stock-documents`) | ADMIN, MANAGER |
-| Проведение документа склада (`post: true` в `POST`/`PUT /api/stock-documents`) | ADMIN |
-| Импорты, МойСклад, `kaspi-catalog`, `products/skus`, `products/import-kaspi`, `warehouses/import-kaspi` | ADMIN |
-| Аккаунты (`/api/users`), журнал (`/api/audit`), кабинет Kaspi (`/api/kaspi-cabinet`), воркеры (`/api/workers`) | ADMIN |
-| `GET /api/auth/me`, `POST /api/auth/logout` | все вошедшие |
+**Фронт** — `useCan()` и `PermissionGuard`, та же проверка (`hasPermission` из shared).
+Удобство, а не защита: права у кнопки и у маршрута должны совпадать.
 
 ## Дерево категорий и серверный каталог (18.09.2026)
 
@@ -1446,7 +1432,7 @@ router.post('/', can([ADMIN, MANAGER]), create);     // только эти ро
 
 ### POST /api/categories
 Создать папку верхнего уровня или подпапку (максимум два уровня).
-- Auth: `can([ADMIN, MANAGER])`.
+- Auth: `can(CATALOG_EDIT_FOLDERS)` — право `CATALOG_EDIT_FOLDERS`.
 - Body: `{ name: string, parentId?: string | null }`.
 - name: 1–150 символов после trim; parentId — UUID существующей папки.
   Отсутствующий parentId или null создаёт корневую папку. Указанный родитель
@@ -1467,7 +1453,7 @@ router.post('/', can([ADMIN, MANAGER]), create);     // только эти ро
 Страница артикулов из нашей БД: серверный поиск, папка, фильтры по складам
 и поставщикам, сортировка по колонке.
 - Auth: `can()` — любой вошедший. Закупка и себестоимость — только ролям из
-  `CATALOG_PURCHASE_ROLES` / `CATALOG_COST_ROLES`, остальным `null`
+  `CATALOG_VIEW_PURCHASE` / `CATALOG_VIEW_COST`, остальным `null`
   (`hideCatalogMoney()` в `catalog.mapper.ts`). `sort=purchasePrice` без доступа —
   403 FORBIDDEN.
 - Query (все необязательные): page — целое 1–1000000, по умолчанию 1;
@@ -1531,8 +1517,8 @@ router.post('/', can([ADMIN, MANAGER]), create);     // только эти ро
 | stocks[].available | Доступно = Остаток − Резерв + Ожидание. Считает сервер, в базе не хранится; null — все три не указаны |
 | stocks[].daysOnStock | Дней на складе, два знака. Считается при выдаче от `VariantStock.receivedAt`, поэтому растёт каждый день сам; null — склад пуст или срок неизвестен |
 | totalStock, preOrderDays | Сумма остатков и максимальный срок предзаказа по складам |
-| purchasePrice, purchaseCurrency | Закупочная цена и её валюта. `null` без роли из `CATALOG_PURCHASE_ROLES` |
-| costPrice | Себестоимость единицы, всегда в тенге. `null` без роли из `CATALOG_COST_ROLES` |
+| purchasePrice, purchaseCurrency | Закупочная цена и её валюта. `null` без права `CATALOG_VIEW_PURCHASE` |
+| costPrice | Себестоимость единицы, всегда в тенге. `null` без права `CATALOG_VIEW_COST` |
 | minChannelPrice, maxChannelPrice | Денормализованные минимум и максимум по каналам |
 | kaspi | Поля кабинета: masterTitle, title, model, masterSku, offerId, fileId, merchantUid, shopLink, updatedAt, updates |
 | delivery | Пять флагов: any, express, local, merchant (кабинет) и site (наш) |
@@ -1551,7 +1537,7 @@ router.post('/', can([ADMIN, MANAGER]), create);     // только эти ро
 
 ### PATCH /api/products/category
 Перенести выбранные товары в папку либо снять привязку к папке.
-- Auth: `can([ADMIN, MANAGER])`.
+- Auth: `can(CATALOG_EDIT_FOLDERS)` — право `CATALOG_EDIT_FOLDERS`.
 - Body: `{ productIds: string[], categoryId: string | null }`.
   От 1 до 100 UUID товаров; повторные ID сворачиваются. categoryId обязателен;
   null снимает категорию. «Все товары» — обзор, а не место хранения.
@@ -1567,7 +1553,7 @@ router.post('/', can([ADMIN, MANAGER]), create);     // только эти ро
 
 ### PATCH /api/categories/order
 Задать порядок папок одного уровня.
-- Auth: `can([ADMIN, MANAGER])`.
+- Auth: `can(CATALOG_EDIT_FOLDERS)` — право `CATALOG_EDIT_FOLDERS`.
 - Body: `{ parentId: string | null, ids: string[] }`. parentId — UUID родителя
   либо null для корневого уровня. ids — **полный** упорядоченный список детей
   этого уровня, 1–200 UUID без повторов. Другие поля запрещены.
@@ -1594,7 +1580,7 @@ router.post('/', can([ADMIN, MANAGER]), create);     // только эти ро
 
 ### PATCH /api/categories/:id
 Переименовать папку без изменения родителя и привязки товаров.
-- Auth: `can([ADMIN, MANAGER])`.
+- Auth: `can(CATALOG_EDIT_FOLDERS)` — право `CATALOG_EDIT_FOLDERS`.
 - Path: id — UUID существующей Category.
 - Body: { name: string }, 1–150 символов после trim. Другие поля запрещены.
 - Ответ 200: CategoryDto { id, name, parentId }.
@@ -1608,7 +1594,7 @@ router.post('/', can([ADMIN, MANAGER]), create);     // только эти ро
 
 ### DELETE /api/categories/:id
 Удалить пустую папку, не удаляя товары и подпапки.
-- Auth: `can([ADMIN, MANAGER])`.
+- Auth: `can(CATALOG_EDIT_FOLDERS)` — право `CATALOG_EDIT_FOLDERS`.
 - Path: id — UUID существующей Category. Body не требуется.
 - Ответ 200: DeleteCategoryResponse { id }.
 - Ошибки: 400 VALIDATION_ERROR — неверный UUID; 404 NOT_FOUND — папки нет;

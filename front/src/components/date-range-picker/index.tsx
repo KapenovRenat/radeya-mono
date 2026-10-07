@@ -135,7 +135,7 @@ export function DateRangePicker({ value, onChange, label, min, max,
         </span>
       </button>
 
-      {panel.isOpen && createPortal(
+      {panel.isOpen && panel.container && createPortal(
         <div
           ref={panel.panelRef}
           role="dialog"
@@ -216,7 +216,7 @@ export function DateRangePicker({ value, onChange, label, min, max,
             </button>
           </div>
         </div>,
-        document.body,
+        panel.container,
       )}
     </div>
   );

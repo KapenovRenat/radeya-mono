@@ -150,7 +150,7 @@ export interface CatalogDeliveryDto {
  *
  * DTO дашборда, не витрины: содержит закупочную цену. На страницы магазина
  * не отдавать. Закупка и себестоимость приходят пустыми, если роли нет
- * в CATALOG_PURCHASE_ROLES / CATALOG_COST_ROLES.
+ * в CATALOG_VIEW_PURCHASE / CATALOG_VIEW_COST.
  */
 export interface CatalogRowDto {
   variantId: string;

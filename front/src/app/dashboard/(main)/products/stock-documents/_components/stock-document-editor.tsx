@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useId, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import {
+  DELETED_USER_NAME,
   STOCK_DOCUMENT_COMMENT_MAX_LENGTH,
   STOCK_DOCUMENT_TYPES,
   STOCK_DOCUMENT_TYPE_LABELS,
@@ -85,9 +86,9 @@ export function StockDocumentEditor({ document }: { document: StockDocumentDto |
 
       {document !== null && (
         <p className={styles.meta}>
-          Создал {document.createdBy.name}, {formatDateTime(document.createdAt)}
-          {document.postedAt !== null && document.postedBy !== null
-            && ` · Провёл ${document.postedBy.name}, ${formatDateTime(document.postedAt)}`}
+          Создал {document.createdBy?.name ?? DELETED_USER_NAME}, {formatDateTime(document.createdAt)}
+          {document.postedAt !== null
+            && ` · Провёл ${document.postedBy?.name ?? DELETED_USER_NAME}, ${formatDateTime(document.postedAt)}`}
         </p>
       )}
 

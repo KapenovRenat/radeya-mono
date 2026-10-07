@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { MouseEvent } from "react";
 import {
+  DELETED_USER_NAME,
   STOCK_DOCUMENT_TYPE_LABELS,
   formatStockDocumentNumber,
   type StockDocumentListItemDto,
@@ -60,7 +61,7 @@ export function StockDocumentRow({ item }: { item: StockDocumentListItemDto }) {
       <td className={styles.numeric}>{formatMoneyExact(moneyToNumber(item.totalAmount) ?? 0)}</td>
       <td><DocumentStatus postedAt={item.postedAt} /></td>
       <td className={styles.comment} title={item.comment ?? undefined}>{item.comment ?? ""}</td>
-      <td className={styles.nowrap}>{item.createdBy.name}</td>
+      <td className={styles.nowrap}>{item.createdBy?.name ?? DELETED_USER_NAME}</td>
       <td className={styles.nowrap}>{formatDateTime(item.updatedAt)}</td>
     </tr>
   );

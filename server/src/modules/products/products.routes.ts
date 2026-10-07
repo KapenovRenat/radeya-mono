@@ -1,16 +1,15 @@
 import express, { Router } from 'express';
-import { USER_ROLES } from '@radeya/shared';
+import { PERMISSIONS } from '@radeya/shared';
 
 import { can } from '../../middlewares/require-auth';
 import { getKnownSkus, postImportKaspiProducts } from './products.controller';
 import { getCatalog, patchProductsCategory } from './catalog.controller';
 import { commitMoysklad, commitStock, previewMoysklad, previewStock } from './moysklad.controller';
 
-const { ADMIN, MANAGER } = USER_ROLES;
 
 /**
  * Каталог. Список — всем вошедшим; закупка и себестоимость в нём срезаются
- * по ролям (CATALOG_PURCHASE_ROLES, CATALOG_COST_ROLES). Импорты — только ADMIN:
+ * по правам (CATALOG_VIEW_PURCHASE, CATALOG_VIEW_COST). Импорты — право IMPORTS:
  * это запись пачкой в весь каталог.
  */
 export const productsRouter = Router();
@@ -18,16 +17,16 @@ export const productsRouter = Router();
 // Весь модуль — только вошедшим. Маршрут без своего can() не станет публичным.
 productsRouter.use(can());
 
-// Артикулы в базе — для панели сохранения товаров из Kaspi, она только у ADMIN.
-productsRouter.get('/skus', can([ADMIN]), getKnownSkus);
-productsRouter.get('/variants', can(), getCatalog);
-productsRouter.patch('/category', can([ADMIN, MANAGER]), patchProductsCategory);
+// Артикулы в базе — для панели сохранения товаров из Kaspi (право KASPI_SYNC).
+productsRouter.get('/skus', can(PERMISSIONS.KASPI_SYNC), getKnownSkus);
+productsRouter.get('/variants', can(PERMISSIONS.CATALOG_VIEW), getCatalog);
+productsRouter.patch('/category', can(PERMISSIONS.CATALOG_EDIT_FOLDERS), patchProductsCategory);
 
 // Весь каталог целиком сюда не присылают: полторы тысячи товаров с картинками
 // и историей изменений — это около пяти мегабайт, а общий лимит тела намеренно
 // оставлен в 1 МБ. Клиент шлёт пачками, поэтому свой лимит на маршруте не нужен:
 // он всё равно не сработал бы — express.json приложения разбирает тело раньше.
-productsRouter.post('/import-kaspi', can([ADMIN]), postImportKaspiProducts);
+productsRouter.post('/import-kaspi', can(PERMISSIONS.KASPI_SYNC), postImportKaspiProducts);
 
 /**
  * Импорт закупки, поставщиков и сроков предзаказа из выгрузки МойСклада.
@@ -38,7 +37,7 @@ productsRouter.post('/import-kaspi', can([ADMIN]), postImportKaspiProducts);
  */
 productsRouter.post(
   '/moysklad/preview',
-  can([ADMIN]),
+  can(PERMISSIONS.IMPORTS),
   express.raw({ type: '*/*', limit: '25mb' }),
   previewMoysklad,
 );
@@ -46,7 +45,7 @@ productsRouter.post(
 /** Запись: тело JSON — строки, которые человек увидел в предпросмотре. */
 productsRouter.post(
   '/moysklad/commit',
-  can([ADMIN]),
+  can(PERMISSIONS.IMPORTS),
   express.json({ limit: '25mb' }),
   commitMoysklad,
 );
@@ -58,14 +57,14 @@ productsRouter.post(
  */
 productsRouter.post(
   '/moysklad/stock/preview',
-  can([ADMIN]),
+  can(PERMISSIONS.IMPORTS),
   express.raw({ type: '*/*', limit: '25mb' }),
   previewStock,
 );
 
 productsRouter.post(
   '/moysklad/stock/commit',
-  can([ADMIN]),
+  can(PERMISSIONS.IMPORTS),
   express.json({ limit: '25mb' }),
   commitStock,
 );

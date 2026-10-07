@@ -6,8 +6,7 @@ import {
   STOCK_DOCUMENT_COMMENT_MIN_LENGTH,
   STOCK_DOCUMENT_MAX_LINES,
   STOCK_DOCUMENT_MAX_QUANTITY,
-  STOCK_DOCUMENT_POST_ROLES,
-  STOCK_DOCUMENT_ROLES,
+  PERMISSIONS,
   STOCK_DOCUMENT_TYPES,
   type SaveStockDocumentRequest,
   type StockDocumentDto,
@@ -62,9 +61,9 @@ export const COMMENT_REQUIRED_MESSAGE = "Заполните комментари
 export function useStockDocumentDraft(document: StockDocumentDto | null, callbacks: DraftCallbacks) {
   const can = useCan();
   const isPosted = document !== null && document.postedAt !== null;
-  const readOnly = isPosted || !can(STOCK_DOCUMENT_ROLES);
+  const readOnly = isPosted || !can(PERMISSIONS.STOCK_DOCUMENTS_EDIT);
   // Провести можно и новый документ: запись и проведение на сервере — одна транзакция.
-  const canPost = !isPosted && can(STOCK_DOCUMENT_POST_ROLES);
+  const canPost = !isPosted && can(PERMISSIONS.STOCK_DOCUMENTS_POST);
 
   const [type, setTypeValue] = useState<StockDocumentType>(document?.type ?? STOCK_DOCUMENT_TYPES.ENTER);
   const [warehouseId, setWarehouseIdValue] = useState(document?.warehouse.id ?? "");
