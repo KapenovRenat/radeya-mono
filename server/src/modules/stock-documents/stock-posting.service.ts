@@ -1,5 +1,6 @@
 import {
   AUDIT_ACTIONS,
+  CURRENCIES,
   HISTORY_ENTITY_TYPES,
   STOCK_DOCUMENT_TYPES,
   formatStockDocumentNumber,
@@ -30,7 +31,9 @@ interface LockedStock {
  * Проведение документа: остатки, себестоимость и история — одной транзакцией.
  *
  * - **Оприходование:** остаток + n, средняя дата поступления пересчитывается
- *   с учётом новой партии, цена строки становится себестоимостью товара.
+ *   с учётом новой партии, цена строки становится **закупкой** товара в тенге
+ *   (решение пользователя 07.10.2026). Себестоимость оприходование не трогает:
+ *   её будет считать приёмка — закупка + упаковка + доля накладных.
  * - **Списание:** остаток − n; в минус нельзя — тогда не проводится ничего,
  *   а в ошибке перечислены товары, которых не хватает. Цена — себестоимость
  *   на момент проведения, а не на момент черновика.
@@ -55,7 +58,7 @@ export async function applyPosting(
       warehouse: { select: { code: true, isActive: true } },
       lines: {
         select: { id: true, variantId: true, quantity: true, price: true,
-          variant: { select: { sku: true, costPrice: true } } },
+          variant: { select: { sku: true, costPrice: true, purchasePrice: true, purchaseCurrency: true } } },
         orderBy: { position: 'asc' },
       },
     },
@@ -93,16 +96,23 @@ export async function applyPosting(
       });
     }
 
-    // Оприходование задаёт себестоимость; списание её только читает.
-    const costBefore = line.variant.costPrice;
-    const costAfter = isEnter ? line.price : undefined;
+    // Оприходование задаёт закупку (документ в тенге — валюта закупки
+    // становится тенге); списание идёт по себестоимости и ничего не меняет.
+    const purchaseBefore = { purchasePrice: line.variant.purchasePrice, purchaseCurrency: line.variant.purchaseCurrency };
+    const purchaseAfter = isEnter
+      ? { purchasePrice: line.price, purchaseCurrency: CURRENCIES.KZT }
+      : { purchasePrice: undefined, purchaseCurrency: undefined };
 
-    if (isEnter && (costBefore === null || !costBefore.equals(line.price))) {
-      await tx.variant.update({ where: { id: line.variantId }, data: { costPrice: line.price } });
+    if (isEnter && (purchaseBefore.purchasePrice === null || !purchaseBefore.purchasePrice.equals(line.price)
+      || purchaseBefore.purchaseCurrency !== CURRENCIES.KZT)) {
+      await tx.variant.update({
+        where: { id: line.variantId },
+        data: { purchasePrice: line.price, purchaseCurrency: CURRENCIES.KZT },
+      });
     }
 
     if (!isEnter) {
-      const price = writeOffPrice(costBefore);
+      const price = writeOffPrice(line.variant.costPrice);
       const amount = lineAmount(price, line.quantity);
 
       await tx.stockDocumentLine.update({ where: { id: line.id }, data: { price, amount } });
@@ -114,8 +124,8 @@ export async function applyPosting(
       entityType: HISTORY_ENTITY_TYPES.VARIANT,
       entityId: line.variantId,
       changes: diffFields(HISTORY_ENTITY_TYPES.VARIANT,
-        { quantity: before, costPrice: costBefore },
-        { quantity: next, costPrice: costAfter }),
+        { quantity: before, ...purchaseBefore },
+        { quantity: next, ...purchaseAfter }),
       context,
     });
   }

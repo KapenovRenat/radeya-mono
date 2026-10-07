@@ -1257,7 +1257,7 @@ Email и состояние входа. Пароля в ответе нет ни
 - Auth: `can(STOCK_DOCUMENTS_EDIT)` — право `STOCK_DOCUMENTS_EDIT`
 - Query: `warehouseId` (uuid, обязателен), `search` (до 200 символов), `page`. Страница — 20 товаров
 - Ответ 200 (`StockPickerResponse`): `{ items, total, page, pageSize, totalPages }`, товар —
-  `StockVariantDto`: `id`, `sku`, `name`, `imageUrl`, `costPrice`, `quantity` (остаток на складе; null — нет строки или не указан)
+  `StockVariantDto`: `id`, `sku`, `name`, `imageUrl`, `costPrice`, `purchasePrice`, `purchaseCurrency`, `quantity` (остаток на складе; null — нет строки или не указан)
 - Ошибки: `400 VALIDATION_ERROR`, общие 401/403
 - Файл: `server/src/modules/stock-documents/stock-documents.controller.ts` (getStockPickerVariants)
 
@@ -1279,8 +1279,8 @@ Email и состояние входа. Пароля в ответе нет ни
 - Тело (`SaveStockDocumentRequest`):
   `{ "type": "ENTER", "warehouseId": "uuid", "comment": "Ревизия 09.10", "lines": [{ "variantId": "uuid", "quantity": 2, "price": "120000.00" }], "post": false }`.
   Комментарий **обязателен**, 20–1000 символов («Заполните комментарий осмысленно»).
-  1–500 строк, товар один раз, количество — целое 1–100 000. `price` обязательна
-  у оприходования (до 10 цифр и 2 знаков); у списания сервер её не берёт —
+  1–500 строк, товар один раз, количество — целое 1–100 000. `price` — закупочная цена
+  в тенге, обязательна у оприходования, больше нуля (до 10 цифр и 2 знаков); у списания сервер её не берёт —
   цена = себестоимость товара. Склад — только действующий.
   `post` — необязателен, по умолчанию `false`
 - Ответ 201: `StockDocumentDto`
@@ -1313,7 +1313,7 @@ Email и состояние входа. Пароля в ответе нет ни
 ### Проведение (`post: true` в POST и PUT)
 
 Отдельного эндпоинта нет: галочка «Проведено» уходит вместе с документом.
-Остатки, себестоимость (оприходование), история товара и отметка «проведён» —
+Остатки, закупка товара (оприходование: цена строки → `purchasePrice`, валюта KZT), история товара и отметка «проведён» —
 в той же транзакции, что и запись черновика.
 
 - Право: `STOCK_DOCUMENTS_POST`, иначе `403`

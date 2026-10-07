@@ -31,6 +31,7 @@ export const stockDocumentListSelect = {
 export function stockVariantSelect(warehouseId: string) {
   return {
     id: true, sku: true, kaspiMasterTitle: true, kaspiImages: true, costPrice: true,
+    purchasePrice: true, purchaseCurrency: true,
     product: { select: { name: true } },
     stocks: { where: { warehouseId }, select: { quantity: true } },
   } as const satisfies Prisma.VariantSelect;
@@ -59,6 +60,8 @@ export function toStockVariantDto(variant: VariantRecord): StockVariantDto {
     name: variantDisplayName(variant.kaspiMasterTitle, variant.product.name),
     imageUrl: previewImageUrl(variant.kaspiImages),
     costPrice: variant.costPrice === null ? null : money(variant.costPrice),
+    purchasePrice: variant.purchasePrice === null ? null : money(variant.purchasePrice),
+    purchaseCurrency: variant.purchaseCurrency,
     quantity: variant.stocks[0]?.quantity ?? null,
   };
 }

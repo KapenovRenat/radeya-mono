@@ -206,7 +206,7 @@ async function requireActiveWarehouse(tx: Prisma.TransactionClient, warehouseId:
 }
 
 /**
- * Строки с ценой и суммой. Оприходование — цена из запроса, списание —
+ * Строки с ценой и суммой. Оприходование — закупочная цена из запроса, списание —
  * себестоимость товара (при проведении она берётся ещё раз, свежая).
  */
 async function priceLines(tx: Prisma.TransactionClient, input: SaveStockDocumentInput) {

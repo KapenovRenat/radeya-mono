@@ -64,7 +64,7 @@ const lineSchema = z.object({
 /**
  * Черновик целиком: шапка и полный список строк.
  *
- * Цена обязательна только у оприходования. У списания присланную цену
+ * Цена — закупочная, обязательна только у оприходования. У списания присланную цену
  * сервер не берёт: списание идёт по себестоимости (см. priceLines).
  */
 export const saveStockDocumentSchema = z.object({
@@ -89,8 +89,10 @@ export const saveStockDocumentSchema = z.object({
 
     seen.add(line.variantId);
 
-    if (document.type === STOCK_DOCUMENT_TYPES.ENTER && line.price === undefined) {
-      ctx.addIssue({ code: 'custom', path: ['lines', index, 'price'], message: 'Укажите цену' });
+    // Закупка обязательна и больше нуля: при проведении она станет закупкой товара,
+    // а ноль затёр бы настоящую цену.
+    if (document.type === STOCK_DOCUMENT_TYPES.ENTER && (line.price === undefined || Number(line.price) <= 0)) {
+      ctx.addIssue({ code: 'custom', path: ['lines', index, 'price'], message: 'Укажите закупочную цену больше нуля' });
     }
   });
 });

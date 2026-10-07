@@ -251,3 +251,6 @@
   align-items: center;
   gap: 0.25rem;
 }
+
+/* Закупка не указана (пусто или 0) — красная рамка: без неё документ не создаётся. */
+.priceMissing input { border-color: var(--destructive); }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useId, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import {
+  CURRENCY_LABELS,
   DELETED_USER_NAME,
   STOCK_DOCUMENT_COMMENT_MAX_LENGTH,
   STOCK_DOCUMENT_TYPES,
@@ -189,9 +190,16 @@ export function StockDocumentEditor({ document }: { document: StockDocumentDto |
 
       <div className="flex flex-wrap items-center gap-2">
         {!draft.readOnly && (
-          <Button type="button" onClick={() => void draft.save()} disabled={busy || draft.commentError !== null} className="">
+          <Button type="button" onClick={() => void draft.save()} disabled={busy || draft.saveBlocker !== null}
+            title={draft.saveBlocker ?? undefined} className="">
             {draft.isSaving ? "Сохраняю…" : document === null ? "Создать" : "Сохранить"}
           </Button>
+        )}
+
+        {/* Почему кнопка неактивна — словами, а не только серым цветом.
+            Комментарий подписан у самого поля, второй раз не повторяем. */}
+        {!draft.readOnly && draft.saveBlocker !== null && draft.saveBlocker !== draft.commentError && (
+          <span className={styles.muted}>{draft.saveBlocker}</span>
         )}
 
         {document !== null && !draft.readOnly && (
@@ -217,7 +225,10 @@ export function StockDocumentEditor({ document }: { document: StockDocumentDto |
           aside: (
             <>
               Остаток: {variant.quantity ?? "—"}
-              {variant.costPrice !== null && <><br />{formatMoney(moneyToNumber(variant.costPrice) ?? 0)}</>}
+              {variant.purchasePrice !== null && (
+                <><br />Закупка: {formatMoney(moneyToNumber(variant.purchasePrice) ?? 0).replace("₸", "").trim()}
+                  {" "}{variant.purchaseCurrency === null ? "" : CURRENCY_LABELS[variant.purchaseCurrency]}</>
+              )}
             </>
           ),
         }))}

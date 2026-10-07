@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
+  CURRENCIES,
   STOCK_DOCUMENT_COMMENT_MAX_LENGTH,
   STOCK_DOCUMENT_COMMENT_MIN_LENGTH,
   STOCK_DOCUMENT_MAX_LINES,
@@ -35,6 +36,8 @@ export interface DraftLine {
   effectivePrice: string | null;
   /** Сумма строки в тиын; null — количество или цена введены неверно. */
   amountTiyn: number | null;
+  /** Оприходование без закупочной цены (пусто или 0) — строку подсвечиваем, «Создать» неактивна. */
+  priceMissing: boolean;
 }
 
 interface DraftCallbacks {
@@ -44,6 +47,14 @@ interface DraftCallbacks {
 }
 
 const QUANTITY_PATTERN = /^\d+$/;
+
+/**
+ * Закупка товара — ценой в оприходование. Только в тенге: документ в тенге,
+ * а курса рубля у нас нет — рублёвую закупку человек пересчитает и впишет сам.
+ */
+function purchasePriceInTenge(variant: StockVariantDto): string {
+  return variant.purchaseCurrency === CURRENCIES.KZT && variant.purchasePrice !== null ? variant.purchasePrice : "";
+}
 
 /** Текст под пустым комментарием — дословно как просил пользователь. */
 export const COMMENT_REQUIRED_MESSAGE = "Заполните комментарий ОСМЫСЛЕННО!";
@@ -68,7 +79,7 @@ export function useStockDocumentDraft(document: StockDocumentDto | null, callbac
   const [type, setTypeValue] = useState<StockDocumentType>(document?.type ?? STOCK_DOCUMENT_TYPES.ENTER);
   const [warehouseId, setWarehouseIdValue] = useState(document?.warehouse.id ?? "");
   const [comment, setCommentValue] = useState(document?.comment ?? "");
-  const [rawLines, setRawLines] = useState<Omit<DraftLine, "effectivePrice" | "amountTiyn">[]>(
+  const [rawLines, setRawLines] = useState<Omit<DraftLine, "effectivePrice" | "amountTiyn" | "priceMissing">[]>(
     () => document?.lines.map((line) => ({ variant: line.variant, quantity: String(line.quantity), price: line.price })) ?? [],
   );
   // Галочка «Проведено»: проводится по «Сохранить» / «Создать» вместе с записью.
@@ -90,7 +101,9 @@ export function useStockDocumentDraft(document: StockDocumentDto | null, callbac
     const quantity = QUANTITY_PATTERN.test(line.quantity) ? Number(line.quantity) : null;
     const price = priceToTiyn(effectivePrice ?? "0");
 
-    return { ...line, effectivePrice, amountTiyn: quantity === null || price === null ? null : quantity * price };
+    const priceMissing = isEnter && !isPosted && (priceToTiyn(line.price) ?? 0) <= 0;
+
+    return { ...line, effectivePrice, priceMissing, amountTiyn: quantity === null || price === null ? null : quantity * price };
   }), [rawLines, isEnter, isPosted]);
 
   const totalTiyn = lines.reduce((sum, line) => sum + (line.amountTiyn ?? 0), 0);
@@ -105,10 +118,10 @@ export function useStockDocumentDraft(document: StockDocumentDto | null, callbac
   const setType = useCallback((next: StockDocumentType) => {
     touch();
     setTypeValue(next);
-    // Перешли на оприходование — пустые цены заполняются себестоимостью.
+    // Перешли на оприходование — пустые цены заполняются закупкой.
     if (next === STOCK_DOCUMENT_TYPES.ENTER) {
       setRawLines((current) => current.map((line) =>
-        line.price === "" ? { ...line, price: line.variant.costPrice ?? "" } : line));
+        line.price === "" ? { ...line, price: purchasePriceInTenge(line.variant) } : line));
     }
   }, [touch]);
 
@@ -132,14 +145,14 @@ export function useStockDocumentDraft(document: StockDocumentDto | null, callbac
     setCommentValue(next.slice(0, STOCK_DOCUMENT_COMMENT_MAX_LENGTH));
   }, [touch]);
 
-  /** Добавление из окна выбора: уже добавленные не дублируются, цена — себестоимость. */
+  /** Добавление из окна выбора: уже добавленные не дублируются, цена — закупка в тенге. */
   const addVariants = useCallback((variants: StockVariantDto[]) => {
     touch();
     setRawLines((current) => {
       const present = new Set(current.map((line) => line.variant.id));
       const added = variants
         .filter((variant) => !present.has(variant.id))
-        .map((variant) => ({ variant, quantity: "1", price: variant.costPrice ?? "" }));
+        .map((variant) => ({ variant, quantity: "1", price: purchasePriceInTenge(variant) }));
 
       return [...current, ...added].slice(0, STOCK_DOCUMENT_MAX_LINES);
     });
@@ -185,8 +198,8 @@ export function useStockDocumentDraft(document: StockDocumentDto | null, callbac
         return `${line.variant.sku}: количество — от 1 до ${STOCK_DOCUMENT_MAX_QUANTITY}`;
       }
 
-      if (isEnter && priceToTiyn(line.price) === null) {
-        return `${line.variant.sku}: укажите цену — число, до двух знаков после точки`;
+      if (isEnter && (priceToTiyn(line.price) ?? 0) <= 0) {
+        return `${line.variant.sku}: укажите закупочную цену — число больше нуля, до двух знаков после точки`;
       }
 
       requestLines.push({
@@ -198,6 +211,17 @@ export function useStockDocumentDraft(document: StockDocumentDto | null, callbac
 
     return { type, warehouseId, comment: comment.trim(), lines: requestLines, post: canPost && postOnSave };
   }, [canPost, comment, commentError, isEnter, lines, postOnSave, type, warehouseId]);
+
+  /**
+   * Почему записать нельзя — для неактивной кнопки и подсказки под ней.
+   * Те же правила, что в buildRequest; null — можно.
+   */
+  const saveBlocker = (() => {
+    if (warehouseId === "") return "Выберите склад";
+    if (lines.length === 0) return "Добавьте хотя бы один товар";
+    if (lines.some((line) => line.priceMissing)) return "Укажите закупочную цену у всех товаров";
+    return commentError;
+  })();
 
   /** Запись черновика. Возвращает записанный документ или null при ошибке. */
   const saveDraft = useCallback(async (): Promise<StockDocumentDto | null> => {
@@ -259,7 +283,7 @@ export function useStockDocumentDraft(document: StockDocumentDto | null, callbac
     lines, addVariants, removeLine, setQuantity, setPrice,
     totalTiyn, totalQuantity,
     postOnSave, setPostOnSave,
-    commentError,
+    commentError, saveBlocker,
     isEnter, isPosted, readOnly, canPost, isDirty,
     error,
     save, remove,

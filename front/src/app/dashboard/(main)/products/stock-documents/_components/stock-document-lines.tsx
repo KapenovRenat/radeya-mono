@@ -43,7 +43,7 @@ export function StockDocumentLines({ lines, isEnter, readOnly, onQuantityChange,
                 <span className={styles.headWithHint}>
                   Цена
                   <Hint align="end" label="Что значит цена"
-                    text="Изменение цены перезапишет себестоимость товара — при проведении документа." />
+                    text="Закупочная цена в тенге. Изменение цены перезапишет закупочную цену товара — при проведении документа." />
                 </span>
               ) : "Себестоимость"}
             </th>
@@ -89,10 +89,11 @@ export function StockDocumentLines({ lines, isEnter, readOnly, onQuantityChange,
                     <Input
                       inputMode="decimal"
                       aria-label={"Цена «" + variant.name + "»"}
-                      placeholder="0"
+                      placeholder="Закупка"
                       value={line.price}
                       onChange={(event) => onPriceChange(variant.id, event.target.value)}
-                      className={styles.priceInput}
+                      aria-invalid={line.priceMissing}
+                      className={cn(styles.priceInput, line.priceMissing && styles.priceMissing)}
                     />
                   )}
                 </td>

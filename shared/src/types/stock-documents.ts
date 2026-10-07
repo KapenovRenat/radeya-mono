@@ -1,4 +1,5 @@
 import type { CatalogPageSize } from '../constants/catalog';
+import type { Currency } from '../constants/currencies';
 import type { StockDocumentType } from '../constants/stock-documents';
 import type { PaginatedResponse } from './api';
 
@@ -61,8 +62,14 @@ export interface StockVariantDto {
   sku: string;
   name: string;
   imageUrl: string | null;
-  /** Себестоимость за единицу, тенге. Подставляется ценой в оприходование. */
+  /** Себестоимость за единицу, тенге. По ней идёт списание. */
   costPrice: string | null;
+  /**
+   * Закупка за единицу и её валюта. В тенге — подставляется ценой в оприходование;
+   * в рублях — не подставляется: документ в тенге, курса у нас нет.
+   */
+  purchasePrice: string | null;
+  purchaseCurrency: Currency | null;
   quantity: number | null;
 }
 
@@ -82,8 +89,9 @@ export interface StockDocumentLineInput {
   variantId: string;
   quantity: number;
   /**
-   * Цена за единицу: `"120000.00"`. Обязательна у оприходования. У списания
-   * не передаётся — сервер берёт себестоимость товара.
+   * Закупочная цена за единицу в тенге: `"120000.00"`. Обязательна у оприходования,
+   * больше нуля; при проведении станет закупкой товара. У списания не передаётся —
+   * сервер берёт себестоимость товара.
    */
   price?: string;
 }
