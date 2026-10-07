@@ -4,7 +4,13 @@
    читаются селекторами :checked и :focus-visible у самого input.
    Сам input не убран display: none — так он потерял бы фокус и клавиатуру. */
 
+/* position: relative обязателен: скрытый input позиционирован absolute,
+   и без опоры здесь он считается от ближайшего позиционированного предка —
+   в модальном окне это сам <dialog>. Тогда input оказывается за краем
+   прокручиваемого тела окна, и фокус на нём (клик по галочке) прокручивает
+   весь диалог — содержимое «улетает». */
 .checkbox {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -18,6 +24,8 @@
 
 .input {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 1px;
   height: 1px;
   margin: 0;

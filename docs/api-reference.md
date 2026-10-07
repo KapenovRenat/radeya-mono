@@ -134,7 +134,7 @@
 
 Создание сотрудника. Пароль задаёт админ.
 
-- Auth: `can(USERS_MANAGE)` — право `USERS_MANAGE`
+- Auth: `USERS_MANAGE` (раздел, у модуля) и `BUTTON_CREATE_USER` (у маршрута) — нужны оба
 - Тело: `{ "login", "password", "name", "position", "role", "permissions": ["STATS_VIEW", …] }`
   (тип `CreateUserRequest`). Права — только ключи `PERMISSIONS`, незнакомый — 400; лишние поля — 400
 - Ответ 201: созданный сотрудник в форме `UserListItem`

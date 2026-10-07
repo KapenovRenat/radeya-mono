@@ -32,7 +32,7 @@ shared/    # Общий код: типы контрактов, констант�
 | `POST /api/auth/logout` | Завершение сессии, удаление куки | все вошедшие | `server/src/modules/auth/auth.routes.ts` |
 | `GET /api/auth/me` | Текущий пользователь | все вошедшие | `server/src/modules/auth/auth.routes.ts` |
 | `GET /api/users` | Список сотрудников | `USERS_MANAGE` | `server/src/modules/users/users.routes.ts` |
-| `POST /api/users` | Создание сотрудника с правами-галочками | `USERS_MANAGE` | `server/src/modules/users/users.routes.ts` |
+| `POST /api/users` | Создание сотрудника с правами-галочками | `BUTTON_CREATE_USER` | `server/src/modules/users/users.routes.ts` |
 | `PATCH /api/users/:id` | Карточка сотрудника: имя, должность, роль, права, новый пароль (гасит сессии) | `USERS_MANAGE` | `server/src/modules/users/users.controller.ts` |
 | `DELETE /api/users/:id` | Удаление сотрудника насовсем; себя и последнего админа — нельзя | `USERS_MANAGE` | `server/src/modules/users/users.controller.ts` |
 | `GET /api/audit` | Журнал действий и история изменений, постранично; фильтры по сущности (`entityType` + `entityId`) и типу (`action`) | `AUDIT_VIEW` | `server/src/modules/audit/audit.controller.ts` |

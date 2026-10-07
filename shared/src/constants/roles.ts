@@ -11,7 +11,8 @@ export const USER_ROLES = {
   ADMIN: 'ADMIN',
   MANAGER: 'MANAGER',
   SELLER: 'SELLER',
-  VIEWER: 'VIEWER'
+  VIEWER: 'VIEWER',
+  DEVELOPER: 'DEVELOPER',
 } as const;
 
 export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES];
@@ -27,5 +28,6 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: 'Админ',
   MANAGER: 'Менеджер',
   SELLER: 'Продавец',
+  DEVELOPER: 'Разработчик',
   VIEWER: 'Смотрящий'
 };

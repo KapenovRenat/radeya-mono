@@ -53,9 +53,9 @@ export default function AccountsPage() {
 
       {tab === "accounts" && (
         <div className="space-y-4">
-          <Button type="button" onClick={userForm.openCreate}>
+            {can(PERMISSIONS.USERS_CREATE) ? <Button type="button" onClick={userForm.openCreate}>
             Добавить аккаунт
-          </Button>
+          </Button> : null}
 
           <UsersTable onOpen={userForm.openEdit} />
 

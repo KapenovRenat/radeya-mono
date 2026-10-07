@@ -24,6 +24,7 @@ import { USER_ROLES, type UserRole } from './roles';
  */
 export const PERMISSIONS = {
   STATS_VIEW: 'STATS_VIEW',
+  STATS_MONEY: 'STATS_MONEY',
 
   ORDERS_VIEW: 'ORDERS_VIEW',
   ORDERS_COMMENT: 'ORDERS_COMMENT',
@@ -52,6 +53,7 @@ export const PERMISSIONS = {
 
   USERS_MANAGE: 'USERS_MANAGE',
   AUDIT_VIEW: 'AUDIT_VIEW',
+  USERS_CREATE: 'USERS_CREATE',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -65,6 +67,7 @@ export const PERMISSION_GROUPS = [
   'Справочники',
   'Импорты и Kaspi',
   'Сотрудники и журнал',
+  'Аккаунты',
 ] as const;
 
 export type PermissionGroup = (typeof PERMISSION_GROUPS)[number];
@@ -110,6 +113,8 @@ export const PERMISSION_INFO: Record<Permission, PermissionInfo> = {
     hint: 'Может выдавать только те права, что есть у него самого, и не трогает админов',
   },
   AUDIT_VIEW: { label: 'Журнал действий', group: 'Сотрудники и журнал' },
+  USERS_CREATE: { label: 'Создание аккаунтов', group: 'Аккаунты' },
+  STATS_MONEY: { label: 'Видеть статистику по выручке', group: 'Статистика' },
 };
 
 /** Все права в порядке объявления — так их рисует форма. */
@@ -132,6 +137,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<UserRole, readonly Permission[]> 
     CATALOG_VIEW, CATALOG_EDIT_FOLDERS, STOCK_DOCUMENTS_VIEW, STOCK_DOCUMENTS_EDIT, DICTIONARIES_EDIT],
   SELLER: [STATS_VIEW, ORDERS_VIEW, ORDERS_COMMENT, ORDERS_CREATE_OFFLINE, CATALOG_VIEW],
   VIEWER: [STATS_VIEW, ORDERS_VIEW, ORDERS_COMMENT, CATALOG_VIEW],
+  DEVELOPER: ALL_PERMISSIONS,
 };
 
 /** Кто проверяется: сотрудник с ролью и выданными правами. */

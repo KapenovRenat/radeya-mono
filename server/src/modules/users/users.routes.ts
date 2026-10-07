@@ -16,6 +16,7 @@ export const usersRouter = Router();
 usersRouter.use(can(PERMISSIONS.USERS_MANAGE));
 
 usersRouter.get('/', can(PERMISSIONS.USERS_MANAGE), getUsers);
-usersRouter.post('/', can(PERMISSIONS.USERS_MANAGE), postUser);
+// Создать — нужны оба права: раздел (USERS_MANAGE, у модуля выше) и само создание.
+usersRouter.post('/', can(PERMISSIONS.BUTTON_CREATE_USER), postUser);
 usersRouter.patch('/:id', can(PERMISSIONS.USERS_MANAGE), patchUser);
 usersRouter.delete('/:id', can(PERMISSIONS.USERS_MANAGE), removeUser);

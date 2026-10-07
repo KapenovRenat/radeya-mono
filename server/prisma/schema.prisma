@@ -20,6 +20,7 @@ enum UserRole {
   MANAGER
   SELLER
   VIEWER
+  DEVELOPER
 }
 
 /// Сотрудник: вход в дашборд по логину. Саморегистрации нет — учётные записи

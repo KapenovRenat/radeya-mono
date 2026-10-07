@@ -52,7 +52,7 @@ export function DashboardNavMenu({ children, className }: { children?: React.Rea
                             <div>
 
                             </div>
-                            <p>Документы склада</p>
+                            <p>Склад</p>
                         </Link>
                     </li> : null}
                     {can([PERMISSIONS.USERS_MANAGE, PERMISSIONS.AUDIT_VIEW]) ? <li>

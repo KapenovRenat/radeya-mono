@@ -1,10 +1,11 @@
 "use client";
 
-import type { OrderStatsCard } from "@radeya/shared";
+import {OrderStatsCard, PERMISSIONS} from "@radeya/shared";
 
 import { formatMoney, moneyToNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import styles from "./stats.module.scss";
+import {useCan} from "@/features/auth/use-can";
 
 /** Деньги для плашки: пусто и ноль показываем одинаково — «0 ₸». */
 function money(value: string): string {
@@ -29,6 +30,8 @@ interface StatsCardsProps {
  * это не выручка, и складывать её с несостоявшейся продажей нельзя.
  */
 export function StatsCards({ card, title, badge, isTotal }: StatsCardsProps) {
+  const can = useCan();
+
   return (
     <section className={cn(styles.group, isTotal && styles.totalGroup)}>
       <div className={styles.groupHead}>
@@ -51,23 +54,23 @@ export function StatsCards({ card, title, badge, isTotal }: StatsCardsProps) {
           <span className={styles.cardNote}>{card.returnsShare}% от заказов</span>
         </div>
 
-        <div className={styles.card}>
+        {can(PERMISSIONS.STATS_MONEY) ? <div className={styles.card}>
           <span className={styles.cardLabel}>Общая выручка</span>
           <span className={styles.cardValue}>{money(card.totalRevenue)}</span>
           <span className={styles.cardNote}>без отменённых и возвратов</span>
-        </div>
+        </div> : null}
 
-        <div className={styles.card}>
+        {can(PERMISSIONS.STATS_MONEY) ? <div className={styles.card}>
           <span className={styles.cardLabel}>Деньги в пути</span>
           <span className={styles.cardValue}>{money(card.inTransit)}</span>
           <span className={styles.cardNote}>заказы ещё не завершены</span>
-        </div>
+        </div> : null}
 
-        <div className={cn(styles.card, styles.cardDone)}>
+        {can(PERMISSIONS.STATS_MONEY) ? <div className={cn(styles.card, styles.cardDone)}>
           <span className={styles.cardLabel}>Чистая выручка</span>
           <span className={styles.cardValue}>{money(card.netRevenue)}</span>
           <span className={styles.cardNote}>доставленные заказы</span>
-        </div>
+        </div> : null}
       </div>
 
       {/* Привязанные заказы в суммы выше не вошли: та же продажа посчитана
